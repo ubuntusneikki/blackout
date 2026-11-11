@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>PROTO-01 – Turun raunioverkko</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --amber:#ffb000; --amber-dim:rgba(255,176,0,.55); --bg:#0a0603;
+    --magenta:#ff2bd6; --cyan:#3ee8ff;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--amber);
+    font-family:'VT323',ui-monospace,monospace;font-size:20px;overflow:hidden;
+    text-shadow:0 0 4px rgba(255,176,0,.7)}
+  #map{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+  /* CRT-kerrokset */
+  .crt::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:50;
+    background:repeating-linear-gradient(to bottom,rgba(0,0,0,0) 0,rgba(0,0,0,0) 2px,rgba(0,0,0,.28) 3px,rgba(0,0,0,0) 4px)}
+  .crt::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:51;
+    background:radial-gradient(ellipse at center,rgba(0,0,0,0) 55%,rgba(0,0,0,.75) 100%);
+    animation:flicker 4s infinite steps(1)}
+  @keyframes flicker{0%{opacity:.95}7%{opacity:.88}8%{opacity:.97}50%{opacity:.93}51%{opacity:.98}}
+  .panel{position:fixed;left:10px;right:10px;z-index:20;background:rgba(10,6,3,.88);
+    border:1px solid var(--amber-dim);box-shadow:0 0 12px rgba(255,176,0,.25) inset;padding:8px 12px}
+  #top{top:calc(10px + env(safe-area-inset-top));display:flex;justify-content:space-between;gap:8px;font-size:17px;flex-wrap:wrap}
+  #bottom{bottom:calc(10px + env(safe-area-inset-bottom))}
+  #zone{min-height:26px;font-size:21px}
+  #zone .sub{font-size:17px;opacity:.75}
+  #log{font-size:16px;opacity:.8;height:58px;overflow:hidden;margin-top:4px;white-space:pre-line}
+  .row{display:flex;gap:8px;margin-top:8px}
+  button{flex:1;font-family:inherit;font-size:20px;white-space:nowrap;background:transparent;color:var(--amber);
+    border:1px solid var(--amber);padding:6px 4px;text-shadow:inherit;cursor:pointer;letter-spacing:1px}
+  button:active{background:rgba(255,176,0,.18)}
+  button:disabled{opacity:.35;cursor:default}
+  button.hot{color:var(--magenta);border-color:var(--magenta);text-shadow:0 0 5px var(--magenta)}
+  #modal{position:fixed;inset:0;z-index:40;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.6)}
+  #modal .box{width:min(92vw,460px);max-height:78vh;overflow:auto;background:var(--bg);border:1px solid var(--amber);padding:14px 16px;box-shadow:0 0 18px rgba(255,176,0,.3)}
+  #modal h2{margin:0 0 8px;font-weight:normal;font-size:26px}
+  .bar{height:10px;border:1px solid var(--amber-dim);margin:2px 0 8px}
+  .bar i{display:block;height:100%;background:var(--amber);box-shadow:0 0 6px var(--amber)}
+  .line{display:flex;justify-content:space-between}
+  .blink{animation:blink 1s infinite steps(1)}
+  @keyframes blink{50%{opacity:0}}
+  #boot{position:fixed;inset:0;z-index:60;background:var(--bg);padding:24px;font-size:20px;white-space:pre-line}
+  .hint{font-size:15px;opacity:.6}
+  #mg{position:fixed;inset:0;z-index:42;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.55);touch-action:none;user-select:none;-webkit-user-select:none}
+  .mgbox{width:min(90vw,380px);background:rgba(10,6,3,.96);border:2px solid var(--c);box-shadow:0 0 22px var(--c);padding:16px;text-align:center}
+  #mg-track{position:relative;height:34px;border:1px solid var(--amber-dim);margin:16px 0 8px;background:repeating-linear-gradient(90deg,rgba(255,176,0,.06) 0 6px,transparent 6px 12px)}
+  #mg-tgt{position:absolute;top:0;bottom:0;background:var(--c);opacity:.35;box-shadow:0 0 10px var(--c)}
+  #mg-cur{position:absolute;top:-6px;bottom:-6px;width:3px;margin-left:-1px;background:#fff;box-shadow:0 0 8px #fff}
+  #mg-fb{height:28px;font-size:26px}
+  #mg-dots{display:flex;gap:10px;justify-content:center;margin:4px 0 8px}
+  .dot{width:14px;height:14px;border:1px solid var(--amber)} .dot.hit{background:#9cff57;border-color:#9cff57;box-shadow:0 0 6px #9cff57} .dot.miss{background:#ff6a5a;border-color:#ff6a5a}
+  .sigbtn{flex:none;font-size:16px;padding:2px 8px}
+  .sigbtn.on{background:rgba(255,176,0,.22)}
+  #sig{display:flex;justify-content:space-between;font-size:17px;opacity:.9;margin-bottom:2px}
+  #sig-bar{letter-spacing:1px}
+  .mach{border:1px solid var(--amber-dim);padding:8px 10px;margin:8px 0}
+  .mach .t{display:flex;justify-content:space-between;font-size:22px}
+  .mach .r{font-size:17px;opacity:.85}
+  .mach .row button{font-size:18px;padding:4px}
+  .ok{color:#9cff57;text-shadow:0 0 5px #9cff57} .no{color:#ff6a5a;text-shadow:0 0 5px #ff6a5a}
+  #loot{position:fixed;left:50%;top:38%;z-index:45;transform:translate(-50%,-50%) scale(.6);opacity:0;pointer-events:none;
+    width:min(80vw,320px);background:rgba(10,6,3,.95);border:2px solid var(--c,#ffb000);padding:14px 16px;text-align:center;
+    box-shadow:0 0 24px var(--c,#ffb000),0 0 4px var(--c,#ffb000) inset;transition:transform .18s cubic-bezier(.2,1.6,.4,1),opacity .18s}
+  #loot.show{transform:translate(-50%,-50%) scale(1);opacity:1;pointer-events:auto}
+  #loot .rar{font-size:16px;letter-spacing:3px;color:var(--c);text-shadow:0 0 6px var(--c)}
+  #loot .icon{font-size:44px;line-height:1.1;color:var(--c);text-shadow:0 0 10px var(--c);margin:4px 0}
+  #loot .name{font-size:28px}
+  #loot .xp{font-size:18px;opacity:.8;margin-top:4px}
+  #loot.rare{animation:glitch .5s steps(2) 2}
+  @keyframes glitch{0%{transform:translate(-50%,-50%) translate(2px,-1px)}50%{transform:translate(-50%,-50%) translate(-2px,1px)}100%{transform:translate(-50%,-50%)}}
+  .float{position:fixed;z-index:30;pointer-events:none;font-size:22px;transform:translate(-50%,0);animation:floatup 1.4s ease-out forwards}
+  @keyframes floatup{to{transform:translate(-50%,-60px);opacity:0}}
+  #flash{position:fixed;inset:0;z-index:44;pointer-events:none;opacity:0;background:var(--c,#ffb000)}
+  #flash.on{animation:flash .35s ease-out}
+  @keyframes flash{0%{opacity:.22}100%{opacity:0}}
+</style>
+</head>
+<body class="crt">
+<canvas id="map"></canvas>
+
+<div id="top" class="panel">
+  <span id="st-pos">SIJAINTI: ...</span>
+  <span id="st-data">DATA: ...</span>
+  <button id="b-sig" class="sigbtn">SIGNAALI: POIS</button>
+  <span id="st-xp">LÖYDÖT 0</span>
+</div>
+
+<div id="bottom" class="panel">
+  <div id="sig"><span>SIGNAALI</span><span id="sig-bar">▯▯▯▯▯▯▯▯▯▯</span></div>
+  <div id="zone">Tutki ympäristöä<span class="blink">_</span></div>
+  <div id="log"></div>
+  <div class="row">
+    <button id="btn-gather" disabled>—</button>
+    <button id="btn-inv">REPPU</button>
+    <button id="btn-base">KOTI</button>
+    <button id="btn-skills">LÖYDÖT</button>
+  </div>
+  <div class="hint" id="hint"></div>
+</div>
+
+<div id="modal"><div class="box" id="modal-box"></div></div>
+<div id="mg"><div class="mgbox">
+  <div id="mg-title" style="font-size:26px;color:var(--c);text-shadow:0 0 6px var(--c)"></div>
+  <div id="mg-desc" class="hint" style="opacity:.8"></div>
+  <div id="mg-track"><div id="mg-tgt"></div><div id="mg-cur"></div></div>
+  <div id="mg-fb"></div>
+  <div id="mg-dots"></div>
+  <div class="hint">Napauta mihin tahansa · 3 yritystä</div>
+</div></div>
+<div id="loot"></div>
+<div id="flash"></div>
+<div id="boot"></div>
+
+<script>
+(() => {
+'use strict';
+
+// ---------- Pelin data ----------
+const START = { lat: 60.4518, lon: 22.2666 }; // Turun kauppatori
+const RADIUS = 700; // metriä, karttadatan hakusäde
+const ZONES = {
+  romu:     { name:'ROMUVYÖHYKE',  color:'#ffb000', skill:'romu',   desc:'Vanhaa teollisuutta. Metallia ja koneenosia.',
+              loot:[['Romumetalli',60,1,3],['Koneenosa',30,1,1],['Vanha piirilevy',10,1,1]] },
+  villi:    { name:'VILLIVYÖHYKE', color:'#9cff57', skill:'metsa',  desc:'Kasvillisuus on vallannut alueen.',
+              loot:[['Puu',50,1,3],['Yrtti',35,1,2],['Riista',15,1,1]] },
+  ranta:    { name:'RANTA',        color:'#3ee8ff', skill:'kala',   desc:'Vettä. Suodata ennen juomista.',
+              loot:[['Vesi',55,1,3],['Kala',40,1,1],['Mutanttiankerias',5,1,1]] },
+  viljely:  { name:'VILJELYALUE',  color:'#e8d44d', skill:'viljely',desc:'Peltoa, jota joku vielä hoitaa.',
+              loot:[['Vilja',70,2,4],['Juurekset',30,1,2]] },
+  arkisto:  { name:'ARKISTO',      color:'#c38bff', skill:'hakk',   desc:'Vanhaa tietoa palvelimilla ja hyllyissä.',
+              loot:[['Datafragmentti',70,1,2],['Resepti: suodatin',20,1,1],['Salattu ydin',10,1,1]] },
+  hot:      { name:'HOT ZONE',     color:'#ff2bd6', skill:'hakk',   desc:'Jäännösverkon solmu. Vaarallinen, arvokas.', hot:true,
+              loot:[['Energiakenno',55,1,2],['Harvinainen piiri',30,1,1],['Tekoälyn sirpale',15,1,1]] },
+  markkina: { name:'MARKKINAPAIKKA', color:'#ffffff', skill:null,   desc:'Kaupankäynti avautuu myöhemmässä versiossa.', loot:[] }
+};
+const SKILLS = {
+  romu:{n:'Romunkeruu'}, metsa:{n:'Metsästys'}, kala:{n:'Kalastus'}, viljely:{n:'Viljely'},
+  hakk:{n:'Hakkerointi'}, tyosto:{n:'Työstö'}, kartoitus:{n:'Kartoitus'}, kestavyys:{n:'Kestävyys'}
+};
+const ICONS={Romumetalli:'⚙',Koneenosa:'🔩','Vanha piirilevy':'▦',Puu:'♣',Yrtti:'❦',Riista:'☠',Vesi:'≈',Kala:'⋊',Mutanttiankerias:'∿',Vilja:'⁂',Juurekset:'◆',Datafragmentti:'◫','Resepti: suodatin':'✎','Salattu ydin':'◉',Energiakenno:'⚡','Harvinainen piiri':'▣','Tekoälyn sirpale':'✦',Metallilevy:'▭',Romusorkka:'⚒'};
+const RARITY=[['TAVALLINEN','#ffb000'],['EPÄTAVALLINEN','#3ee8ff'],['HARVINAINEN','#ff2bd6']];
+const COOLDOWN_MS = 45000;   // proto: resurssipiste palautuu 45 s
+const ZONE_PRIO = ['hot','arkisto','markkina','ranta','romu','viljely','villi'];
+
+// ---------- Tila ----------
+const SAVE_KEY = 'proto01_save_v1';
+let S = { xp:{}, inv:{}, visited:{}, cooldowns:{}, walked:0, walkedToday:0, day:'', base:null, equip:null };
+try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)); if (s) S = Object.assign(S, s); } catch(e){}
+for (const k in SKILLS) S.xp[k] = S.xp[k] || 0;
+const save = () => { try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch(e){} };
+
+const level = xp => Math.min(99, Math.floor(1 + Math.sqrt(xp / 20)));
+const xpFor = l => 20 * (l - 1) * (l - 1);
+const totalLevel = () => Object.keys(SKILLS).reduce((a,k)=>a+level(S.xp[k]),0);
+
+// ---------- Projektio (metrit origosta) ----------
+let origin = { ...START };
+const kx = () => Math.cos(origin.lat * Math.PI/180) * 111320;
+const toXY = (lat, lon) => [ (lon - origin.lon) * kx(), -(lat - origin.lat) * 110540 ];
+const toLL = (x, y) => ({ lat: origin.lat - y/110540, lon: origin.lon + x/kx() });
+
+// ---------- Karttaominaisuudet ----------
+// area: {kind:'area', pts, zone?, cls}   line: {kind:'line', pts, cls}   point: {kind:'point', x,y,r, zone}
+let features = [];
+let zoneFeatures = [];
+
+function classify(t){
+  if (!t) return null;
+  if (t.power==='substation'||t.power==='plant'||t.man_made==='mast'||t.man_made==='communications_tower'||(t.man_made==='tower'&&t['tower:type']==='communication')) return 'hot';
+  if (['library','school','university','college'].includes(t.amenity)) return 'arkisto';
+  if (t.shop==='mall'||t.landuse==='retail') return 'markkina';
+  if (t.natural==='water'||t.waterway==='riverbank') return 'ranta';
+  if (t.landuse==='industrial') return 'romu';
+  if (t.landuse==='farmland') return 'viljely';
+  if (t.landuse==='forest'||t.natural==='wood'||t.natural==='scrub'||t.leisure==='park'||t.leisure==='garden'||t.landuse==='meadow'||t.landuse==='grass') return 'villi';
+  return null;
+}
+
+async function loadOSM(lat, lon){
+  const q = `[out:json][timeout:25];(
+    way["highway"](around:${RADIUS},${lat},${lon});
+    way["building"](around:${RADIUS},${lat},${lon});
+    way["landuse"~"industrial|forest|farmland|meadow|grass|retail"](around:${RADIUS},${lat},${lon});
+    way["natural"~"wood|water|scrub"](around:${RADIUS},${lat},${lon});
+    way["leisure"~"park|garden"](around:${RADIUS},${lat},${lon});
+    way["waterway"](around:${RADIUS},${lat},${lon});
+    nwr["amenity"~"library|school|university|college"](around:${RADIUS},${lat},${lon});
+    nwr["power"~"substation|plant"](around:${RADIUS},${lat},${lon});
+    nwr["man_made"~"mast|tower|communications_tower"](around:${RADIUS},${lat},${lon});
+    nwr["shop"="mall"](around:${RADIUS},${lat},${lon});
+  );out geom;`;
+  const ctrl = new AbortController(); const to = setTimeout(()=>ctrl.abort(), 20000);
+  const res = await fetch('https://overpass-api.de/api/interpreter', { method:'POST', body:'data='+encodeURIComponent(q),
+    headers:{'Content-Type':'application/x-www-form-urlencoded'}, signal:ctrl.signal });
+  clearTimeout(to);
+  if (!res.ok) throw new Error('HTTP '+res.status);
+  const js = await res.json();
+  const out = [];
+  for (const el of js.elements){
+    const t = el.tags || {}; const z = classify(t);
+    const pointZone = z==='hot'||z==='arkisto';
+    if (el.type==='node'){
+      if (z) { const [x,y]=toXY(el.lat,el.lon); out.push({kind:'point',x,y,r: z==='hot'?60:45,zone:z,id:'n'+el.id}); }
+      continue;
+    }
+    let geom = el.geometry;
+    if (el.type==='relation' || (pointZone && el.bounds)){
+      if (z && el.bounds){ const b=el.bounds; const [x,y]=toXY((b.minlat+b.maxlat)/2,(b.minlon+b.maxlon)/2);
+        out.push({kind:'point',x,y,r: z==='hot'?60:45,zone:z,id:el.type[0]+el.id}); }
+      if (el.type==='relation') continue;
+    }
+    if (!geom || geom.length<2) continue;
+    const pts = geom.map(g=>toXY(g.lat,g.lon));
+    const closed = pts.length>3 && geom[0].lat===geom[geom.length-1].lat && geom[0].lon===geom[geom.length-1].lon;
+    if (t.highway){ out.push({kind:'line',pts,cls: /primary|secondary|trunk|tertiary/.test(t.highway)?'road1':'road2'}); continue; }
+    if (t.waterway && !closed){ out.push({kind:'line',pts,cls:'water',zone:'ranta',id:'w'+el.id,w:25}); continue; }
+    if (t.building){ if (!pointZone) { out.push({kind:'area',pts,cls:'building'}); continue; } }
+    if (z && closed && !pointZone) out.push({kind:'area',pts,zone:z,id:'w'+el.id});
+  }
+  return out;
+}
+
+// ---------- Proseduraalinen demokaupunki (jos OSM ei ole saatavilla) ----------
+function demoCity(){
+  let seed = 1977; const rnd = () => (seed = (seed*16807) % 2147483647) / 2147483647;
+  const out = []; const H = 650, step = 95;
+  // joki
+  const river = []; for (let x=-H; x<=H; x+=40) river.push([x, Math.sin(x/220)*90 + x*0.25]);
+  const top = river.map(([x,y])=>[x,y-22]), bot = river.map(([x,y])=>[x,y+22]).reverse();
+  out.push({kind:'area',pts:top.concat(bot),zone:'ranta',id:'d-river'});
+  const riverY = x => Math.sin(x/220)*90 + x*0.25;
+  // korttelit
+  let i=0;
+  for (let gx=-H; gx<H; gx+=step) for (let gy=-H; gy<H; gy+=step){
+    const x0=gx+6, y0=gy+6, x1=gx+step-6, y1=gy+step-6, cx=(x0+x1)/2, cy=(y0+y1)/2;
+    if (Math.abs(cy - riverY(cx)) < 60) continue;
+    const r = rnd(); const rect=[[x0,y0],[x1,y0],[x1,y1],[x0,y1],[x0,y0]];
+    const d = Math.hypot(cx,cy);
+    let z = null;
+    if (r<0.16) z='villi'; else if (r<0.28) z='romu'; else if (r<0.33 && d>420) z='viljely'; else if (r<0.37) z='markkina';
+    if (z) out.push({kind:'area',pts:rect,zone:z,id:'d'+(i++)});
+    if (!z || z==='markkina' || z==='romu'){
+      for (let b=0;b<4;b++){ const bx=x0+8+rnd()*(step-40), by=y0+8+rnd()*(step-40), w=12+rnd()*16, h=12+rnd()*16;
+        out.push({kind:'area',pts:[[bx,by],[bx+w,by],[bx+w,by+h],[bx,by+h],[bx,by]],cls:'building'}); }
+    }
+  }
+  for (let gx=-H; gx<=H; gx+=step){ out.push({kind:'line',pts:[[gx,-H],[gx,H]],cls: gx%(step*3)===0?'road1':'road2'}); out.push({kind:'line',pts:[[-H,gx],[H,gx]],cls: gx%(step*3)===0?'road1':'road2'}); }
+  const pts = [[ -180,-260,'arkisto'],[240,180,'arkisto'],[-330,310,'arkisto'],[60,-90,'arkisto'],[380,-300,'hot'],[-420,-60,'hot'],[150,420,'hot']];
+  pts.forEach(([x,y,z],k)=>out.push({kind:'point',x,y,r: z==='hot'?60:45,zone:z,id:'dp'+k}));
+  return out;
+}
+
+// ---------- Geometria ----------
+function inPoly(x,y,pts){ let c=false; for (let i=0,j=pts.length-1;i<pts.length;j=i++){ const [xi,yi]=pts[i],[xj,yj]=pts[j];
+  if (((yi>y)!==(yj>y)) && (x < (xj-xi)*(y-yi)/(yj-yi)+xi)) c=!c; } return c; }
+function distSeg(px,py,[ax,ay],[bx,by]){ const dx=bx-ax, dy=by-ay, l=dx*dx+dy*dy; let t=l?((px-ax)*dx+(py-ay)*dy)/l:0; t=Math.max(0,Math.min(1,t));
+  return Math.hypot(px-(ax+t*dx), py-(ay+t*dy)); }
+function zoneAt(x,y){
+  const hits=[];
+  for (const f of zoneFeatures){
+    if (f.kind==='point'){ if (Math.hypot(x-f.x,y-f.y)<=f.r) hits.push(f); }
+    else if (f.kind==='area'){ if (inPoly(x,y,f.pts)) hits.push(f); }
+    else if (f.kind==='line'){ for (let i=1;i<f.pts.length;i++) if (distSeg(x,y,f.pts[i-1],f.pts[i])<=f.w){ hits.push(f); break; } }
+  }
+  hits.sort((a,b)=>ZONE_PRIO.indexOf(a.zone)-ZONE_PRIO.indexOf(b.zone));
+  return hits[0]||null;
+}
+
+// ---------- Pelaaja ----------
+const P = { x:0, y:0, tx:null, ty:null, mode:'sim' };
+const SIM_SPEED = 9; // m/s simuloidussa liikkeessä (nopeutettu testaukseen)
+let lastFix = null;
+
+function moved(dist){
+  if (dist<=0) return;
+  const today = new Date().toISOString().slice(0,10);
+  if (S.day!==today){ S.day=today; S.walkedToday=0; }
+  S.walked += dist; S.walkedToday += dist;
+  const before = Math.floor((S.walkedToday-dist)/100), after = Math.floor(S.walkedToday/100);
+  if (after>before && S.walkedToday <= 10000) gainXP('kestavyys', 8*(after-before));
+  // kartoitus: n. 40 m ruudut
+  const ll = toLL(P.x,P.y); const key = Math.round(ll.lat/0.00036)+':'+Math.round(ll.lon/0.00072);
+  if (!S.visited[key]){ S.visited[key]=1; gainXP('kartoitus',5, true); }
+}
+
+// ---------- Loki & XP ----------
+const logLines=[];
+function log(msg){ logLines.unshift('> '+msg); logLines.length=Math.min(logLines.length,3); $('log').textContent=logLines.join('\n'); }
+function gainXP(sk,n,quiet){ if (typeof XP_ON!=='undefined' && !XP_ON) return; const l0=level(S.xp[sk]); S.xp[sk]+=n; const l1=level(S.xp[sk]);
+  if (l1>l0){ log(`${SKILLS[sk].n.toUpperCase()} NOUSI TASOLLE ${l1}!`); setTimeout(()=>showLoot('','▲',`${SKILLS[sk].n} ${l1}`,'Uusi taso saavutettu','#9cff57',true,'TASO NOUSI'), quiet?0:2100); }
+  else if (quiet && sk==='kartoitus') floatText('+'+n+' Kartoitus','#ffb000');
+  save(); }
+const $ = id => document.getElementById(id);
+
+// ---------- Ilmoitukset ----------
+let lootTimer=null;
+function showLoot(title, icon, name, xpText, color, rare, heading){
+  const L=$('loot'); L.style.setProperty('--c',color);
+  L.innerHTML=`<div class="rar">${heading||title}</div><div class="icon">${icon}</div><div class="name">${name}</div><div class="xp">${xpText}</div>`;
+  L.classList.remove('show','rare'); void L.offsetWidth; L.classList.add('show'); if(rare) L.classList.add('rare');
+  const F=$('flash'); F.style.setProperty('--c',color); F.classList.remove('on'); void F.offsetWidth; F.classList.add('on');
+  try{ navigator.vibrate && navigator.vibrate(rare?[40,60,40,60,120]:40); }catch(e){}
+  clearTimeout(lootTimer); lootTimer=setTimeout(()=>L.classList.remove('show'), rare?3200:2000);
+}
+function floatText(txt,color){ const d=document.createElement('div'); d.className='float'; d.textContent=txt;
+  d.style.left=(innerWidth/2)+'px'; d.style.top=(innerHeight/2-40)+'px'; d.style.color=color; d.style.textShadow='0 0 6px '+color;
+  document.body.appendChild(d); setTimeout(()=>d.remove(),1500); }
+$('loot').onclick=()=>$('loot').classList.remove('show');
+
+// ---------- Koti: tuotantoketju ----------
+const MACHINES = {
+  uuni:  { name:'Sulatusuuni', inp:{Romumetalli:3, Puu:1}, out:'Metallilevy', time:20000,
+           up:{Koneenosa:1, Metallilevy:2}, desc:'Sulattaa romun levyiksi. Polttoaineena puu.' },
+  penkki:{ name:'Työpenkki',   inp:{Metallilevy:2, Koneenosa:1}, out:'Romusorkka', time:30000,
+           up:{Koneenosa:2, Metallilevy:3}, desc:'Tekee työkaluja. Romusorkka: +1 saalis romuvyöhykkeillä.' }
+};
+const ORDER = ['uuni','penkki'];
+function ensureBase(){
+  if (S.base) return false;
+  S.base = { uuni:{lvl:1,queue:0,start:null,out:0}, penkki:{lvl:1,queue:0,start:null,out:0} };
+  // aloituspakkaus testaamista varten
+  for (const [k,n] of [['Romumetalli',6],['Puu',2],['Koneenosa',1]]) S.inv[k]=(S.inv[k]||0)+n;
+  save(); return true;
+}
+const mTime = id => MACHINES[id].time / (1 + 0.35*(S.base[id].lvl-1));
+const mCap  = id => 4 + 2*S.base[id].lvl;
+function tickBase(){
+  if (!S.base) return;
+  const now = Date.now();
+  for (const id of ORDER){ const m=S.base[id];
+    if (!m.queue){ m.start=null; continue; }
+    if (m.out >= mCap(id)){ m.start = now; continue; }   // varasto täynnä: kone seisoo
+    if (m.start===null) m.start = now;
+    const dur=mTime(id); let done=Math.floor((now-m.start)/dur);
+    done=Math.min(done, m.queue, mCap(id)-m.out);
+    if (done>0){ m.out+=done; m.queue-=done; m.start+=done*dur; if(!m.queue) m.start=null; save(); }
+  }
+}
+const has = req => Object.entries(req).every(([k,n])=>(S.inv[k]||0)>=n);
+const pay = req => { for (const [k,n] of Object.entries(req)) S.inv[k]-=n; };
+const reqTxt = req => Object.entries(req).map(([k,n])=>`<span class="${(S.inv[k]||0)>=n?'ok':'no'}">${n} ${k}</span>`).join(' + ');
+function baseAction(act,id){
+  const M=MACHINES[id], m=S.base[id];
+  if (act==='q1'||act==='q5'){ let k=0; const want=act==='q1'?1:5;
+    while (k<want && has(M.inp)){ pay(M.inp); m.queue++; k++; }
+    if (m.queue && m.start===null) m.start=Date.now();
+    if (!k) log('EI TARPEEKSI RAAKA-AINEITA'); else log(`${M.name}: ${k} erää jonoon`);
+  }
+  if (act==='take' && m.out>0){ const n=m.out; m.out=0; S.inv[M.out]=(S.inv[M.out]||0)+n;
+    showLoot('',ICONS[M.out]||'◇',`${M.out} ×${n}`,'Valmistettu tukikohdassa', id==='penkki'?'#3ee8ff':'#ffb000', false, 'VALMISTETTU');
+  }
+  if (act==='up' && has(M.up)){ pay(M.up); m.lvl++; log(`${M.name} päivitetty tasolle ${m.lvl}`); }
+  save(); renderBase();
+}
+function renderBase(){
+  tickBase();
+  const html = `<h2>TUKIKOHTA</h2><div class="hint">Koneet käyvät myös silloin, kun peli on kiinni.</div>` + ORDER.map(id=>{
+    const M=MACHINES[id], m=S.base[id], dur=mTime(id);
+    const prog = m.start!==null && m.queue ? Math.min(100, Math.round(100*(Date.now()-m.start)/dur)) : 0;
+    const left = m.queue ? Math.ceil(((m.queue-1)*dur + dur - (m.start!==null?Date.now()-m.start:0))/1000) : 0;
+    const full = m.out>=mCap(id);
+    return `<div class="mach"><div class="t"><span>${M.name}</span><span>TASO ${m.lvl}</span></div>
+      <div class="r">${M.desc}</div>
+      <div class="r">${reqTxt(M.inp)} → 1 ${M.out} · ${(dur/1000).toFixed(0)} s</div>
+      <div class="bar"><i style="width:${prog}%"></i></div>
+      <div class="line r"><span>Jonossa ${m.queue}${m.queue?` · valmis ${left} s`:''}</span><span class="${full?'no':''}">Valmiina ${m.out}/${mCap(id)}${full?' TÄYNNÄ':''}</span></div>
+      <div class="row"><button data-a="q1" data-m="${id}">+1</button><button data-a="q5" data-m="${id}">+5</button>
+      <button data-a="take" data-m="${id}" ${m.out?'':'disabled'}>OTA (${m.out})</button></div>
+      <div class="row"><button data-a="up" data-m="${id}" ${has(M.up)?'':'disabled'}>PÄIVITÄ</button></div>
+      <div class="r">Päivitys: ${reqTxt(M.up)} · nopeus +35 %, varasto +2</div></div>`; }).join('');
+  if (!baseOpen || pressing) return;
+  const box=$('modal-box'), st=box.scrollTop;
+  box.innerHTML = html + '<div class="row"><button id="m-close">SULJE</button></div>'; box.scrollTop=st;
+  $('m-close').onclick=closeModal;
+}
+let baseOpen=false, baseTimer=null, pressing=false;
+$('modal-box').addEventListener('pointerdown',()=>pressing=true);
+addEventListener('pointerup',()=>setTimeout(()=>pressing=false,120));
+function closeModal(){ $('modal').style.display='none'; baseOpen=false; clearInterval(baseTimer); }
+$('btn-base').onclick = () => {
+  const fresh = ensureBase();
+  openModal('<div></div>'); baseOpen=true; renderBase();
+  clearInterval(baseTimer); baseTimer=setInterval(renderBase,1000);
+  if (fresh) log('Löysit vanhan varaston: 6 romumetallia, 2 puuta, 1 koneenosa.');
+};
+$('modal-box').addEventListener('click', e => { const b=e.target.closest('button[data-a]'); if(!b) return;
+  if (b.dataset.a==='equip'){ equipTool(); return; } baseAction(b.dataset.a, b.dataset.m); });
+function equipTool(){ if((S.inv.Romusorkka||0)<1) return; S.inv.Romusorkka--; S.equip={name:'Romusorkka',dur:10}; save();
+  log('Romusorkka varustettu (10 käyttöä).'); $('btn-inv').onclick(); }
+setInterval(tickBase, 2000);
+
+// ---------- Keräyspisteet ----------
+const XP_ON = false; // kokemus pois päältä toistaiseksi
+const NODE = {
+  romu:    { name:'Romukasa',            verb:'PURA',     icon:'⚙', speed:0.9, win:0.22 },
+  villi:   { name:'Joutomaan pusikko',   verb:'ETSI',     icon:'♣', speed:0.8, win:0.24 },
+  ranta:   { name:'Rantakivikko',        verb:'KALASTA',  icon:'≈', speed:0.75,win:0.22, drift:true },
+  viljely: { name:'Peltopalsta',         verb:'KORJAA',   icon:'⁂', speed:0.65,win:0.26 },
+  arkisto: { name:'Palvelinkaappi',      verb:'MURRA',    icon:'◫', speed:1.15,win:0.18 },
+  hot:     { name:'Jäännösverkon solmu', verb:'MURRA',    icon:'⚡', speed:1.5, win:0.13 }
+};
+const RANGE = 28; // m
+let nodes = [];
+function hashStr(str){ let h=2166136261; for (const c of str){ h^=c.charCodeAt(0); h=Math.imul(h,16777619); } return h>>>0; }
+function seeded(str){ let s=hashStr(str)||1; return ()=>((s=Math.imul(s,48271)%2147483647)>>>0)/2147483647; }
+function polyArea(p){ let a=0; for (let i=0,j=p.length-1;i<p.length;j=i++) a+=(p[j][0]+p[i][0])*(p[j][1]-p[i][1]); return Math.abs(a/2); }
+function genNodes(feats){
+  const out=[];
+  for (const f of feats){ if (!NODE[f.zone]) continue; const r=seeded(f.id);
+    if (f.kind==='point'){ out.push({id:f.id+'#0',x:f.x,y:f.y,zone:f.zone}); continue; }
+    if (f.kind==='area'){ const n=Math.max(1,Math.min(4,Math.round(polyArea(f.pts)/3000)));
+      const xs=f.pts.map(p=>p[0]), ys=f.pts.map(p=>p[1]); const x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys);
+      let k=0; for (let t=0;t<60&&k<n;t++){ const x=x0+r()*(x1-x0), y=y0+r()*(y1-y0);
+        if (inPoly(x,y,f.pts) && out.every(o=>Math.hypot(o.x-x,o.y-y)>35)){ out.push({id:f.id+'#'+k,x,y,zone:f.zone}); k++; } } continue; }
+    if (f.kind==='line'){ let acc=60,k=0; for (let i=1;i<f.pts.length;i++){ const [ax,ay]=f.pts[i-1],[bx,by]=f.pts[i], L=Math.hypot(bx-ax,by-ay);
+        while (acc<L){ const t=acc/L; out.push({id:f.id+'#'+(k++),x:ax+(bx-ax)*t,y:ay+(by-ay)*t,zone:f.zone}); acc+=150; } acc-=L; } }
+  }
+  return out;
+}
+const ready = n => (S.cooldowns[n.id]||0) <= Date.now();
+function nearestNode(onlyReady){ let best=null,bd=1e9; for (const n of nodes){ if (onlyReady && !ready(n)) continue; const d=Math.hypot(n.x-P.x,n.y-P.y); if (d<bd){bd=d;best=n;} } return best?{n:best,d:bd}:null; }
+
+// ---------- Minipeli ----------
+let MG=null;
+function startGather(){
+  const near=nearestNode(false); if (!near || near.d>RANGE || !ready(near.n)) return;
+  const n=near.n, cfg=NODE[n.zone], Z=ZONES[n.zone];
+  MG={ node:n, cfg, round:0, hits:0, pos:0, dir:1, target:0.2+Math.random()*0.55, t0:performance.now(), lock:false, res:[] };
+  const o=$('mg'); o.style.setProperty('--c',Z.color); o.style.display='flex';
+  $('mg-title').textContent=`${cfg.verb}: ${cfg.name.toUpperCase()}`;
+  $('mg-desc').textContent = n.zone==='ranta' ? 'Napauta, kun osoitin osuu kalan kohdalle.' : (n.zone==='hot'||n.zone==='arkisto') ? 'Napauta, kun signaali lukittuu ikkunaan. Nopea!' : 'Napauta, kun osoitin on merkityllä alueella.';
+  renderMG(); requestAnimationFrame(mgLoop);
+}
+function renderMG(){ $('mg-dots').innerHTML=[0,1,2].map(i=>`<span class="dot ${MG.res[i]===true?'hit':MG.res[i]===false?'miss':''}"></span>`).join(''); }
+function mgLoop(t){
+  if (!MG) return;
+  const dt=Math.min(0.05,(t-(MG.last||t))/1000); MG.last=t;
+  if (!MG.lock){ MG.pos+=MG.dir*MG.cfg.speed*dt; if (MG.pos>1){MG.pos=1;MG.dir=-1;} if (MG.pos<0){MG.pos=0;MG.dir=1;}
+    if (MG.cfg.drift) MG.target = Math.max(0,Math.min(1-MG.cfg.win, MG.target + Math.sin(t/400)*0.004)); }
+  $('mg-cur').style.left=(MG.pos*100)+'%';
+  $('mg-tgt').style.left=(MG.target*100)+'%'; $('mg-tgt').style.width=(MG.cfg.win*100)+'%';
+  requestAnimationFrame(mgLoop);
+}
+function strike(){
+  if (!MG || MG.lock) return;
+  const hit = MG.pos>=MG.target && MG.pos<=MG.target+MG.cfg.win;
+  MG.res.push(hit); if (hit) MG.hits++; MG.lock=true; renderMG();
+  const fb=$('mg-fb'); fb.textContent = hit?'OSUMA!':'OHI'; fb.className = hit?'ok':'no';
+  try{ navigator.vibrate && navigator.vibrate(hit?30:[10,40,10]); }catch(e){}
+  setTimeout(()=>{ fb.textContent=''; MG.round++;
+    if (MG.round>=3){ const m=MG; MG=null; $('mg').style.display='none'; finishGather(m.node,m.hits); return; }
+    MG.target=0.05+Math.random()*(0.9-MG.cfg.win); MG.lock=false; }, 450);
+}
+$('mg').addEventListener('pointerdown', e=>{ e.preventDefault(); strike(); });
+
+// ---------- Keräys ----------
+const QUALITY=['KÖMPELÖ','KELVOLLINEN','HYVÄ','TÄYDELLINEN'];
+function finishGather(node,hits){
+  const Z=ZONES[node.zone], cfg=NODE[node.zone];
+  let roll = Math.random()*100 - hits*9;       // osumat parantavat harvinaisen mahdollisuutta
+  let pick = Z.loot[0], pi = 0;
+  let acc = 0; const rev = Z.loot.slice().reverse(); for (let k=0;k<rev.length;k++){ acc += rev[k][1]; if (roll < acc){ pick = rev[k]; pi = Z.loot.length-1-k; break; } }
+  if (hits===0){ pick=Z.loot[0]; pi=0; }
+  let n = hits===0 ? 1 : pick[2] + Math.floor(Math.random()*(pick[3]-pick[2]+1)) + (hits>=2?1:0);
+  let toolTxt='';
+  if (node.zone==='romu' && S.equip && S.equip.name==='Romusorkka'){ n+=1; S.equip.dur--; toolTxt=' · sorkka +1';
+    if (S.equip.dur<=0){ S.equip=null; setTimeout(()=>log('ROMUSORKKA HAJOSI!'),50); } }
+  S.inv[pick[0]] = (S.inv[pick[0]]||0) + n;
+  S.cooldowns[node.id] = Date.now() + COOLDOWN_MS;
+  S.finds = S.finds||[]; S.finds.unshift({t:Date.now(), item:pick[0], n, place:cfg.name, q:hits}); S.finds.length=Math.min(S.finds.length,60);
+  S.newCount=(S.newCount||0)+n;
+  log(`+${n} ${pick[0]} · ${cfg.name}`);
+  const [rn,rc] = RARITY[Math.min(pi,2)];
+  showLoot('', ICONS[pick[0]]||'◇', `${pick[0]} ×${n}`, `${QUALITY[hits]} (${hits}/3)${toolTxt} · ${rn.toLowerCase()}`, rc, pi>=2, (Z.hot?'⚠ ':'')+'LÖYDÖS');
+  floatText(`+${n} ${pick[0]}`, rc);
+  save(); updateUI(true);
+}
+
+// ---------- UI ----------
+function updateUI(){
+  const near=nearestNode(false), nr=nearestNode(true), btn=$('btn-gather');
+  btn.classList.remove('hot');
+  if (near && near.d<=RANGE){ const n=near.n, Z=ZONES[n.zone], cfg=NODE[n.zone];
+    const cd=(S.cooldowns[n.id]||0)-Date.now();
+    const head=`<span style="color:${Z.color};text-shadow:0 0 6px ${Z.color}">${cfg.icon} ${cfg.name.toUpperCase()}</span>`;
+    if (cd>0){ $('zone').innerHTML=`${head}<br><span class="sub">Tyhjennetty. Täyttyy ${Math.ceil(cd/1000)} s kuluttua.</span>`; btn.disabled=true; btn.textContent=`TYHJÄ ${Math.ceil(cd/1000)}s`; }
+    else { $('zone').innerHTML=`${head} <span class="ok">VALMIS</span><br><span class="sub">Voi löytyä: ${Z.loot.map(l=>l[0]).join(', ')}</span>`; btn.disabled=false; btn.textContent=cfg.verb; btn.classList.toggle('hot',!!Z.hot); }
+  } else {
+    btn.disabled=true; btn.textContent='—';
+    const z=zoneAt(P.x,P.y); const zt = z ? `<span style="color:${ZONES[z.zone].color}">${ZONES[z.zone].name}</span> · ` : '';
+    $('zone').innerHTML = nr ? `${zt}Lähin löytö: ${NODE[nr.n.zone].icon} ${NODE[nr.n.zone].name} <b>${Math.round(nr.d)} m</b><br><span class="sub">Kävele kohteen luo (alle ${RANGE} m).</span>`
+                             : `${zt}Ei löytöjä lähellä<span class="blink">_</span>`;
+  }
+  $('st-xp').textContent = `LÖYDÖT ${(S.finds||[]).length}`;
+  $('btn-inv').textContent = S.newCount ? `REPPU +${S.newCount}` : 'REPPU';
+}
+
+function openModal(html){ $('modal-box').innerHTML = html + '<div class="row"><button id="m-close">SULJE</button></div>'; $('modal').style.display='flex'; $('m-close').onclick=closeModal; baseOpen=false; clearInterval(baseTimer); }
+$('btn-gather').onclick = startGather;
+$('btn-inv').onclick = () => {
+  S.newCount=0; save(); updateUI();
+  const items = Object.entries(S.inv).filter(([,n])=>n>0).sort((a,b)=>b[1]-a[1]);
+  openModal(`<h2>REPPU</h2>` + (items.length ? items.map(([k,n])=>`<div class="line"><span>${ICONS[k]||'◇'} ${k}</span><span>x${n}</span></div>`).join('') : '<div>Tyhjä. Mene ulos keräämään.</div>')
+    + `<p>VARUSTE: ${S.equip?`${S.equip.name} (${S.equip.dur} käyttöä)`:'ei mitään'}</p>`
+    + ((S.inv.Romusorkka||0)>0 ? `<div class="row"><button data-a="equip">VARUSTA ROMUSORKKA</button></div>` : '')
+    + `<p class="hint">Kävelty yhteensä ${(S.walked/1000).toFixed(2)} km · tänään ${(S.walkedToday/1000).toFixed(2)} km · kartoitettuja ruutuja ${Object.keys(S.visited).length}</p>`);
+};
+$('btn-skills').onclick = () => {
+  const f=S.finds||[]; const ago=t=>{ const s=Math.round((Date.now()-t)/1000); return s<60?`${s} s`:s<3600?`${Math.round(s/60)} min`:`${Math.round(s/3600)} h`; };
+  openModal(`<h2>LÖYDÖT</h2>` + (f.length ? f.slice(0,30).map(x=>`<div class="line"><span>${ICONS[x.item]||'◇'} ${x.item} ×${x.n}</span><span class="r">${ago(x.t)} sitten</span></div><div class="hint" style="margin-bottom:6px">${x.place} · ${QUALITY[x.q]||''}</div>`).join('') : '<div>Ei vielä löytöjä.</div>'));
+};
+$('modal').onclick = e => { if (e.target.id==='modal') closeModal(); };
+
+// ---------- Piirto ----------
+const cv=$('map'), ctx=cv.getContext('2d'); let W=0,Hh=0,DPR=1; let zoom=1.1;
+const fog=document.createElement('canvas'), fctx=fog.getContext('2d');
+function resize(){ DPR=Math.min(2,window.devicePixelRatio||1); W=innerWidth; Hh=innerHeight; for (const c of [cv,fog]){ c.width=W*DPR; c.height=Hh*DPR; } cv.style.width=W+'px'; cv.style.height=Hh+'px'; }
+addEventListener('resize',resize); resize();
+const sx = x => (x-P.x)*zoom + W/2, sy = y => (y-P.y)*zoom + Hh/2;
+function path(pts){ ctx.beginPath(); pts.forEach(([x,y],i)=> i?ctx.lineTo(sx(x),sy(y)):ctx.moveTo(sx(x),sy(y))); }
+function hexA(hex,a){ const n=parseInt(hex.slice(1),16); return `rgba(${n>>16},${(n>>8)&255},${n&255},${a})`; }
+
+function draw(t){
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.fillStyle='#0a0603'; ctx.fillRect(0,0,W,Hh);
+  // ruudukko
+  ctx.strokeStyle='rgba(255,176,0,.05)'; ctx.lineWidth=1; const g=50*zoom;
+  for (let x=((W/2-P.x*zoom)%g+g)%g; x<W; x+=g){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,Hh); ctx.stroke(); }
+  for (let y=((Hh/2-P.y*zoom)%g+g)%g; y<Hh; y+=g){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+  const now = Date.now();
+  // vyöhykkeet
+  for (const f of features){
+    if (f.kind==='area' && f.zone){ const Z=ZONES[f.zone]; const dep=(S.cooldowns[f.id]||0)>now;
+      path(f.pts); ctx.fillStyle=hexA(Z.color, dep?.04:.10); ctx.fill(); ctx.strokeStyle=hexA(Z.color, dep?.25:.55); ctx.lineWidth=1.2; ctx.stroke(); }
+    if (f.kind==='line' && f.cls==='water'){ path(f.pts); ctx.strokeStyle='rgba(62,232,255,.22)'; ctx.lineWidth=Math.max(2,f.w*zoom); ctx.lineCap='round'; ctx.stroke(); }
+  }
+  // rakennukset
+  ctx.strokeStyle='rgba(255,176,0,.22)'; ctx.lineWidth=1;
+  for (const f of features) if (f.cls==='building'){ path(f.pts); ctx.stroke(); }
+  // tiet
+  ctx.shadowColor='#ffb000'; ctx.shadowBlur=4; ctx.lineCap='round';
+  for (const f of features) if (f.kind==='line' && (f.cls==='road1'||f.cls==='road2')){ path(f.pts);
+    ctx.strokeStyle= f.cls==='road1'?'rgba(255,176,0,.65)':'rgba(255,176,0,.35)'; ctx.lineWidth= f.cls==='road1'?2.2:1.2; ctx.stroke(); }
+  // pistevyöhykkeet
+  for (const f of features) if (f.kind==='point'){ const Z=ZONES[f.zone]; const dep=(S.cooldowns[f.id]||0)>now;
+    const pulse = Z.hot ? 1 + Math.sin(t/300)*0.08 : 1;
+    ctx.shadowColor=Z.color; ctx.shadowBlur= Z.hot?14:8;
+    ctx.beginPath(); ctx.arc(sx(f.x),sy(f.y),f.r*zoom*pulse,0,7); ctx.fillStyle=hexA(Z.color, dep?.04:.12); ctx.fill();
+    ctx.strokeStyle=hexA(Z.color, dep?.3:.85); ctx.lineWidth=1.5; ctx.setLineDash(Z.hot?[6,4]:[]); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle=hexA(Z.color,.9); ctx.font='16px VT323, monospace'; ctx.textAlign='center';
+    }
+  ctx.shadowBlur=0;
+  // keräyspisteet
+  const nearN = nearestNode(false);
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  for (const n of nodes){ const X=sx(n.x), Y=sy(n.y); if (X<-30||Y<-30||X>W+30||Y>Hh+30) continue;
+    const Z=ZONES[n.zone], cfg=NODE[n.zone], rdy=ready(n), inR = nearN && nearN.n===n && nearN.d<=RANGE;
+    if (rdy){ const pr=1+0.15*Math.sin(t/260+n.x);
+      ctx.shadowColor=Z.color; ctx.shadowBlur=inR?18:10;
+      ctx.beginPath(); ctx.arc(X,Y,(inR?17:12)*pr,0,7); ctx.fillStyle=hexA(Z.color,.18); ctx.fill(); ctx.strokeStyle=Z.color; ctx.lineWidth=inR?2:1.3; ctx.stroke();
+      ctx.fillStyle=Z.color; ctx.font=(inR?24:19)+'px VT323, monospace'; ctx.fillText(cfg.icon,X,Y+1);
+      if (inR){ ctx.font='16px VT323, monospace'; ctx.fillText(cfg.verb+'!',X,Y-28); }
+    } else { const left=Math.max(0,(S.cooldowns[n.id]-Date.now())/COOLDOWN_MS);
+      ctx.shadowBlur=0; ctx.fillStyle=hexA(Z.color,.3); ctx.font='17px VT323, monospace'; ctx.fillText(cfg.icon,X,Y+1);
+      ctx.beginPath(); ctx.arc(X,Y,11,-Math.PI/2,-Math.PI/2+Math.PI*2*(1-left)); ctx.strokeStyle=hexA(Z.color,.55); ctx.lineWidth=2; ctx.stroke(); }
+  }
+  ctx.shadowBlur=0; ctx.textBaseline='alphabetic';
+  // suunta lähimpään valmiiseen löytöön
+  const nr = nearestNode(true);
+  if (nr && nr.d>RANGE && nr.d<600){ const Z=ZONES[nr.n.zone]; const a=Math.atan2(nr.n.y-P.y,nr.n.x-P.x);
+    const ax=W/2+Math.cos(a)*34, ay=Hh/2+Math.sin(a)*34;
+    ctx.save(); ctx.translate(ax,ay); ctx.rotate(a); ctx.fillStyle=Z.color; ctx.shadowColor=Z.color; ctx.shadowBlur=8;
+    ctx.beginPath(); ctx.moveTo(8,0); ctx.lineTo(-5,-6); ctx.lineTo(-5,6); ctx.closePath(); ctx.fill(); ctx.restore(); ctx.shadowBlur=0; }
+  // sumu: kartoittamaton alue tummennetaan
+  fctx.setTransform(DPR,0,0,DPR,0,0); fctx.globalCompositeOperation='source-over'; fctx.clearRect(0,0,W,Hh);
+  fctx.fillStyle='rgba(10,6,3,.62)'; fctx.fillRect(0,0,W,Hh); fctx.globalCompositeOperation='destination-out';
+  const rr = 70*zoom;
+  for (const key in S.visited){ const [a,b]=key.split(':').map(Number); const [x,y]=toXY(a*0.00036,b*0.00072);
+    const X=sx(x), Y=sy(y); if (X<-rr||Y<-rr||X>W+rr||Y>Hh+rr) continue;
+    const gr=fctx.createRadialGradient(X,Y,0,X,Y,rr); gr.addColorStop(0,'rgba(0,0,0,1)'); gr.addColorStop(1,'rgba(0,0,0,0)');
+    fctx.fillStyle=gr; fctx.beginPath(); fctx.arc(X,Y,rr,0,7); fctx.fill(); }
+  ctx.setTransform(1,0,0,1,0,0); ctx.drawImage(fog,0,0); ctx.setTransform(DPR,0,0,DPR,0,0);
+  // kohde
+  if (P.tx!==null){ ctx.strokeStyle='rgba(255,176,0,.6)'; ctx.setLineDash([3,5]); ctx.beginPath(); ctx.moveTo(W/2,Hh/2); ctx.lineTo(sx(P.tx),sy(P.ty)); ctx.stroke(); ctx.setLineDash([]);
+    ctx.beginPath(); ctx.arc(sx(P.tx),sy(P.ty),5,0,7); ctx.stroke(); }
+  // pelaaja
+  ctx.shadowColor='#ffb000'; ctx.shadowBlur=12; ctx.fillStyle='#ffb000';
+  ctx.beginPath(); ctx.arc(W/2,Hh/2,6,0,7); ctx.fill();
+  ctx.strokeStyle=`rgba(255,176,0,${.5+.3*Math.sin(t/250)})`; ctx.lineWidth=1.2; ctx.beginPath(); ctx.arc(W/2,Hh/2,14+3*Math.sin(t/250),0,7); ctx.stroke();
+  ctx.shadowBlur=0;
+}
+
+
+// ---------- Signaalimittari (ääni + värinä) ----------
+let AC=null, sigOn=false, noiseBuf=null, staticSrc=null, staticGain=null, nextClick=0, lockBeat=0, lastInRange=null, lastNear80=null;
+const ZONE_FREQ={romu:1800, villi:1300, ranta:2600, viljely:1100, arkisto:3400, hot:4200};
+const VIB={hot:[80,60,80,60,200], arkisto:[40,40,40,40,40], ranta:[120,80,120], default:[60,40,60]};
+function initAudio(){
+  AC = new (window.AudioContext||window.webkitAudioContext)();
+  noiseBuf = AC.createBuffer(1, AC.sampleRate*1, AC.sampleRate);
+  const d=noiseBuf.getChannelData(0); for (let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+  staticGain = AC.createGain(); staticGain.gain.value=0;
+  const bp = AC.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=900; bp.Q.value=0.7;
+  staticSrc = AC.createBufferSource(); staticSrc.buffer=noiseBuf; staticSrc.loop=true;
+  staticSrc.connect(bp).connect(staticGain).connect(AC.destination); staticSrc.start();
+}
+function tick(freq, vol){
+  const t=AC.currentTime, src=AC.createBufferSource(); src.buffer=noiseBuf;
+  const f=AC.createBiquadFilter(); f.type='bandpass'; f.frequency.value=freq; f.Q.value=3;
+  const g=AC.createGain(); g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.012);
+  src.connect(f).connect(g).connect(AC.destination); src.start(t, Math.random()*0.9, 0.02);
+}
+function beep(freq){
+  const t=AC.currentTime, o=AC.createOscillator(), g=AC.createGain(); o.type='square'; o.frequency.value=freq;
+  g.gain.setValueAtTime(0.06,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.09);
+  o.connect(g).connect(AC.destination); o.start(t); o.stop(t+0.1);
+}
+const vib = p => { try{ navigator.vibrate && navigator.vibrate(p); }catch(e){} };
+$('b-sig').onclick = () => {
+  if (!AC) { try { initAudio(); } catch(e){ log('Ääni ei ole käytettävissä tässä selaimessa.'); return; } }
+  AC.resume && AC.resume();
+  sigOn=!sigOn; $('b-sig').textContent = 'SIGNAALI: '+(sigOn?'PÄÄLLÄ':'POIS'); $('b-sig').classList.toggle('on',sigOn);
+  if (!sigOn && staticGain) staticGain.gain.value=0;
+  if (sigOn) log('Signaalimittari päällä. Kuuntele ritinää: mitä tiheämpi, sitä lähempänä.');
+};
+const SIG_MAX=160;
+function signal(dt){
+  const nr=nearestNode(true);
+  const d = nr ? nr.d : Infinity;
+  // visuaalinen palkki
+  const lvl = d<=RANGE ? 10 : d>=SIG_MAX ? 0 : Math.max(1, Math.round(10*(1-(d-RANGE)/(SIG_MAX-RANGE))));
+  const col = nr ? ZONES[nr.n.zone].color : '#ffb000';
+  $('sig-bar').innerHTML = `<span style="color:${col};text-shadow:0 0 6px ${col}">${'▮'.repeat(lvl)}</span>${'▯'.repeat(10-lvl)}`;
+  // värinä: lähestyminen (80 m) ja kantaman sisälle tulo
+  if (nr && d<80 && lastNear80!==nr.n.id){ lastNear80=nr.n.id; vib(30); }
+  if (nr && d<=RANGE && lastInRange!==nr.n.id){ lastInRange=nr.n.id; vib(VIB[nr.n.zone]||VIB.default); }
+  if (!nr || d>RANGE) lastInRange = null;
+  if (!sigOn || !AC) return;
+  // staattinen kohina hot zonella
+  const z=zoneAt(P.x,P.y); staticGain.gain.value = (z && z.zone==='hot') ? 0.035+0.02*Math.random() : 0;
+  if (!nr || d>=SIG_MAX) return;
+  const rate = d<=RANGE ? 16 : 0.7 + 13*Math.pow(1-(d-RANGE)/(SIG_MAX-RANGE), 2);
+  nextClick -= dt;
+  if (nextClick<=0){ tick(ZONE_FREQ[nr.n.zone]||2000, 0.35); nextClick = -Math.log(1-Math.random())/rate; }
+  if (d<=RANGE){ lockBeat -= dt; if (lockBeat<=0){ beep(nr.n.zone==='hot'?1320:880); lockBeat=1.2; } }
+}
+
+// ---------- Silmukka ----------
+let last=performance.now(), uiTick=0;
+function loop(t){
+  const dt=Math.min(0.1,(t-last)/1000); last=t;
+  if (P.mode==='sim' && P.tx!==null){ const dx=P.tx-P.x, dy=P.ty-P.y, d=Math.hypot(dx,dy), s=SIM_SPEED*dt;
+    if (d<=s){ P.x=P.tx; P.y=P.ty; P.tx=P.ty=null; moved(d); } else { P.x+=dx/d*s; P.y+=dy/d*s; moved(s); } }
+  if (keys.size && P.mode==='sim'){ let vx=0,vy=0; if(keys.has('ArrowLeft')||keys.has('a'))vx--; if(keys.has('ArrowRight')||keys.has('d'))vx++; if(keys.has('ArrowUp')||keys.has('w'))vy--; if(keys.has('ArrowDown')||keys.has('s'))vy++;
+    if (vx||vy){ const n=Math.hypot(vx,vy), s=SIM_SPEED*dt; P.x+=vx/n*s; P.y+=vy/n*s; P.tx=P.ty=null; moved(s); } }
+  signal(dt);
+  draw(t);
+  if ((uiTick+=dt)>0.25){ uiTick=0; updateUI(); }
+  requestAnimationFrame(loop);
+}
+
+// ---------- Syöte ----------
+const keys=new Set(); addEventListener('keydown',e=>keys.add(e.key)); addEventListener('keyup',e=>keys.delete(e.key));
+let pinch=null, down=null;
+cv.addEventListener('pointerdown',e=>{ down={x:e.clientX,y:e.clientY}; });
+cv.addEventListener('pointerup',e=>{ if(!down) return; const moved_=Math.hypot(e.clientX-down.x,e.clientY-down.y); down=null;
+  if (moved_<8 && P.mode==='sim' && !pinch){ P.tx=P.x+(e.clientX-W/2)/zoom; P.ty=P.y+(e.clientY-Hh/2)/zoom; } });
+cv.addEventListener('wheel',e=>{ e.preventDefault(); zoom=Math.max(0.35,Math.min(4,zoom*(e.deltaY<0?1.12:0.89))); },{passive:false});
+cv.addEventListener('touchstart',e=>{ if(e.touches.length===2){ const [a,b]=e.touches; pinch={d:Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY),z:zoom}; } },{passive:true});
+cv.addEventListener('touchmove',e=>{ if(pinch&&e.touches.length===2){ const [a,b]=e.touches; zoom=Math.max(0.35,Math.min(4,pinch.z*Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY)/pinch.d)); } },{passive:true});
+cv.addEventListener('touchend',e=>{ if(e.touches.length<2) setTimeout(()=>pinch=null,50); },{passive:true});
+
+// ---------- Käynnistys ----------
+function getPosition(){ return new Promise(res=>{
+  if (!navigator.geolocation) return res(null);
+  let done=false; const to=setTimeout(()=>{ if(!done){done=true;res(null);} },7000);
+  try { navigator.geolocation.getCurrentPosition(p=>{ if(!done){done=true;clearTimeout(to);res(p);} }, ()=>{ if(!done){done=true;clearTimeout(to);res(null);} }, {enableHighAccuracy:true,timeout:6500}); }
+  catch(e){ done=true; clearTimeout(to); res(null); }
+}); }
+
+async function boot(){
+  const B=$('boot'); const say=s=>{ B.textContent += s+'\n'; };
+  say('JÄÄNNÖSVERKKO-TERMINAALI v0.1'); say('(c) 20XX — kaikki oikeudet raunioituneet'); say('');
+  say('> Haetaan sijaintia...');
+  const pos = await getPosition();
+  if (pos){ origin={lat:pos.coords.latitude, lon:pos.coords.longitude}; P.mode='gps'; say('  GPS-LUKITUS OK'); }
+  else { origin={...START}; P.mode='sim'; say('  GPS EI KÄYTÖSSÄ → SIMULOITU SIJAINTI (Turku, Kauppatori)'); }
+  say('> Ladataan karttadataa (OpenStreetMap)...');
+  let data='OSM';
+  try { features = await loadOSM(origin.lat, origin.lon); if (features.length<20) throw new Error('liian vähän dataa'); say(`  ${features.length} kohdetta ladattu`); }
+  catch(e){ features = demoCity(); data='DEMO'; say('  YHTEYS EPÄONNISTUI → SIMULOITU DEMOKAUPUNKI'); }
+  zoneFeatures = features.filter(f=>f.zone && f.id);
+  nodes = genNodes(zoneFeatures);
+  $('st-pos').textContent = 'SIJAINTI: ' + (P.mode==='gps'?'GPS':'SIMULOITU');
+  $('st-data').textContent = 'DATA: ' + data;
+  $('hint').textContent = P.mode==='sim' ? 'Napauta karttaa liikkuaksesi (tai nuolinäppäimet). Rulla/nipistys = zoom.' : 'Liiku ulkona. Nipistys = zoom.';
+  if (P.mode==='gps'){
+    navigator.geolocation.watchPosition(p=>{
+      const [x,y]=toXY(p.coords.latitude,p.coords.longitude); const now=Date.now();
+      if (lastFix){ const d=Math.hypot(x-lastFix.x,y-lastFix.y), sp=d/Math.max(1,(now-lastFix.t)/1000);
+        if (sp>50){ log('SIJAINTIHYPPY HYLÄTTY'); return; } // huijausesto: mahdoton nopeus
+        if (sp<7) moved(d); else log('LIIAN NOPEA (>25 km/h): ei XP:tä'); }
+      lastFix={x,y,t:now}; P.x=x; P.y=y;
+    }, ()=>{}, {enableHighAccuracy:true, maximumAge:2000});
+  }
+  moved(0.0001);
+  say(''); say('> VALMIS. Paina mitä tahansa...');
+  await new Promise(r=>setTimeout(r,900));
+  B.style.transition='opacity .4s'; B.style.opacity='0'; setTimeout(()=>B.remove(),450);
+  log(data==='DEMO' ? 'Demokaupunki ladattu. Etsi värillisiä vyöhykkeitä.' : 'Karttadata ladattu. Etsi värillisiä vyöhykkeitä.');
+  updateUI(true);
+}
+boot();
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
