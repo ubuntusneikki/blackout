@@ -676,20 +676,40 @@ cv.addEventListener('touchmove',e=>{ if(pinch&&e.touches.length===2){ const [a,b
 cv.addEventListener('touchend',e=>{ if(e.touches.length<2) setTimeout(()=>pinch=null,50); },{passive:true});
 
 // ---------- Käynnistys ----------
+const GEO_ERR={1:'LUPA EVÄTTY (tarkista selaimen ja puhelimen sijaintiasetukset)',2:'SIJAINTI EI SAATAVILLA (GPS-signaali puuttuu)',3:'AIKAKATKAISU (GPS ei ehtinyt vastata)'};
+let geoErr='';
 function getPosition(){ return new Promise(res=>{
-  if (!navigator.geolocation) return res(null);
-  let done=false; const to=setTimeout(()=>{ if(!done){done=true;res(null);} },7000);
-  try { navigator.geolocation.getCurrentPosition(p=>{ if(!done){done=true;clearTimeout(to);res(p);} }, ()=>{ if(!done){done=true;clearTimeout(to);res(null);} }, {enableHighAccuracy:true,timeout:6500}); }
-  catch(e){ done=true; clearTimeout(to); res(null); }
+  if (!window.isSecureContext){ geoErr='SIVU EI OLE HTTPS-OSOITTEESSA'; return res(null); }
+  if (!navigator.geolocation){ geoErr='SELAIN EI TUE SIJAINTIA'; return res(null); }
+  let done=false; const finish=v=>{ if(!done){ done=true; clearTimeout(to); res(v); } };
+  const to=setTimeout(()=>{ geoErr=geoErr||GEO_ERR[3]; finish(null); },25000);
+  const tryOnce=(high,next)=>{ try { navigator.geolocation.getCurrentPosition(p=>finish(p), e=>{ geoErr=GEO_ERR[e.code]||('VIRHE '+e.code); if (e.code===1) finish(null); else next(); }, {enableHighAccuracy:high, timeout:12000, maximumAge:60000}); } catch(e){ geoErr='VIRHE: '+e.message; finish(null); } };
+  tryOnce(true, ()=>tryOnce(false, ()=>finish(null)));   // ensin tarkka GPS, sitten verkkopohjainen sijainti
 }); }
+
+let watchId=null;
+function startWatch(){
+  if (!navigator.geolocation || !window.isSecureContext || watchId!==null) return;
+  watchId = navigator.geolocation.watchPosition(p=>{
+    const [x,y]=toXY(p.coords.latitude,p.coords.longitude); const now=Date.now();
+    if (P.mode!=='gps'){ // GPS löytyi myöhemmin: siirrytään oikeaan sijaintiin
+      if (Math.hypot(x,y) > 2500){ log('GPS LÖYTYI KAUKAA – lataa sivu uudelleen, niin kartta haetaan sijaintisi ympäriltä.'); }
+      P.mode='gps'; P.tx=P.ty=null; lastFix=null; $('st-pos').textContent='SIJAINTI: GPS'; $('hint').textContent='Liiku ulkona. Nipistys = zoom.'; log('GPS-LUKITUS SAATU');
+    }
+    if (lastFix){ const d=Math.hypot(x-lastFix.x,y-lastFix.y), sp=d/Math.max(1,(now-lastFix.t)/1000);
+      if (sp>50){ log('SIJAINTIHYPPY HYLÄTTY'); return; } // huijausesto: mahdoton nopeus
+      if (sp<7) moved(d); else log('LIIAN NOPEA (>25 km/h)'); }
+    lastFix={x,y,t:now}; P.x=x; P.y=y;
+  }, e=>{ if (P.mode==='gps') log('GPS: '+(GEO_ERR[e.code]||e.message)); }, {enableHighAccuracy:true, maximumAge:2000, timeout:30000});
+}
 
 async function boot(){
   const B=$('boot'); const say=s=>{ B.textContent += s+'\n'; };
   say('JÄÄNNÖSVERKKO-TERMINAALI v0.1'); say('(c) 20XX — kaikki oikeudet raunioituneet'); say('');
-  say('> Haetaan sijaintia...');
+  say('> Haetaan sijaintia (voi kestää 10–20 s)...');
   const pos = await getPosition();
   if (pos){ origin={lat:pos.coords.latitude, lon:pos.coords.longitude}; P.mode='gps'; say('  GPS-LUKITUS OK'); }
-  else { origin={...START}; P.mode='sim'; say('  GPS EI KÄYTÖSSÄ → SIMULOITU SIJAINTI (Turku, Kauppatori)'); }
+  else { origin={...START}; P.mode='sim'; say('  GPS EPÄONNISTUI: '+(geoErr||'tuntematon syy')); say('  → SIMULOITU SIJAINTI (Turku, Kauppatori). GPS:ää yritetään taustalla.'); }
   say('> Ladataan karttadataa (OpenStreetMap)...');
   let data='OSM';
   try { features = await loadOSM(origin.lat, origin.lon); if (features.length<20) throw new Error('liian vähän dataa'); say(`  ${features.length} kohdetta ladattu`); }
@@ -699,19 +719,12 @@ async function boot(){
   $('st-pos').textContent = 'SIJAINTI: ' + (P.mode==='gps'?'GPS':'SIMULOITU');
   $('st-data').textContent = 'DATA: ' + data;
   $('hint').textContent = P.mode==='sim' ? 'Napauta karttaa liikkuaksesi (tai nuolinäppäimet). Rulla/nipistys = zoom.' : 'Liiku ulkona. Nipistys = zoom.';
-  if (P.mode==='gps'){
-    navigator.geolocation.watchPosition(p=>{
-      const [x,y]=toXY(p.coords.latitude,p.coords.longitude); const now=Date.now();
-      if (lastFix){ const d=Math.hypot(x-lastFix.x,y-lastFix.y), sp=d/Math.max(1,(now-lastFix.t)/1000);
-        if (sp>50){ log('SIJAINTIHYPPY HYLÄTTY'); return; } // huijausesto: mahdoton nopeus
-        if (sp<7) moved(d); else log('LIIAN NOPEA (>25 km/h): ei XP:tä'); }
-      lastFix={x,y,t:now}; P.x=x; P.y=y;
-    }, ()=>{}, {enableHighAccuracy:true, maximumAge:2000});
-  }
+  startWatch();
   moved(0.0001);
   say(''); say('> VALMIS. Paina mitä tahansa...');
   await new Promise(r=>setTimeout(r,900));
   B.style.transition='opacity .4s'; B.style.opacity='0'; setTimeout(()=>B.remove(),450);
+  if (P.mode==='sim' && geoErr) log('GPS: '+geoErr);
   log(data==='DEMO' ? 'Demokaupunki ladattu. Etsi värillisiä vyöhykkeitä.' : 'Karttadata ladattu. Etsi värillisiä vyöhykkeitä.');
   updateUI(true);
 }
