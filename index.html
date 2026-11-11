@@ -50,7 +50,7 @@
   .mgbox{width:min(90vw,380px);background:rgba(10,6,3,.96);border:2px solid var(--c);box-shadow:0 0 22px var(--c);padding:16px;text-align:center}
   #mg-track{position:relative;height:34px;border:1px solid var(--amber-dim);margin:16px 0 8px;background:repeating-linear-gradient(90deg,rgba(255,176,0,.06) 0 6px,transparent 6px 12px)}
   #mg-tgt{position:absolute;top:0;bottom:0;background:var(--c);opacity:.35;box-shadow:0 0 10px var(--c)}
-  #mg-cur{position:absolute;top:-6px;bottom:-6px;width:3px;margin-left:-1px;background:#fff;box-shadow:0 0 8px #fff}
+  #mg-cur{position:absolute;left:0;top:-6px;bottom:-6px;width:3px;margin-left:-1px;will-change:transform;background:#fff;box-shadow:0 0 8px #fff}
   #mg-fb{height:28px;font-size:26px}
   #mg-dots{display:flex;gap:10px;justify-content:center;margin:4px 0 8px}
   .dot{width:14px;height:14px;border:1px solid var(--amber)} .dot.hit{background:#9cff57;border-color:#9cff57;box-shadow:0 0 6px #9cff57} .dot.miss{background:#ff6a5a;border-color:#ff6a5a}
@@ -87,8 +87,9 @@
   <span id="st-pos">SIJAINTI: ...</span>
   <span id="st-data">DATA: ...</span>
   <button id="b-sig" class="sigbtn">SIGNAALI: POIS</button>
+  <button id="b-dir" class="sigbtn">SUUNTA: KULKU</button>
   <button id="b-map" class="sigbtn" style="display:none;color:#ff2bd6;border-color:#ff2bd6">HAE KARTTA</button>
-  <span class="hint">v0.7</span>
+  <span class="hint">v0.9</span>
   <span id="st-xp">LÖYDÖT 0</span>
 </div>
 
@@ -204,10 +205,31 @@ async function overpass(q, label){
   }
   throw new Error(errs.join(' | '));
 }
-async function loadOSM(lat, lon){
-  // rajausruutu (bbox) on Overpassille paljon kevyempi kuin around-haku
-  const dLat = RADIUS/110540, dLon = RADIUS/(Math.cos(lat*Math.PI/180)*111320);
-  const bb = `${(lat-dLat).toFixed(5)},${(lon-dLon).toFixed(5)},${(lat+dLat).toFixed(5)},${(lon+dLon).toFixed(5)}`;
+// ---------- Karttaruudut: aluetta ladataan lisää liikkuessa ----------
+const TLAT=0.005, TLON=0.010;           // n. 550 m × 550 m Turun leveysasteella
+const tiles={}; let seenOSM=new Set(), mapMode='OSM';
+const tileOf=(lat,lon)=>[Math.floor(lat/TLAT), Math.floor(lon/TLON)];
+function parseOSM(els){
+  const out=[];
+  for (const el of els){
+    const uid=el.type[0]+el.id; if (seenOSM.has(uid)) continue; seenOSM.add(uid);
+    const t = el.tags || {}; const z = classify(t);
+    if (el.type==='node' || el.center){
+      if (z){ const c = el.center || el; const [x,y]=toXY(c.lat,c.lon); out.push({kind:'point',x,y,r: z==='hot'?60:45,zone:z,id:uid}); }
+      continue;
+    }
+    const geom = el.geometry; if (!geom || geom.length<2) continue;
+    const pts = geom.map(g=>toXY(g.lat,g.lon));
+    const closed = pts.length>3 && geom[0].lat===geom[geom.length-1].lat && geom[0].lon===geom[geom.length-1].lon;
+    if (t.highway){ out.push({kind:'line',pts,cls: /primary|secondary|trunk|tertiary/.test(t.highway)?'road1':'road2'}); continue; }
+    if (t.waterway && !closed){ out.push({kind:'line',pts,cls:'water',zone:'ranta',id:uid,w:25}); continue; }
+    if (t.building){ out.push({kind:'area',pts,cls:'building'}); continue; }
+    if (z && closed && z!=='hot' && z!=='arkisto') out.push({kind:'area',pts,zone:z,id:uid});
+  }
+  return out;
+}
+async function loadTile(ty,tx){
+  const s_=ty*TLAT, w_=tx*TLON, bb=`${s_.toFixed(5)},${w_.toFixed(5)},${(s_+TLAT).toFixed(5)},${(w_+TLON).toFixed(5)}`;
   const qMain = `[out:json][timeout:25][bbox:${bb}];
 (way["highway"~"^(primary|secondary|tertiary|residential|unclassified|living_street|pedestrian|service|footway|cycleway|path)$"];
  way["landuse"~"^(industrial|forest|farmland|meadow|grass|retail)$"];
@@ -221,30 +243,47 @@ out geom qt;
  nwr["shop"="mall"];);
 out center qt;`;
   const qBld = `[out:json][timeout:25][bbox:${bb}];way["building"];out geom qt;`;
-  const cacheKey = 'osm2_'+lat.toFixed(3)+'_'+lon.toFixed(3);
-  let main=null, bld=null;
-  try { const c = JSON.parse(localStorage.getItem(cacheKey)); if (c && Date.now()-c.t < 7*864e5){ main=c.m; bld=c.b; osmNote='välimuistista'; } } catch(e){}
+  const ck='osmt_'+ty+'_'+tx; let main=null, bld=null;
+  try { const c=JSON.parse(localStorage.getItem(ck)); if (c && Date.now()-c.t<7*864e5){ main=c.m; bld=c.b; osmNote='välimuistista'; } } catch(e){}
   if (!main){
     main = await overpass(qMain, 'kartta');
-    try { bld = await overpass(qBld, 'rakennukset'); } catch(e){ bld = {elements:[]}; bootSay && bootSay('  rakennukset ohitettiin (palvelin ruuhkainen)'); }
-    try { localStorage.setItem(cacheKey, JSON.stringify({t:Date.now(), m:main, b:bld})); } catch(e){}
+    try { bld = await overpass(qBld, 'rakennukset'); } catch(e){ bld={elements:[]}; }
+    try { localStorage.setItem(ck, JSON.stringify({t:Date.now(), m:main, b:bld})); }
+    catch(e){ try { for (const k of Object.keys(localStorage)) if (k.startsWith('osmt_')) localStorage.removeItem(k); localStorage.setItem(ck, JSON.stringify({t:Date.now(), m:main, b:bld})); } catch(e2){} }
   }
-  const out = [];
-  for (const el of main.elements.concat(bld.elements)){
-    const t = el.tags || {}; const z = classify(t);
-    if (el.type==='node' || el.center){
-      if (z){ const c = el.center || el; const [x,y]=toXY(c.lat,c.lon); out.push({kind:'point',x,y,r: z==='hot'?60:45,zone:z,id:el.type[0]+el.id}); }
-      continue;
-    }
-    const geom = el.geometry; if (!geom || geom.length<2) continue;
-    const pts = geom.map(g=>toXY(g.lat,g.lon));
-    const closed = pts.length>3 && geom[0].lat===geom[geom.length-1].lat && geom[0].lon===geom[geom.length-1].lon;
-    if (t.highway){ out.push({kind:'line',pts,cls: /primary|secondary|trunk|tertiary/.test(t.highway)?'road1':'road2'}); continue; }
-    if (t.waterway && !closed){ out.push({kind:'line',pts,cls:'water',zone:'ranta',id:'w'+el.id,w:25}); continue; }
-    if (t.building){ out.push({kind:'area',pts,cls:'building'}); continue; }
-    if (z && closed && z!=='hot' && z!=='arkisto') out.push({kind:'area',pts,zone:z,id:'w'+el.id});
+  return parseOSM(main.elements.concat(bld.elements));
+}
+function addFeatures(nf){
+  features.push(...nf);
+  const nz = nf.filter(f=>f.zone && f.id); zoneFeatures.push(...nz);
+  const have = new Set(nodes.map(n=>n.id)); nodes.push(...genNodes(nz).filter(n=>!have.has(n.id)));
+}
+// taustalataaja: hakee viereiset ruudut, kun pelaaja lähestyy ladatun alueen reunaa
+let tileBusy=false;
+async function tileLoader(){
+  if (mapMode!=='OSM' || tileBusy) return;
+  const me=toLL(P.x,P.y); const [cy,cx]=tileOf(me.lat,me.lon); const now=Date.now();
+  const cand=[];
+  for (let dy=-1; dy<=1; dy++) for (let dx=-1; dx<=1; dx++){
+    const ty=cy+dy, tx=cx+dx, k=ty+':'+tx, st=tiles[k];
+    if (st==='ok' || st==='loading' || (st && st.fail && now-st.fail<30000)) continue;
+    const lat=Math.min(Math.max(me.lat,ty*TLAT),(ty+1)*TLAT), lon=Math.min(Math.max(me.lon,tx*TLON),(tx+1)*TLON);
+    const [x1,y1]=toXY(lat,lon), d=Math.hypot(x1-P.x,y1-P.y);
+    if (d<350) cand.push({ty,tx,k,d});
   }
-  return out;
+  if (!cand.length) return;
+  cand.sort((a,b)=>a.d-b.d); const c=cand[0];
+  tileBusy=true; tiles[c.k]='loading';
+  const showMsg = c.d < 120;  // kerrotaan vain, jos reuna on jo lähellä
+  if (showMsg) log('Ladataan lisää aluetta...');
+  try { const nf=await loadTile(c.ty,c.tx); addFeatures(nf); tiles[c.k]='ok'; if (showMsg) log('Uusi alue ladattu.'); }
+  catch(e){ tiles[c.k]={fail:Date.now()}; if (showMsg) log('Alueen lataus epäonnistui, yritetään uudelleen...'); }
+  tileBusy=false;
+}
+setInterval(tileLoader, 2500);
+async function loadStartArea(lat,lon){
+  const [ty,tx]=tileOf(lat,lon); tiles[ty+':'+tx]='loading';
+  try { const f=await loadTile(ty,tx); tiles[ty+':'+tx]='ok'; return f; } catch(e){ delete tiles[ty+':'+tx]; throw e; }
 }
 
 // ---------- Proseduraalinen demokaupunki (jos OSM ei ole saatavilla) ----------
@@ -452,7 +491,7 @@ let MG=null;
 function startGather(){
   const near=nearestNode(false); if (!near || near.d>RANGE || !ready(near.n)) return;
   const n=near.n, cfg=NODE[n.zone], Z=ZONES[n.zone];
-  MG={ node:n, cfg, round:0, hits:0, pos:0, dir:1, target:0.2+Math.random()*0.55, t0:performance.now(), lock:false, res:[] };
+  MG={ node:n, cfg, round:0, hits:0, pos:0, target:0.2+Math.random()*0.55, t0:performance.now(), lock:false, res:[] };
   const o=$('mg'); o.style.setProperty('--c',Z.color); o.style.display='flex';
   $('mg-title').textContent=`${cfg.verb}: ${cfg.name.toUpperCase()}`;
   $('mg-desc').textContent = n.zone==='ranta' ? 'Napauta, kun osoitin osuu kalan kohdalle.' : (n.zone==='hot'||n.zone==='arkisto') ? 'Napauta, kun signaali lukittuu ikkunaan. Nopea!' : 'Napauta, kun osoitin on merkityllä alueella.';
@@ -462,21 +501,23 @@ function renderMG(){ $('mg-dots').innerHTML=[0,1,2].map(i=>`<span class="dot ${M
 function mgLoop(t){
   if (!MG) return;
   const dt=Math.min(0.05,(t-(MG.last||t))/1000); MG.last=t;
-  if (!MG.lock){ MG.pos+=MG.dir*MG.cfg.speed*dt; if (MG.pos>1){MG.pos=1;MG.dir=-1;} if (MG.pos<0){MG.pos=0;MG.dir=1;}
+  if (!MG.lock){ MG.pos=mgPos(t);
     if (MG.cfg.drift) MG.target = Math.max(0,Math.min(1-MG.cfg.win, MG.target + Math.sin(t/400)*0.004)); }
-  $('mg-cur').style.left=(MG.pos*100)+'%';
+  const tw=$('mg-track').clientWidth; $('mg-cur').style.transform=`translateX(${MG.pos*tw}px)`;
   $('mg-tgt').style.left=(MG.target*100)+'%'; $('mg-tgt').style.width=(MG.cfg.win*100)+'%';
   requestAnimationFrame(mgLoop);
 }
+function mgPos(t){ const ph=((t-MG.t0)/1000*MG.cfg.speed)%2; return ph<1?ph:2-ph; }
 function strike(){
   if (!MG || MG.lock) return;
+  MG.pos=mgPos(performance.now());   // osuma lasketaan kosketushetken mukaan, ei edellisen ruudunpäivityksen
   const hit = MG.pos>=MG.target && MG.pos<=MG.target+MG.cfg.win;
   MG.res.push(hit); if (hit) MG.hits++; MG.lock=true; renderMG();
   const fb=$('mg-fb'); fb.textContent = hit?'OSUMA!':'OHI'; fb.className = hit?'ok':'no';
   try{ navigator.vibrate && navigator.vibrate(hit?30:[10,40,10]); }catch(e){}
   setTimeout(()=>{ fb.textContent=''; MG.round++;
     if (MG.round>=3){ const m=MG; MG=null; $('mg').style.display='none'; finishGather(m.node,m.hits); return; }
-    MG.target=0.05+Math.random()*(0.9-MG.cfg.win); MG.lock=false; }, 450);
+    MG.target=0.05+Math.random()*(0.9-MG.cfg.win); MG.t0=performance.now()-Math.random()*800; MG.lock=false; }, 450);
 }
 $('mg').addEventListener('pointerdown', e=>{ e.preventDefault(); strike(); });
 
@@ -539,82 +580,122 @@ $('btn-skills').onclick = () => {
 $('modal').onclick = e => { if (e.target.id==='modal') closeModal(); };
 
 // ---------- Piirto ----------
-const cv=$('map'), ctx=cv.getContext('2d'); let W=0,Hh=0,DPR=1; let zoom=1.1;
+const cv=$('map'), ctx=cv.getContext('2d'); let W=0,Hh=0,DPR=1; let zoom=1.7;
 const fog=document.createElement('canvas'), fctx=fog.getContext('2d');
 function resize(){ DPR=Math.min(2,window.devicePixelRatio||1); W=innerWidth; Hh=innerHeight; for (const c of [cv,fog]){ c.width=W*DPR; c.height=Hh*DPR; } cv.style.width=W+'px'; cv.style.height=Hh+'px'; }
 addEventListener('resize',resize); resize();
-const sx = x => (x-P.x)*zoom + W/2, sy = y => (y-P.y)*zoom + Hh/2;
-function path(pts){ ctx.beginPath(); pts.forEach(([x,y],i)=> i?ctx.lineTo(sx(x),sy(y)):ctx.moveTo(sx(x),sy(y))); }
+// pelaaja on hieman ruudun keskikohdan alapuolella, jotta edessä näkyy enemmän
+const CY = () => Hh*0.56;
+// kartan kierto: ROT = suunta (rad, 0 = pohjoinen, myötäpäivään), joka näytetään ylöspäin
+let ROT=0, rotTarget=0, moveHeading=null, lastHeadPt=null, compassHeading=null, compassOn=false, dirMode='kulku', stillSince=0;
+function lerpAngle(a,b,t){ let d=((b-a+Math.PI)%(2*Math.PI)+2*Math.PI)%(2*Math.PI)-Math.PI; return a+d*t; }
+function scr(x,y){ const dx=(x-P.x)*zoom, dy=(y-P.y)*zoom, c=Math.cos(-ROT), s=Math.sin(-ROT); return [dx*c-dy*s+W/2, dx*s+dy*c+CY()]; }
+function unscr(X,Y){ const u=(X-W/2)/zoom, v=(Y-CY())/zoom, c=Math.cos(ROT), s=Math.sin(ROT); return [P.x+u*c-v*s, P.y+u*s+v*c]; }
+function path(pts){ ctx.beginPath(); pts.forEach(([x,y],i)=>{ const [X,Y]=scr(x,y); i?ctx.lineTo(X,Y):ctx.moveTo(X,Y); }); }
 function hexA(hex,a){ const n=parseInt(hex.slice(1),16); return `rgba(${n>>16},${(n>>8)&255},${n&255},${a})`; }
+function updateHeading(dt){
+  if (!lastHeadPt) lastHeadPt={x:P.x,y:P.y,t:performance.now()};
+  const dx=P.x-lastHeadPt.x, dy=P.y-lastHeadPt.y;
+  if (Math.hypot(dx,dy)>4){ moveHeading=Math.atan2(dx,-dy); lastHeadPt={x:P.x,y:P.y,t:performance.now()}; }
+  const still = performance.now()-lastHeadPt.t > 4000;
+  if (dirMode==='pohjoinen') rotTarget=0;
+  else if (dirMode==='kompassi' && compassHeading!==null) rotTarget=compassHeading;
+  else if (still && compassOn && compassHeading!==null) rotTarget=compassHeading;
+  else if (moveHeading!==null) rotTarget=moveHeading;
+  ROT = lerpAngle(ROT, rotTarget, Math.min(1, dt*2.2));
+}
+function onOri(e){ let h=null; if (typeof e.webkitCompassHeading==='number') h=e.webkitCompassHeading; else if (e.absolute && e.alpha!=null) h=360-e.alpha;
+  if (h!==null && !isNaN(h)){ const r=h*Math.PI/180; compassHeading = compassHeading===null ? r : lerpAngle(compassHeading, r, 0.25); } }
+async function enableCompass(){
+  if (compassOn) return true;
+  try { if (window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission==='function'){ const r=await DeviceOrientationEvent.requestPermission(); if (r!=='granted'){ log('Kompassin käyttöä ei sallittu.'); return false; } }
+    addEventListener('deviceorientationabsolute', onOri); addEventListener('deviceorientation', onOri); compassOn=true; return true;
+  } catch(e){ log('Kompassi ei käytettävissä.'); return false; }
+}
+const DIRS=['kulku','kompassi','pohjoinen'], DIRLBL={kulku:'SUUNTA: KULKU',kompassi:'SUUNTA: KOMPASSI',pohjoinen:'SUUNTA: POHJOINEN'};
+$('b-dir').onclick = async () => { dirMode = DIRS[(DIRS.indexOf(dirMode)+1)%3];
+  if (dirMode==='kompassi'){ const ok=await enableCompass(); if(!ok) dirMode='pohjoinen'; }
+  if (dirMode==='kulku') enableCompass();   // paikallaan seistessä käytetään kompassia, jos saatavilla
+  $('b-dir').textContent=DIRLBL[dirMode];
+  log(dirMode==='kulku'?'Kartta kääntyy kulkusuunnan mukaan.':dirMode==='kompassi'?'Kartta kääntyy puhelimen suunnan mukaan.':'Pohjoinen on aina ylhäällä.'); };
 
+let topBottom=0; setInterval(()=>{ const el=$('top'); if(el) topBottom=el.getBoundingClientRect().bottom; },1000);
 function draw(t){
   ctx.setTransform(DPR,0,0,DPR,0,0);
   ctx.fillStyle='#0a0603'; ctx.fillRect(0,0,W,Hh);
-  // ruudukko
-  ctx.strokeStyle='rgba(255,176,0,.05)'; ctx.lineWidth=1; const g=50*zoom;
-  for (let x=((W/2-P.x*zoom)%g+g)%g; x<W; x+=g){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,Hh); ctx.stroke(); }
-  for (let y=((Hh/2-P.y*zoom)%g+g)%g; y<Hh; y+=g){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
-  const now = Date.now();
+  // ruudukko (kiertyy kartan mukana)
+  ctx.save(); ctx.translate(W/2,CY()); ctx.rotate(-ROT);
+  ctx.strokeStyle='rgba(255,176,0,.05)'; ctx.lineWidth=1; const g=50*zoom, R=Math.hypot(W,Hh);
+  const ox=-(((P.x*zoom)%g)+g)%g, oy=-(((P.y*zoom)%g)+g)%g;
+  for (let x=ox-Math.ceil(R/g)*g; x<R; x+=g){ ctx.beginPath(); ctx.moveTo(x,-R); ctx.lineTo(x,R); ctx.stroke(); }
+  for (let y=oy-Math.ceil(R/g)*g; y<R; y+=g){ ctx.beginPath(); ctx.moveTo(-R,y); ctx.lineTo(R,y); ctx.stroke(); }
+  ctx.restore();
   // vyöhykkeet
   for (const f of features){
-    if (f.kind==='area' && f.zone){ const Z=ZONES[f.zone]; const dep=(S.cooldowns[f.id]||0)>now;
-      path(f.pts); ctx.fillStyle=hexA(Z.color, dep?.04:.10); ctx.fill(); ctx.strokeStyle=hexA(Z.color, dep?.25:.55); ctx.lineWidth=1.2; ctx.stroke(); }
-    if (f.kind==='line' && f.cls==='water'){ path(f.pts); ctx.strokeStyle='rgba(62,232,255,.22)'; ctx.lineWidth=Math.max(2,f.w*zoom); ctx.lineCap='round'; ctx.stroke(); }
+    if (f.kind==='area' && f.zone){ const Z=ZONES[f.zone];
+      path(f.pts); ctx.fillStyle=hexA(Z.color,.15); ctx.fill(); ctx.strokeStyle=hexA(Z.color,.5); ctx.lineWidth=1.2; ctx.stroke(); }
+    if (f.kind==='line' && f.cls==='water'){ path(f.pts); ctx.strokeStyle='rgba(62,232,255,.28)'; ctx.lineWidth=Math.max(3,f.w*zoom); ctx.lineCap='round'; ctx.stroke(); }
   }
-  // rakennukset
-  ctx.strokeStyle='rgba(255,176,0,.22)'; ctx.lineWidth=1;
-  for (const f of features) if (f.cls==='building'){ path(f.pts); ctx.stroke(); }
-  // tiet
-  ctx.shadowColor='#ffb000'; ctx.shadowBlur=4; ctx.lineCap='round';
-  for (const f of features) if (f.kind==='line' && (f.cls==='road1'||f.cls==='road2')){ path(f.pts);
-    ctx.strokeStyle= f.cls==='road1'?'rgba(255,176,0,.65)':'rgba(255,176,0,.35)'; ctx.lineWidth= f.cls==='road1'?2.2:1.2; ctx.stroke(); }
-  // pistevyöhykkeet
-  for (const f of features) if (f.kind==='point'){ const Z=ZONES[f.zone]; const dep=(S.cooldowns[f.id]||0)>now;
-    const pulse = Z.hot ? 1 + Math.sin(t/300)*0.08 : 1;
-    ctx.shadowColor=Z.color; ctx.shadowBlur= Z.hot?14:8;
-    ctx.beginPath(); ctx.arc(sx(f.x),sy(f.y),f.r*zoom*pulse,0,7); ctx.fillStyle=hexA(Z.color, dep?.04:.12); ctx.fill();
-    ctx.strokeStyle=hexA(Z.color, dep?.3:.85); ctx.lineWidth=1.5; ctx.setLineDash(Z.hot?[6,4]:[]); ctx.stroke(); ctx.setLineDash([]);
-    ctx.fillStyle=hexA(Z.color,.9); ctx.font='16px VT323, monospace'; ctx.textAlign='center';
-    }
+  // rakennukset: himmeä täyttö, jotta tiet erottuvat
+  for (const f of features) if (f.cls==='building'){ path(f.pts); ctx.fillStyle='rgba(255,176,0,.05)'; ctx.fill(); ctx.strokeStyle='rgba(255,176,0,.16)'; ctx.lineWidth=1; ctx.stroke(); }
+  // tiet: leveämmät ja kirkkaammat
+  ctx.lineCap='round'; ctx.lineJoin='round';
+  for (const f of features) if (f.kind==='line' && f.cls==='road2'){ path(f.pts); ctx.strokeStyle='rgba(255,176,0,.45)'; ctx.lineWidth=Math.max(2,4*zoom/1.7); ctx.stroke(); }
+  ctx.shadowColor='#ffb000'; ctx.shadowBlur=6;
+  for (const f of features) if (f.kind==='line' && f.cls==='road1'){ path(f.pts); ctx.strokeStyle='rgba(255,176,0,.8)'; ctx.lineWidth=Math.max(3,7*zoom/1.7); ctx.stroke(); }
   ctx.shadowBlur=0;
-  // keräyspisteet
-  const nearN = nearestNode(false);
-  ctx.textAlign='center'; ctx.textBaseline='middle';
-  for (const n of nodes){ const X=sx(n.x), Y=sy(n.y); if (X<-30||Y<-30||X>W+30||Y>Hh+30) continue;
-    const Z=ZONES[n.zone], cfg=NODE[n.zone], rdy=ready(n), inR = nearN && nearN.n===n && nearN.d<=RANGE;
-    if (rdy){ const pr=1+0.15*Math.sin(t/260+n.x);
-      ctx.shadowColor=Z.color; ctx.shadowBlur=inR?18:10;
-      ctx.beginPath(); ctx.arc(X,Y,(inR?17:12)*pr,0,7); ctx.fillStyle=hexA(Z.color,.18); ctx.fill(); ctx.strokeStyle=Z.color; ctx.lineWidth=inR?2:1.3; ctx.stroke();
-      ctx.fillStyle=Z.color; ctx.font=(inR?24:19)+'px VT323, monospace'; ctx.fillText(cfg.icon,X,Y+1);
-      if (inR){ ctx.font='16px VT323, monospace'; ctx.fillText(cfg.verb+'!',X,Y-28); }
-    } else { const left=Math.max(0,(S.cooldowns[n.id]-Date.now())/COOLDOWN_MS);
-      ctx.shadowBlur=0; ctx.fillStyle=hexA(Z.color,.3); ctx.font='17px VT323, monospace'; ctx.fillText(cfg.icon,X,Y+1);
-      ctx.beginPath(); ctx.arc(X,Y,11,-Math.PI/2,-Math.PI/2+Math.PI*2*(1-left)); ctx.strokeStyle=hexA(Z.color,.55); ctx.lineWidth=2; ctx.stroke(); }
-  }
-  ctx.shadowBlur=0; ctx.textBaseline='alphabetic';
-  // suunta lähimpään valmiiseen löytöön
-  const nr = nearestNode(true);
-  if (nr && nr.d>RANGE && nr.d<600){ const Z=ZONES[nr.n.zone]; const a=Math.atan2(nr.n.y-P.y,nr.n.x-P.x);
-    const ax=W/2+Math.cos(a)*34, ay=Hh/2+Math.sin(a)*34;
-    ctx.save(); ctx.translate(ax,ay); ctx.rotate(a); ctx.fillStyle=Z.color; ctx.shadowColor=Z.color; ctx.shadowBlur=8;
-    ctx.beginPath(); ctx.moveTo(8,0); ctx.lineTo(-5,-6); ctx.lineTo(-5,6); ctx.closePath(); ctx.fill(); ctx.restore(); ctx.shadowBlur=0; }
-  // sumu: kartoittamaton alue tummennetaan
+  // pistevyöhykkeet
+  for (const f of features) if (f.kind==='point'){ const Z=ZONES[f.zone]; const [X,Y]=scr(f.x,f.y);
+    const pulse = Z.hot ? 1 + Math.sin(t/300)*0.08 : 1;
+    ctx.beginPath(); ctx.arc(X,Y,f.r*zoom*pulse,0,7); ctx.fillStyle=hexA(Z.color,.12); ctx.fill();
+    ctx.strokeStyle=hexA(Z.color,.7); ctx.lineWidth=1.5; ctx.setLineDash(Z.hot?[6,4]:[]); ctx.stroke(); ctx.setLineDash([]); }
+  // sumu: kartoittamaton alue tummennetaan kevyesti
   fctx.setTransform(DPR,0,0,DPR,0,0); fctx.globalCompositeOperation='source-over'; fctx.clearRect(0,0,W,Hh);
-  fctx.fillStyle='rgba(10,6,3,.62)'; fctx.fillRect(0,0,W,Hh); fctx.globalCompositeOperation='destination-out';
-  const rr = 70*zoom;
+  fctx.fillStyle='rgba(10,6,3,.38)'; fctx.fillRect(0,0,W,Hh); fctx.globalCompositeOperation='destination-out';
+  const rr = 80*zoom;
   for (const key in S.visited){ const [a,b]=key.split(':').map(Number); const [x,y]=toXY(a*0.00036,b*0.00072);
-    const X=sx(x), Y=sy(y); if (X<-rr||Y<-rr||X>W+rr||Y>Hh+rr) continue;
+    const [X,Y]=scr(x,y); if (X<-rr||Y<-rr||X>W+rr||Y>Hh+rr) continue;
     const gr=fctx.createRadialGradient(X,Y,0,X,Y,rr); gr.addColorStop(0,'rgba(0,0,0,1)'); gr.addColorStop(1,'rgba(0,0,0,0)');
     fctx.fillStyle=gr; fctx.beginPath(); fctx.arc(X,Y,rr,0,7); fctx.fill(); }
   ctx.setTransform(1,0,0,1,0,0); ctx.drawImage(fog,0,0); ctx.setTransform(DPR,0,0,DPR,0,0);
-  // kohde
-  if (P.tx!==null){ ctx.strokeStyle='rgba(255,176,0,.6)'; ctx.setLineDash([3,5]); ctx.beginPath(); ctx.moveTo(W/2,Hh/2); ctx.lineTo(sx(P.tx),sy(P.ty)); ctx.stroke(); ctx.setLineDash([]);
-    ctx.beginPath(); ctx.arc(sx(P.tx),sy(P.ty),5,0,7); ctx.stroke(); }
-  // pelaaja
-  ctx.shadowColor='#ffb000'; ctx.shadowBlur=12; ctx.fillStyle='#ffb000';
-  ctx.beginPath(); ctx.arc(W/2,Hh/2,6,0,7); ctx.fill();
-  ctx.strokeStyle=`rgba(255,176,0,${.5+.3*Math.sin(t/250)})`; ctx.lineWidth=1.2; ctx.beginPath(); ctx.arc(W/2,Hh/2,14+3*Math.sin(t/250),0,7); ctx.stroke();
+  // keräyspisteet (sumun päällä, aina näkyvissä ja pystyssä)
+  const nearN = nearestNode(false);
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  for (const n of nodes){ const [X,Y]=scr(n.x,n.y); if (X<-30||Y<-30||X>W+30||Y>Hh+30) continue;
+    const Z=ZONES[n.zone], cfg=NODE[n.zone], rdy=ready(n), inR = nearN && nearN.n===n && nearN.d<=RANGE;
+    if (rdy){ const pr=1+0.15*Math.sin(t/260+n.x);
+      ctx.shadowColor=Z.color; ctx.shadowBlur=inR?20:12;
+      ctx.beginPath(); ctx.arc(X,Y,(inR?20:15)*pr,0,7); ctx.fillStyle=hexA(Z.color,.22); ctx.fill(); ctx.strokeStyle=Z.color; ctx.lineWidth=inR?2.5:1.6; ctx.stroke();
+      ctx.fillStyle=Z.color; ctx.font=(inR?28:23)+'px VT323, monospace'; ctx.fillText(cfg.icon,X,Y+1);
+      if (inR){ ctx.font='18px VT323, monospace'; ctx.fillText(cfg.verb+'!',X,Y-32); }
+    } else { const left=Math.max(0,(S.cooldowns[n.id]-Date.now())/COOLDOWN_MS);
+      ctx.shadowBlur=0; ctx.fillStyle=hexA(Z.color,.3); ctx.font='19px VT323, monospace'; ctx.fillText(cfg.icon,X,Y+1);
+      ctx.beginPath(); ctx.arc(X,Y,13,-Math.PI/2,-Math.PI/2+Math.PI*2*(1-left)); ctx.strokeStyle=hexA(Z.color,.55); ctx.lineWidth=2; ctx.stroke(); }
+  }
+  ctx.shadowBlur=0; ctx.textBaseline='alphabetic';
+  // suuntanuoli lähimpään valmiiseen löytöön + katkoviiva
+  const nr = nearestNode(true);
+  if (nr && nr.d>RANGE && nr.d<600){ const Z=ZONES[nr.n.zone]; const [TX,TY]=scr(nr.n.x,nr.n.y); const a=Math.atan2(TY-CY(),TX-W/2);
+    ctx.strokeStyle=hexA(Z.color,.45); ctx.lineWidth=1.5; ctx.setLineDash([4,6]); ctx.beginPath(); ctx.moveTo(W/2+Math.cos(a)*44,CY()+Math.sin(a)*44); ctx.lineTo(TX,TY); ctx.stroke(); ctx.setLineDash([]);
+    const ax=W/2+Math.cos(a)*38, ay=CY()+Math.sin(a)*38;
+    ctx.save(); ctx.translate(ax,ay); ctx.rotate(a); ctx.fillStyle=Z.color; ctx.shadowColor=Z.color; ctx.shadowBlur=10;
+    ctx.beginPath(); ctx.moveTo(11,0); ctx.lineTo(-6,-8); ctx.lineTo(-6,8); ctx.closePath(); ctx.fill(); ctx.restore(); ctx.shadowBlur=0; }
+  // simuloidun liikkeen kohde
+  if (P.tx!==null){ const [X,Y]=scr(P.tx,P.ty); ctx.strokeStyle='rgba(255,176,0,.6)'; ctx.setLineDash([3,5]); ctx.beginPath(); ctx.moveTo(W/2,CY()); ctx.lineTo(X,Y); ctx.stroke(); ctx.setLineDash([]);
+    ctx.beginPath(); ctx.arc(X,Y,5,0,7); ctx.stroke(); }
+  // pelaaja: nuoli osoittaa kulkusuuntaan
+  const pa = (moveHeading!==null ? moveHeading : ROT) - ROT;
+  ctx.save(); ctx.translate(W/2,CY()); ctx.rotate(pa);
+  ctx.shadowColor='#ffb000'; ctx.shadowBlur=14; ctx.fillStyle='#ffb000';
+  ctx.beginPath(); ctx.moveTo(0,-13); ctx.lineTo(9,9); ctx.lineTo(0,4); ctx.lineTo(-9,9); ctx.closePath(); ctx.fill(); ctx.restore();
+  ctx.strokeStyle=`rgba(255,176,0,${.45+.3*Math.sin(t/250)})`; ctx.lineWidth=1.2; ctx.beginPath(); ctx.arc(W/2,CY(),20+3*Math.sin(t/250),0,7); ctx.stroke();
   ctx.shadowBlur=0;
+  // pohjoisnuoli
+  const nx=W-34, ny=(topBottom||100)+30, na=-Math.PI/2-ROT;
+  ctx.beginPath(); ctx.arc(nx,ny,16,0,7); ctx.fillStyle='rgba(10,6,3,.8)'; ctx.fill(); ctx.strokeStyle='rgba(255,176,0,.6)'; ctx.lineWidth=1; ctx.stroke();
+  ctx.save(); ctx.translate(nx,ny); ctx.rotate(na+Math.PI/2); ctx.fillStyle='#ff2bd6'; ctx.beginPath(); ctx.moveTo(0,-13); ctx.lineTo(5,0); ctx.lineTo(-5,0); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='rgba(255,176,0,.6)'; ctx.beginPath(); ctx.moveTo(0,13); ctx.lineTo(5,0); ctx.lineTo(-5,0); ctx.closePath(); ctx.fill(); ctx.restore();
+  ctx.font='14px VT323, monospace'; ctx.textAlign='center'; ctx.fillStyle='#ff2bd6'; ctx.fillText('N', nx+Math.cos(na)*24, ny+Math.sin(na)*24+4);
 }
 
 
@@ -679,9 +760,10 @@ function loop(t){
   if (P.mode==='sim' && P.tx!==null){ const dx=P.tx-P.x, dy=P.ty-P.y, d=Math.hypot(dx,dy), s=SIM_SPEED*dt;
     if (d<=s){ P.x=P.tx; P.y=P.ty; P.tx=P.ty=null; moved(d); } else { P.x+=dx/d*s; P.y+=dy/d*s; moved(s); } }
   if (keys.size && P.mode==='sim'){ let vx=0,vy=0; if(keys.has('ArrowLeft')||keys.has('a'))vx--; if(keys.has('ArrowRight')||keys.has('d'))vx++; if(keys.has('ArrowUp')||keys.has('w'))vy--; if(keys.has('ArrowDown')||keys.has('s'))vy++;
-    if (vx||vy){ const n=Math.hypot(vx,vy), s=SIM_SPEED*dt; P.x+=vx/n*s; P.y+=vy/n*s; P.tx=P.ty=null; moved(s); } }
+    if (vx||vy){ const n=Math.hypot(vx,vy), s=SIM_SPEED*dt, c=Math.cos(ROT), si=Math.sin(ROT); const ux=vx/n, uy=vy/n; P.x+=(ux*c-uy*si)*s; P.y+=(ux*si+uy*c)*s; P.tx=P.ty=null; moved(s); } }
   signal(dt);
-  draw(t);
+  updateHeading(dt);
+  if (!MG) draw(t);
   if ((uiTick+=dt)>0.25){ uiTick=0; updateUI(); }
   requestAnimationFrame(loop);
 }
@@ -691,10 +773,10 @@ const keys=new Set(); addEventListener('keydown',e=>keys.add(e.key)); addEventLi
 let pinch=null, down=null;
 cv.addEventListener('pointerdown',e=>{ down={x:e.clientX,y:e.clientY}; });
 cv.addEventListener('pointerup',e=>{ if(!down) return; const moved_=Math.hypot(e.clientX-down.x,e.clientY-down.y); down=null;
-  if (moved_<8 && P.mode==='sim' && !pinch){ P.tx=P.x+(e.clientX-W/2)/zoom; P.ty=P.y+(e.clientY-Hh/2)/zoom; } });
-cv.addEventListener('wheel',e=>{ e.preventDefault(); zoom=Math.max(0.35,Math.min(4,zoom*(e.deltaY<0?1.12:0.89))); },{passive:false});
+  if (moved_<8 && P.mode==='sim' && !pinch){ const [wx_,wy_]=unscr(e.clientX,e.clientY); P.tx=wx_; P.ty=wy_; } });
+cv.addEventListener('wheel',e=>{ e.preventDefault(); zoom=Math.max(0.5,Math.min(4,zoom*(e.deltaY<0?1.12:0.89))); },{passive:false});
 cv.addEventListener('touchstart',e=>{ if(e.touches.length===2){ const [a,b]=e.touches; pinch={d:Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY),z:zoom}; } },{passive:true});
-cv.addEventListener('touchmove',e=>{ if(pinch&&e.touches.length===2){ const [a,b]=e.touches; zoom=Math.max(0.35,Math.min(4,pinch.z*Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY)/pinch.d)); } },{passive:true});
+cv.addEventListener('touchmove',e=>{ if(pinch&&e.touches.length===2){ const [a,b]=e.touches; zoom=Math.max(0.5,Math.min(4,pinch.z*Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY)/pinch.d)); } },{passive:true});
 cv.addEventListener('touchend',e=>{ if(e.touches.length<2) setTimeout(()=>pinch=null,50); },{passive:true});
 
 // ---------- Käynnistys ----------
@@ -722,20 +804,20 @@ function startWatch(){
       if (sp>50){ log('SIJAINTIHYPPY HYLÄTTY'); return; } // huijausesto: mahdoton nopeus
       if (sp<7) moved(d); else log('LIIAN NOPEA (>25 km/h)'); }
     lastFix={x,y,t:now}; P.x=x; P.y=y;
-  }, e=>{ if (P.mode==='gps') log('GPS: '+(GEO_ERR[e.code]||e.message)); }, {enableHighAccuracy:true, maximumAge:2000, timeout:30000});
+  }, e=>{ const now=Date.now(); if (P.mode==='gps' && (!lastFix || now-lastFix.t>20000) && now-(window._gpsErrT||0)>30000){ window._gpsErrT=now; log('GPS: '+(GEO_ERR[e.code]||e.message)); } }, {enableHighAccuracy:true, maximumAge:2000, timeout:30000});
 }
 
 async function boot(){
   const B=$('boot'); const say=s=>{ B.textContent += s+'\n'; }; bootSay=say;
-  say('JÄÄNNÖSVERKKO-TERMINAALI v0.7'); say('(c) 20XX — kaikki oikeudet raunioituneet'); say('');
+  say('JÄÄNNÖSVERKKO-TERMINAALI v0.9'); say('(c) 20XX — kaikki oikeudet raunioituneet'); say('');
   say('> Haetaan sijaintia (voi kestää 10–20 s)...');
   const pos = await getPosition();
   if (pos){ origin={lat:pos.coords.latitude, lon:pos.coords.longitude}; P.mode='gps'; say('  GPS-LUKITUS OK'); }
   else { origin={...START}; P.mode='sim'; say('  GPS EPÄONNISTUI: '+(geoErr||'tuntematon syy')); say('  → SIMULOITU SIJAINTI (Turku, Kauppatori). GPS:ää yritetään taustalla.'); }
   say('> Ladataan karttadataa (OpenStreetMap)...');
   let data='OSM';
-  try { features = await loadOSM(origin.lat, origin.lon); if (features.length<20) throw new Error('liian vähän dataa'); say(`  ${features.length} kohdetta ladattu (${osmNote})`); }
-  catch(e){ features = demoCity(); data='DEMO'; osmFail=e.message; say('  KARTTADATA EPÄONNISTUI: '+e.message); say('  → SIMULOITU DEMOKAUPUNKI. Paina yläpalkin HAE KARTTA yrittääksesi uudelleen.'); }
+  try { features = await loadStartArea(origin.lat, origin.lon); if (features.length<5) throw new Error('liian vähän dataa'); say(`  ${features.length} kohdetta ladattu (${osmNote})`); }
+  catch(e){ features = demoCity(); data='DEMO'; mapMode='DEMO'; osmFail=e.message; say('  KARTTADATA EPÄONNISTUI: '+e.message); say('  → SIMULOITU DEMOKAUPUNKI. Paina yläpalkin HAE KARTTA yrittääksesi uudelleen.'); }
   zoneFeatures = features.filter(f=>f.zone && f.id);
   nodes = genNodes(zoneFeatures);
   $('st-pos').textContent = 'SIJAINTI: ' + (P.mode==='gps'?'GPS':'SIMULOITU');
@@ -752,8 +834,9 @@ async function boot(){
     bm.onclick = async () => { if (bm.disabled) return; bm.disabled=true; bm.textContent='HAETAAN...'; $('st-data').textContent='DATA: HAETAAN...';
       const here = toLL(P.x,P.y);
       try { origin = {lat:here.lat, lon:here.lon}; P.x=0; P.y=0; lastFix=null; P.tx=P.ty=null;
-        const f = await loadOSM(origin.lat, origin.lon); if (f.length<20) throw new Error('liian vähän dataa');
-        features=f; zoneFeatures=features.filter(f=>f.zone&&f.id); nodes=genNodes(zoneFeatures);
+        for (const k in tiles) delete tiles[k]; seenOSM=new Set();
+        const f = await loadStartArea(origin.lat, origin.lon); if (f.length<5) throw new Error('liian vähän dataa');
+        features=f; zoneFeatures=features.filter(f=>f.zone&&f.id); nodes=genNodes(zoneFeatures); mapMode='OSM';
         $('st-data').textContent='DATA: OSM'; bm.style.display='none'; log('Oikea karttadata ladattu ('+osmNote+').'); }
       catch(e){ $('st-data').textContent='DATA: DEMO'; bm.textContent='HAE KARTTA'; log('KARTTA: '+e.message); }
       bm.disabled=false; };
