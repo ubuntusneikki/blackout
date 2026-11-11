@@ -122,7 +122,7 @@
 
 // ---------- Pelin data ----------
 const START = { lat: 60.4518, lon: 22.2666 }; // Turun kauppatori
-const RADIUS = 700; // metriä, karttadatan hakusäde
+const RADIUS = 550; // metriä, karttadatan hakusäde
 const ZONES = {
   romu:     { name:'ROMUVYÖHYKE',  color:'#ffb000', skill:'romu',   desc:'Vanhaa teollisuutta. Metallia ja koneenosia.',
               loot:[['Romumetalli',60,1,3],['Koneenosa',30,1,1],['Vanha piirilevy',10,1,1]] },
@@ -181,6 +181,7 @@ function classify(t){
   return null;
 }
 
+let osmNote='', bootSay=null, osmFail='';
 async function loadOSM(lat, lon){
   const q = `[out:json][timeout:25];(
     way["highway"](around:${RADIUS},${lat},${lon});
@@ -194,12 +195,23 @@ async function loadOSM(lat, lon){
     nwr["man_made"~"mast|tower|communications_tower"](around:${RADIUS},${lat},${lon});
     nwr["shop"="mall"](around:${RADIUS},${lat},${lon});
   );out geom;`;
-  const ctrl = new AbortController(); const to = setTimeout(()=>ctrl.abort(), 20000);
-  const res = await fetch('https://overpass-api.de/api/interpreter', { method:'POST', body:'data='+encodeURIComponent(q),
-    headers:{'Content-Type':'application/x-www-form-urlencoded'}, signal:ctrl.signal });
-  clearTimeout(to);
-  if (!res.ok) throw new Error('HTTP '+res.status);
-  const js = await res.json();
+  const SERVERS = ['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter','https://overpass.private.coffee/api/interpreter'];
+  const cacheKey = 'osm_'+lat.toFixed(3)+'_'+lon.toFixed(3);
+  let js = null, errs = [];
+  try { const c = JSON.parse(localStorage.getItem(cacheKey)); if (c && Date.now()-c.t < 7*864e5) { js = c.d; osmNote = 'välimuistista'; } } catch(e){}
+  for (const url of SERVERS){
+    if (js) break;
+    const ctrl = new AbortController(); const to = setTimeout(()=>ctrl.abort(), 25000);
+    try {
+      bootSay && bootSay('  palvelin: '+url.split('/')[2]+' ...');
+      const res = await fetch(url, { method:'POST', body:'data='+encodeURIComponent(q), headers:{'Content-Type':'application/x-www-form-urlencoded'}, signal:ctrl.signal });
+      clearTimeout(to);
+      if (!res.ok){ errs.push(url.split('/')[2]+': HTTP '+res.status); continue; }
+      js = await res.json(); osmNote = url.split('/')[2];
+      try { localStorage.setItem(cacheKey, JSON.stringify({t:Date.now(), d:js})); } catch(e){}
+    } catch(e){ clearTimeout(to); errs.push(url.split('/')[2]+': '+(e.name==='AbortError'?'aikakatkaisu':e.message)); }
+  }
+  if (!js) throw new Error(errs.join(' | '));
   const out = [];
   for (const el of js.elements){
     const t = el.tags || {}; const z = classify(t);
@@ -704,7 +716,7 @@ function startWatch(){
 }
 
 async function boot(){
-  const B=$('boot'); const say=s=>{ B.textContent += s+'\n'; };
+  const B=$('boot'); const say=s=>{ B.textContent += s+'\n'; }; bootSay=say;
   say('JÄÄNNÖSVERKKO-TERMINAALI v0.1'); say('(c) 20XX — kaikki oikeudet raunioituneet'); say('');
   say('> Haetaan sijaintia (voi kestää 10–20 s)...');
   const pos = await getPosition();
@@ -712,8 +724,8 @@ async function boot(){
   else { origin={...START}; P.mode='sim'; say('  GPS EPÄONNISTUI: '+(geoErr||'tuntematon syy')); say('  → SIMULOITU SIJAINTI (Turku, Kauppatori). GPS:ää yritetään taustalla.'); }
   say('> Ladataan karttadataa (OpenStreetMap)...');
   let data='OSM';
-  try { features = await loadOSM(origin.lat, origin.lon); if (features.length<20) throw new Error('liian vähän dataa'); say(`  ${features.length} kohdetta ladattu`); }
-  catch(e){ features = demoCity(); data='DEMO'; say('  YHTEYS EPÄONNISTUI → SIMULOITU DEMOKAUPUNKI'); }
+  try { features = await loadOSM(origin.lat, origin.lon); if (features.length<20) throw new Error('liian vähän dataa'); say(`  ${features.length} kohdetta ladattu (${osmNote})`); }
+  catch(e){ features = demoCity(); data='DEMO'; osmFail=e.message; say('  KARTTADATA EPÄONNISTUI: '+e.message); say('  → SIMULOITU DEMOKAUPUNKI. Napauta yläpalkin DATA: DEMO yrittääksesi uudelleen.'); }
   zoneFeatures = features.filter(f=>f.zone && f.id);
   nodes = genNodes(zoneFeatures);
   $('st-pos').textContent = 'SIJAINTI: ' + (P.mode==='gps'?'GPS':'SIMULOITU');
@@ -725,6 +737,15 @@ async function boot(){
   await new Promise(r=>setTimeout(r,900));
   B.style.transition='opacity .4s'; B.style.opacity='0'; setTimeout(()=>B.remove(),450);
   if (P.mode==='sim' && geoErr) log('GPS: '+geoErr);
+  if (data==='DEMO'){ log('KARTTA: '+osmFail); $('st-data').style.textDecoration='underline'; $('st-data').style.cursor='pointer';
+    $('st-data').onclick = async () => { $('st-data').textContent='DATA: HAETAAN...';
+      const here = toLL(P.x,P.y);
+      try { origin = {lat:here.lat, lon:here.lon}; P.x=0; P.y=0; lastFix=null; P.tx=P.ty=null;
+        const f = await loadOSM(origin.lat, origin.lon); if (f.length<20) throw new Error('liian vähän dataa');
+        features=f; zoneFeatures=features.filter(f=>f.zone&&f.id); nodes=genNodes(zoneFeatures);
+        $('st-data').textContent='DATA: OSM'; $('st-data').onclick=null; $('st-data').style.textDecoration='none'; log('Oikea karttadata ladattu ('+osmNote+').'); }
+      catch(e){ $('st-data').textContent='DATA: DEMO'; log('KARTTA: '+e.message); } };
+  }
   log(data==='DEMO' ? 'Demokaupunki ladattu. Etsi värillisiä vyöhykkeitä.' : 'Karttadata ladattu. Etsi värillisiä vyöhykkeitä.');
   updateUI(true);
 }
