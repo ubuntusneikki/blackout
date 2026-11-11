@@ -87,6 +87,8 @@
   <span id="st-pos">SIJAINTI: ...</span>
   <span id="st-data">DATA: ...</span>
   <button id="b-sig" class="sigbtn">SIGNAALI: POIS</button>
+  <button id="b-map" class="sigbtn" style="display:none;color:#ff2bd6;border-color:#ff2bd6">HAE KARTTA</button>
+  <span class="hint">v0.6</span>
   <span id="st-xp">LÖYDÖT 0</span>
 </div>
 
@@ -717,7 +719,7 @@ function startWatch(){
 
 async function boot(){
   const B=$('boot'); const say=s=>{ B.textContent += s+'\n'; }; bootSay=say;
-  say('JÄÄNNÖSVERKKO-TERMINAALI v0.1'); say('(c) 20XX — kaikki oikeudet raunioituneet'); say('');
+  say('JÄÄNNÖSVERKKO-TERMINAALI v0.6'); say('(c) 20XX — kaikki oikeudet raunioituneet'); say('');
   say('> Haetaan sijaintia (voi kestää 10–20 s)...');
   const pos = await getPosition();
   if (pos){ origin={lat:pos.coords.latitude, lon:pos.coords.longitude}; P.mode='gps'; say('  GPS-LUKITUS OK'); }
@@ -725,7 +727,7 @@ async function boot(){
   say('> Ladataan karttadataa (OpenStreetMap)...');
   let data='OSM';
   try { features = await loadOSM(origin.lat, origin.lon); if (features.length<20) throw new Error('liian vähän dataa'); say(`  ${features.length} kohdetta ladattu (${osmNote})`); }
-  catch(e){ features = demoCity(); data='DEMO'; osmFail=e.message; say('  KARTTADATA EPÄONNISTUI: '+e.message); say('  → SIMULOITU DEMOKAUPUNKI. Napauta yläpalkin DATA: DEMO yrittääksesi uudelleen.'); }
+  catch(e){ features = demoCity(); data='DEMO'; osmFail=e.message; say('  KARTTADATA EPÄONNISTUI: '+e.message); say('  → SIMULOITU DEMOKAUPUNKI. Paina yläpalkin HAE KARTTA yrittääksesi uudelleen.'); }
   zoneFeatures = features.filter(f=>f.zone && f.id);
   nodes = genNodes(zoneFeatures);
   $('st-pos').textContent = 'SIJAINTI: ' + (P.mode==='gps'?'GPS':'SIMULOITU');
@@ -737,14 +739,16 @@ async function boot(){
   await new Promise(r=>setTimeout(r,900));
   B.style.transition='opacity .4s'; B.style.opacity='0'; setTimeout(()=>B.remove(),450);
   if (P.mode==='sim' && geoErr) log('GPS: '+geoErr);
-  if (data==='DEMO'){ log('KARTTA: '+osmFail); $('st-data').style.textDecoration='underline'; $('st-data').style.cursor='pointer';
-    $('st-data').onclick = async () => { $('st-data').textContent='DATA: HAETAAN...';
+  if (data==='DEMO'){ log('KARTTA: '+osmFail);
+    const bm=$('b-map'); bm.style.display='inline-block';
+    bm.onclick = async () => { if (bm.disabled) return; bm.disabled=true; bm.textContent='HAETAAN...'; $('st-data').textContent='DATA: HAETAAN...';
       const here = toLL(P.x,P.y);
       try { origin = {lat:here.lat, lon:here.lon}; P.x=0; P.y=0; lastFix=null; P.tx=P.ty=null;
         const f = await loadOSM(origin.lat, origin.lon); if (f.length<20) throw new Error('liian vähän dataa');
         features=f; zoneFeatures=features.filter(f=>f.zone&&f.id); nodes=genNodes(zoneFeatures);
-        $('st-data').textContent='DATA: OSM'; $('st-data').onclick=null; $('st-data').style.textDecoration='none'; log('Oikea karttadata ladattu ('+osmNote+').'); }
-      catch(e){ $('st-data').textContent='DATA: DEMO'; log('KARTTA: '+e.message); } };
+        $('st-data').textContent='DATA: OSM'; bm.style.display='none'; log('Oikea karttadata ladattu ('+osmNote+').'); }
+      catch(e){ $('st-data').textContent='DATA: DEMO'; bm.textContent='HAE KARTTA'; log('KARTTA: '+e.message); }
+      bm.disabled=false; };
   }
   log(data==='DEMO' ? 'Demokaupunki ladattu. Etsi värillisiä vyöhykkeitä.' : 'Karttadata ladattu. Etsi värillisiä vyöhykkeitä.');
   updateUI(true);
