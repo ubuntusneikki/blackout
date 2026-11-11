@@ -88,7 +88,7 @@
   <span id="st-data">DATA: ...</span>
   <button id="b-sig" class="sigbtn">SIGNAALI: POIS</button>
   <button id="b-map" class="sigbtn" style="display:none;color:#ff2bd6;border-color:#ff2bd6">HAE KARTTA</button>
-  <span class="hint">v0.6</span>
+  <span class="hint">v0.7</span>
   <span id="st-xp">LÖYDÖT 0</span>
 </div>
 
@@ -124,7 +124,7 @@
 
 // ---------- Pelin data ----------
 const START = { lat: 60.4518, lon: 22.2666 }; // Turun kauppatori
-const RADIUS = 550; // metriä, karttadatan hakusäde
+const RADIUS = 500; // metriä, karttadatan hakusäde
 const ZONES = {
   romu:     { name:'ROMUVYÖHYKE',  color:'#ffb000', skill:'romu',   desc:'Vanhaa teollisuutta. Metallia ja koneenosia.',
               loot:[['Romumetalli',60,1,3],['Koneenosa',30,1,1],['Vanha piirilevy',10,1,1]] },
@@ -184,57 +184,65 @@ function classify(t){
 }
 
 let osmNote='', bootSay=null, osmFail='';
-async function loadOSM(lat, lon){
-  const q = `[out:json][timeout:25];(
-    way["highway"](around:${RADIUS},${lat},${lon});
-    way["building"](around:${RADIUS},${lat},${lon});
-    way["landuse"~"industrial|forest|farmland|meadow|grass|retail"](around:${RADIUS},${lat},${lon});
-    way["natural"~"wood|water|scrub"](around:${RADIUS},${lat},${lon});
-    way["leisure"~"park|garden"](around:${RADIUS},${lat},${lon});
-    way["waterway"](around:${RADIUS},${lat},${lon});
-    nwr["amenity"~"library|school|university|college"](around:${RADIUS},${lat},${lon});
-    nwr["power"~"substation|plant"](around:${RADIUS},${lat},${lon});
-    nwr["man_made"~"mast|tower|communications_tower"](around:${RADIUS},${lat},${lon});
-    nwr["shop"="mall"](around:${RADIUS},${lat},${lon});
-  );out geom;`;
-  const SERVERS = ['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter','https://overpass.private.coffee/api/interpreter'];
-  const cacheKey = 'osm_'+lat.toFixed(3)+'_'+lon.toFixed(3);
-  let js = null, errs = [];
-  try { const c = JSON.parse(localStorage.getItem(cacheKey)); if (c && Date.now()-c.t < 7*864e5) { js = c.d; osmNote = 'välimuistista'; } } catch(e){}
+const SERVERS = ['https://overpass-api.de/api/interpreter','https://overpass.private.coffee/api/interpreter','https://maps.mail.ru/osm/tools/overpass/api/interpreter','https://overpass.kumi.systems/api/interpreter'];
+async function overpass(q, label){
+  const errs=[];
   for (const url of SERVERS){
-    if (js) break;
-    const ctrl = new AbortController(); const to = setTimeout(()=>ctrl.abort(), 25000);
-    try {
-      bootSay && bootSay('  palvelin: '+url.split('/')[2]+' ...');
-      const res = await fetch(url, { method:'POST', body:'data='+encodeURIComponent(q), headers:{'Content-Type':'application/x-www-form-urlencoded'}, signal:ctrl.signal });
-      clearTimeout(to);
-      if (!res.ok){ errs.push(url.split('/')[2]+': HTTP '+res.status); continue; }
-      js = await res.json(); osmNote = url.split('/')[2];
-      try { localStorage.setItem(cacheKey, JSON.stringify({t:Date.now(), d:js})); } catch(e){}
-    } catch(e){ clearTimeout(to); errs.push(url.split('/')[2]+': '+(e.name==='AbortError'?'aikakatkaisu':e.message)); }
+    const host=url.split('/')[2];
+    for (let attempt=0; attempt<2; attempt++){
+      const ctrl = new AbortController(); const to = setTimeout(()=>ctrl.abort(), 30000);
+      try {
+        bootSay && bootSay(`  ${label}: ${host}${attempt?' (uusi yritys)':''} ...`);
+        const res = await fetch(url, { method:'POST', body:'data='+encodeURIComponent(q), headers:{'Content-Type':'application/x-www-form-urlencoded'}, signal:ctrl.signal });
+        clearTimeout(to);
+        if (res.ok){ const js = await res.json(); osmNote = host; return js; }
+        errs.push(host+': HTTP '+res.status);
+        if ([429,502,503,504].includes(res.status) && attempt===0){ await new Promise(r=>setTimeout(r,2500)); continue; }
+        break;
+      } catch(e){ clearTimeout(to); errs.push(host+': '+(e.name==='AbortError'?'aikakatkaisu':e.message)); break; }
+    }
   }
-  if (!js) throw new Error(errs.join(' | '));
+  throw new Error(errs.join(' | '));
+}
+async function loadOSM(lat, lon){
+  // rajausruutu (bbox) on Overpassille paljon kevyempi kuin around-haku
+  const dLat = RADIUS/110540, dLon = RADIUS/(Math.cos(lat*Math.PI/180)*111320);
+  const bb = `${(lat-dLat).toFixed(5)},${(lon-dLon).toFixed(5)},${(lat+dLat).toFixed(5)},${(lon+dLon).toFixed(5)}`;
+  const qMain = `[out:json][timeout:25][bbox:${bb}];
+(way["highway"~"^(primary|secondary|tertiary|residential|unclassified|living_street|pedestrian|service|footway|cycleway|path)$"];
+ way["landuse"~"^(industrial|forest|farmland|meadow|grass|retail)$"];
+ way["natural"~"^(wood|water|scrub)$"];
+ way["leisure"~"^(park|garden)$"];
+ way["waterway"~"^(river|stream|canal)$"];);
+out geom qt;
+(nwr["amenity"~"^(library|school|university|college)$"];
+ nwr["power"~"^(substation|plant)$"];
+ nwr["man_made"~"^(mast|tower|communications_tower)$"];
+ nwr["shop"="mall"];);
+out center qt;`;
+  const qBld = `[out:json][timeout:25][bbox:${bb}];way["building"];out geom qt;`;
+  const cacheKey = 'osm2_'+lat.toFixed(3)+'_'+lon.toFixed(3);
+  let main=null, bld=null;
+  try { const c = JSON.parse(localStorage.getItem(cacheKey)); if (c && Date.now()-c.t < 7*864e5){ main=c.m; bld=c.b; osmNote='välimuistista'; } } catch(e){}
+  if (!main){
+    main = await overpass(qMain, 'kartta');
+    try { bld = await overpass(qBld, 'rakennukset'); } catch(e){ bld = {elements:[]}; bootSay && bootSay('  rakennukset ohitettiin (palvelin ruuhkainen)'); }
+    try { localStorage.setItem(cacheKey, JSON.stringify({t:Date.now(), m:main, b:bld})); } catch(e){}
+  }
   const out = [];
-  for (const el of js.elements){
+  for (const el of main.elements.concat(bld.elements)){
     const t = el.tags || {}; const z = classify(t);
-    const pointZone = z==='hot'||z==='arkisto';
-    if (el.type==='node'){
-      if (z) { const [x,y]=toXY(el.lat,el.lon); out.push({kind:'point',x,y,r: z==='hot'?60:45,zone:z,id:'n'+el.id}); }
+    if (el.type==='node' || el.center){
+      if (z){ const c = el.center || el; const [x,y]=toXY(c.lat,c.lon); out.push({kind:'point',x,y,r: z==='hot'?60:45,zone:z,id:el.type[0]+el.id}); }
       continue;
     }
-    let geom = el.geometry;
-    if (el.type==='relation' || (pointZone && el.bounds)){
-      if (z && el.bounds){ const b=el.bounds; const [x,y]=toXY((b.minlat+b.maxlat)/2,(b.minlon+b.maxlon)/2);
-        out.push({kind:'point',x,y,r: z==='hot'?60:45,zone:z,id:el.type[0]+el.id}); }
-      if (el.type==='relation') continue;
-    }
-    if (!geom || geom.length<2) continue;
+    const geom = el.geometry; if (!geom || geom.length<2) continue;
     const pts = geom.map(g=>toXY(g.lat,g.lon));
     const closed = pts.length>3 && geom[0].lat===geom[geom.length-1].lat && geom[0].lon===geom[geom.length-1].lon;
     if (t.highway){ out.push({kind:'line',pts,cls: /primary|secondary|trunk|tertiary/.test(t.highway)?'road1':'road2'}); continue; }
     if (t.waterway && !closed){ out.push({kind:'line',pts,cls:'water',zone:'ranta',id:'w'+el.id,w:25}); continue; }
-    if (t.building){ if (!pointZone) { out.push({kind:'area',pts,cls:'building'}); continue; } }
-    if (z && closed && !pointZone) out.push({kind:'area',pts,zone:z,id:'w'+el.id});
+    if (t.building){ out.push({kind:'area',pts,cls:'building'}); continue; }
+    if (z && closed && z!=='hot' && z!=='arkisto') out.push({kind:'area',pts,zone:z,id:'w'+el.id});
   }
   return out;
 }
@@ -719,7 +727,7 @@ function startWatch(){
 
 async function boot(){
   const B=$('boot'); const say=s=>{ B.textContent += s+'\n'; }; bootSay=say;
-  say('JÄÄNNÖSVERKKO-TERMINAALI v0.6'); say('(c) 20XX — kaikki oikeudet raunioituneet'); say('');
+  say('JÄÄNNÖSVERKKO-TERMINAALI v0.7'); say('(c) 20XX — kaikki oikeudet raunioituneet'); say('');
   say('> Haetaan sijaintia (voi kestää 10–20 s)...');
   const pos = await getPosition();
   if (pos){ origin={lat:pos.coords.latitude, lon:pos.coords.longitude}; P.mode='gps'; say('  GPS-LUKITUS OK'); }
