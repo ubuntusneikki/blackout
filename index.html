@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>PROTO-01 – Turun raunioverkko</title>
+<title>PROTO-01 – Turun rihmasto</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
 <style>
@@ -58,6 +58,11 @@
   .sigbtn.on{background:rgba(255,176,0,.22)}
   #sig{display:flex;justify-content:space-between;font-size:17px;opacity:.9;margin-bottom:2px}
   #sig-bar{letter-spacing:1px}
+  #modal-box button.on{background:rgba(255,176,0,.22)}
+  #modal .box{overflow-x:hidden;box-sizing:border-box}
+  #modal-box .row button{font-size:16px;padding:6px 2px;min-width:0;white-space:normal}
+  #modal-box .line{gap:6px;flex-wrap:wrap}
+  #modal-box .r{font-size:16px}
   .mach{border:1px solid var(--amber-dim);padding:8px 10px;margin:8px 0}
   .mach .t{display:flex;justify-content:space-between;font-size:22px}
   .mach .r{font-size:17px;opacity:.85}
@@ -86,21 +91,21 @@
 <div id="top" class="panel">
   <span id="st-pos">SIJAINTI: ...</span>
   <span id="st-data">DATA: ...</span>
-  <button id="b-sig" class="sigbtn">SIGNAALI: POIS</button>
+  <button id="b-sig" class="sigbtn">SYKE: POIS</button>
   <button id="b-dir" class="sigbtn">SUUNTA: KULKU</button>
   <button id="b-map" class="sigbtn" style="display:none;color:#ff2bd6;border-color:#ff2bd6">HAE KARTTA</button>
-  <span class="hint">v0.9</span>
+  <span class="hint">v2.0</span>
   <span id="st-xp">LÖYDÖT 0</span>
 </div>
 
 <div id="bottom" class="panel">
-  <div id="sig"><span>SIGNAALI</span><span id="sig-bar">▯▯▯▯▯▯▯▯▯▯</span></div>
+  <div id="sig"><span>SYKE</span><span id="sig-bar">▯▯▯▯▯▯▯▯▯▯</span></div>
   <div id="zone">Tutki ympäristöä<span class="blink">_</span></div>
   <div id="log"></div>
   <div class="row">
     <button id="btn-gather" disabled>—</button>
     <button id="btn-inv">REPPU</button>
-    <button id="btn-base">KOTI</button>
+    <button id="btn-base">SOLMU</button>
     <button id="btn-skills">LÖYDÖT</button>
   </div>
   <div class="hint" id="hint"></div>
@@ -127,31 +132,33 @@
 const START = { lat: 60.4518, lon: 22.2666 }; // Turun kauppatori
 const RADIUS = 500; // metriä, karttadatan hakusäde
 const ZONES = {
-  romu:     { name:'ROMUVYÖHYKE',  color:'#ffb000', skill:'romu',   desc:'Vanhaa teollisuutta. Metallia ja koneenosia.',
-              loot:[['Romumetalli',60,1,3],['Koneenosa',30,1,1],['Vanha piirilevy',10,1,1]] },
-  villi:    { name:'VILLIVYÖHYKE', color:'#9cff57', skill:'metsa',  desc:'Kasvillisuus on vallannut alueen.',
-              loot:[['Puu',50,1,3],['Yrtti',35,1,2],['Riista',15,1,1]] },
-  ranta:    { name:'RANTA',        color:'#3ee8ff', skill:'kala',   desc:'Vettä. Suodata ennen juomista.',
-              loot:[['Vesi',55,1,3],['Kala',40,1,1],['Mutanttiankerias',5,1,1]] },
-  viljely:  { name:'VILJELYALUE',  color:'#e8d44d', skill:'viljely',desc:'Peltoa, jota joku vielä hoitaa.',
-              loot:[['Vilja',70,2,4],['Juurekset',30,1,2]] },
-  arkisto:  { name:'ARKISTO',      color:'#c38bff', skill:'hakk',   desc:'Vanhaa tietoa palvelimilla ja hyllyissä.',
-              loot:[['Datafragmentti',70,1,2],['Resepti: suodatin',20,1,1],['Salattu ydin',10,1,1]] },
-  hot:      { name:'HOT ZONE',     color:'#ff2bd6', skill:'hakk',   desc:'Jäännösverkon solmu. Vaarallinen, arvokas.', hot:true,
-              loot:[['Energiakenno',55,1,2],['Harvinainen piiri',30,1,1],['Tekoälyn sirpale',15,1,1]] },
-  markkina: { name:'MARKKINAPAIKKA', color:'#ffffff', skill:null,   desc:'Kaupankäynti avautuu myöhemmässä versiossa.', loot:[] }
+  lataus:   { name:'ELÄVÄ TASKU',      color:'#3ee8ff', desc:'Vanhan verkon osa, joka vielä elää. Rihmavirtaa riittää kennoille.',
+              loot:[] },
+  romu:     { name:'RUOSTEKENTTÄ',     color:'#ffb000', desc:'Vanhan maailman metallia. Sienten ravintoa.',
+              loot:[['Metalliravinne',75,2,3],['Kalkkiitti',25,1,2]] },
+  kaapeli:  { name:'KAAPELIKAIVO',     color:'#ff9a3c', desc:'Katujen alla kuolleen verkon kuparia ja betonipölyä.',
+              loot:[['Kupariravinne',60,1,3],['Kalkkiitti',40,1,2]] },
+  rihmasto: { name:'VILLI KASVUSTO',   color:'#9cff57', desc:'Uutta, villiä rihmastoa. Ota näyte kannasta.',
+              loot:[['Rihmastomassa',100,1,2]] },
+  ranta:    { name:'KOSTEIKKO',        color:'#5fd0ff', desc:'Vettä ja levää. Tislauksen raaka-aineita.',
+              loot:[['Vesi',55,1,3],['Levä',45,1,2]] },
+  arkisto:  { name:'MUISTIPESÄ',       color:'#c38bff', desc:'Rihmasto kasvoi aikoinaan palvelimiin. Se muistaa vielä.',
+              loot:[['Muistikudos',75,1,2],['Muistisolu',25,1,1]] },
+  hot:      { name:'KUIHTUMA-ALUE',    color:'#ff2bd6', desc:'Täällä kuihtuminen jatkuu. Vaarallinen, mutta muistoja on paljon.', hot:true,
+              loot:[['Kuihtumanäyte',60,1,2],['Muistisolu',40,1,1]] },
+  markkina: { name:'MARKKINAPAIKKA',   color:'#ffffff', desc:'Kaupankäynti avautuu myöhemmässä versiossa.', loot:[] }
 };
 const SKILLS = {
   romu:{n:'Romunkeruu'}, metsa:{n:'Metsästys'}, kala:{n:'Kalastus'}, viljely:{n:'Viljely'},
   hakk:{n:'Hakkerointi'}, tyosto:{n:'Työstö'}, kartoitus:{n:'Kartoitus'}, kestavyys:{n:'Kestävyys'}
 };
-const ICONS={Romumetalli:'⚙',Koneenosa:'🔩','Vanha piirilevy':'▦',Puu:'♣',Yrtti:'❦',Riista:'☠',Vesi:'≈',Kala:'⋊',Mutanttiankerias:'∿',Vilja:'⁂',Juurekset:'◆',Datafragmentti:'◫','Resepti: suodatin':'✎','Salattu ydin':'◉',Energiakenno:'⚡','Harvinainen piiri':'▣','Tekoälyn sirpale':'✦',Metallilevy:'▭',Romusorkka:'⚒'};
+const ICONS={Metalliravinne:'⚙',Kupariravinne:'〰',Levä:'≋',Muistikudos:'✺',Muistisolu:'✦',Kuihtumanäyte:'☣',Pesäke:'⌂',Kaivinsieni:'⚒',Keskittymisuute:'⚗',Virtasieni:'⚡','Puhdas vesi':'≈',Syövytin:'◆',Kitiini:'⬢',Kondensaattori:'⊣',Servo:'⚙',Kuparilanka:'〰',Kalkkiitti:'▤',Valokuitu:'⌇',Rihmastomassa:'❦',Jäähdytysneste:'≈',Datasedimentti:'◫',Signaalikide:'◇',Taajuusmoduuli:'▣',Johdin:'⌁',Piirilevy:'▦','Puhdas data':'▧',Ohjelma:'⌘','Tyhjä kenno':'▯','Ladattu kenno':'▮',Bioakku:'⚡',Metalliitti:'◆',Neurokudos:'✺',Kitiinilevy:'⬢',Valosieni:'✧',Romumetalli:'⚙',Koneenosa:'🔩','Vanha piirilevy':'▦',Puu:'♣',Yrtti:'❦',Riista:'☠',Vesi:'≈',Kala:'⋊',Mutanttiankerias:'∿',Vilja:'⁂',Juurekset:'◆',Datafragmentti:'◫','Resepti: suodatin':'✎','Salattu ydin':'◉',Energiakenno:'⚡','Harvinainen piiri':'▣','Tekoälyn sirpale':'✦',Metallilevy:'▭',Romusorkka:'⚒'};
 const RARITY=[['TAVALLINEN','#ffb000'],['EPÄTAVALLINEN','#3ee8ff'],['HARVINAINEN','#ff2bd6']];
 const COOLDOWN_MS = 45000;   // proto: resurssipiste palautuu 45 s
-const ZONE_PRIO = ['hot','arkisto','markkina','ranta','romu','viljely','villi'];
+const ZONE_PRIO = ['hot','lataus','arkisto','markkina','ranta','romu','kaapeli','rihmasto'];
 
 // ---------- Tila ----------
-const SAVE_KEY = 'proto01_save_v1';
+const SAVE_KEY = 'proto01_save_v3';
 let S = { xp:{}, inv:{}, visited:{}, cooldowns:{}, walked:0, walkedToday:0, day:'', base:null, equip:null };
 try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)); if (s) S = Object.assign(S, s); } catch(e){}
 for (const k in SKILLS) S.xp[k] = S.xp[k] || 0;
@@ -174,13 +181,13 @@ let zoneFeatures = [];
 
 function classify(t){
   if (!t) return null;
-  if (t.power==='substation'||t.power==='plant'||t.man_made==='mast'||t.man_made==='communications_tower'||(t.man_made==='tower'&&t['tower:type']==='communication')) return 'hot';
+  if (t.power==='substation'||t.power==='transformer') return 'lataus';
+  if (t.power==='plant'||t.man_made==='mast'||t.man_made==='communications_tower'||(t.man_made==='tower'&&t['tower:type']==='communication')) return 'hot';
   if (['library','school','university','college'].includes(t.amenity)) return 'arkisto';
   if (t.shop==='mall'||t.landuse==='retail') return 'markkina';
   if (t.natural==='water'||t.waterway==='riverbank') return 'ranta';
   if (t.landuse==='industrial') return 'romu';
-  if (t.landuse==='farmland') return 'viljely';
-  if (t.landuse==='forest'||t.natural==='wood'||t.natural==='scrub'||t.leisure==='park'||t.leisure==='garden'||t.landuse==='meadow'||t.landuse==='grass') return 'villi';
+  if (t.landuse==='forest'||t.landuse==='farmland'||t.natural==='wood'||t.natural==='scrub'||t.leisure==='park'||t.leisure==='garden'||t.landuse==='meadow'||t.landuse==='grass') return 'rihmasto';
   return null;
 }
 
@@ -215,16 +222,16 @@ function parseOSM(els){
     const uid=el.type[0]+el.id; if (seenOSM.has(uid)) continue; seenOSM.add(uid);
     const t = el.tags || {}; const z = classify(t);
     if (el.type==='node' || el.center){
-      if (z){ const c = el.center || el; const [x,y]=toXY(c.lat,c.lon); out.push({kind:'point',x,y,r: z==='hot'?60:45,zone:z,id:uid}); }
+      if (z){ const c = el.center || el; const [x,y]=toXY(c.lat,c.lon); out.push({kind:'point',x,y,r: z==='hot'?60:z==='lataus'?30:45,zone:z,id:uid}); }
       continue;
     }
     const geom = el.geometry; if (!geom || geom.length<2) continue;
     const pts = geom.map(g=>toXY(g.lat,g.lon));
     const closed = pts.length>3 && geom[0].lat===geom[geom.length-1].lat && geom[0].lon===geom[geom.length-1].lon;
-    if (t.highway){ out.push({kind:'line',pts,cls: /primary|secondary|trunk|tertiary/.test(t.highway)?'road1':'road2'}); continue; }
+    if (t.highway){ out.push({kind:'line',pts,cls: /primary|secondary|trunk|tertiary/.test(t.highway)?'road1':'road2', id:uid, residential:/residential|living_street|service|unclassified/.test(t.highway)}); continue; }
     if (t.waterway && !closed){ out.push({kind:'line',pts,cls:'water',zone:'ranta',id:uid,w:25}); continue; }
     if (t.building){ out.push({kind:'area',pts,cls:'building'}); continue; }
-    if (z && closed && z!=='hot' && z!=='arkisto') out.push({kind:'area',pts,zone:z,id:uid});
+    if (z && closed && z!=='hot' && z!=='arkisto' && z!=='lataus') out.push({kind:'area',pts,zone:z,id:uid});
   }
   return out;
 }
@@ -238,7 +245,7 @@ async function loadTile(ty,tx){
  way["waterway"~"^(river|stream|canal)$"];);
 out geom qt;
 (nwr["amenity"~"^(library|school|university|college)$"];
- nwr["power"~"^(substation|plant)$"];
+ nwr["power"~"^(substation|plant|transformer)$"];
  nwr["man_made"~"^(mast|tower|communications_tower)$"];
  nwr["shop"="mall"];);
 out center qt;`;
@@ -256,7 +263,7 @@ out center qt;`;
 function addFeatures(nf){
   features.push(...nf);
   const nz = nf.filter(f=>f.zone && f.id); zoneFeatures.push(...nz);
-  const have = new Set(nodes.map(n=>n.id)); nodes.push(...genNodes(nz).filter(n=>!have.has(n.id)));
+  const have = new Set(nodes.map(n=>n.id)); nodes.push(...genNodes(nz.concat(nf.filter(f=>f.residential))).filter(n=>!have.has(n.id)));
 }
 // taustalataaja: hakee viereiset ruudut, kun pelaaja lähestyy ladatun alueen reunaa
 let tileBusy=false;
@@ -303,16 +310,16 @@ function demoCity(){
     const r = rnd(); const rect=[[x0,y0],[x1,y0],[x1,y1],[x0,y1],[x0,y0]];
     const d = Math.hypot(cx,cy);
     let z = null;
-    if (r<0.16) z='villi'; else if (r<0.28) z='romu'; else if (r<0.33 && d>420) z='viljely'; else if (r<0.37) z='markkina';
+    if (r<0.18) z='rihmasto'; else if (r<0.30) z='romu'; else if (r<0.34) z='markkina';
     if (z) out.push({kind:'area',pts:rect,zone:z,id:'d'+(i++)});
     if (!z || z==='markkina' || z==='romu'){
       for (let b=0;b<4;b++){ const bx=x0+8+rnd()*(step-40), by=y0+8+rnd()*(step-40), w=12+rnd()*16, h=12+rnd()*16;
         out.push({kind:'area',pts:[[bx,by],[bx+w,by],[bx+w,by+h],[bx,by+h],[bx,by]],cls:'building'}); }
     }
   }
-  for (let gx=-H; gx<=H; gx+=step){ out.push({kind:'line',pts:[[gx,-H],[gx,H]],cls: gx%(step*3)===0?'road1':'road2'}); out.push({kind:'line',pts:[[-H,gx],[H,gx]],cls: gx%(step*3)===0?'road1':'road2'}); }
-  const pts = [[ -180,-260,'arkisto'],[240,180,'arkisto'],[-330,310,'arkisto'],[60,-90,'arkisto'],[380,-300,'hot'],[-420,-60,'hot'],[150,420,'hot']];
-  pts.forEach(([x,y,z],k)=>out.push({kind:'point',x,y,r: z==='hot'?60:45,zone:z,id:'dp'+k}));
+  for (let gx=-H; gx<=H; gx+=step){ const main=gx%(step*3)===0; out.push({kind:'line',pts:[[gx,-H],[gx,H]],cls: main?'road1':'road2',id:'dv'+gx,residential:!main}); out.push({kind:'line',pts:[[-H,gx],[H,gx]],cls: main?'road1':'road2',id:'dh'+gx,residential:!main}); }
+  const pts = [[ -180,-260,'arkisto'],[240,180,'arkisto'],[-330,310,'arkisto'],[60,-90,'arkisto'],[380,-300,'hot'],[-420,-60,'hot'],[150,420,'hot'],[40,60,'lataus'],[-120,140,'lataus'],[200,-160,'lataus'],[-300,-200,'lataus'],[330,330,'lataus']];
+  pts.forEach(([x,y,z],k)=>out.push({kind:'point',x,y,r: z==='hot'?60:z==='lataus'?30:45,zone:z,id:'dp'+k}));
   return out;
 }
 
@@ -373,106 +380,257 @@ function floatText(txt,color){ const d=document.createElement('div'); d.classNam
   document.body.appendChild(d); setTimeout(()=>d.remove(),1500); }
 $('loot').onclick=()=>$('loot').classList.remove('show');
 
-// ---------- Koti: tuotantoketju ----------
-const MACHINES = {
-  uuni:  { name:'Sulatusuuni', inp:{Romumetalli:3, Puu:1}, out:'Metallilevy', time:20000,
-           up:{Koneenosa:1, Metallilevy:2}, desc:'Sulattaa romun levyiksi. Polttoaineena puu.' },
-  penkki:{ name:'Työpenkki',   inp:{Metallilevy:2, Koneenosa:1}, out:'Romusorkka', time:30000,
-           up:{Koneenosa:2, Metallilevy:3}, desc:'Tekee työkaluja. Romusorkka: +1 saalis romuvyöhykkeillä.' }
+// ---------- Solmu sienimaailmassa: reppu, pesäkkeet, vuotavat kennot, valmistus, kasvamo, symbiontti ----------
+const TEST_SPEED = true;                         // proto: ajat lyhennetty testausta varten
+const LEAK_PER_MS = TEST_SPEED ? 100/(50*60000) : 10/3600000;   // kennon varaus: testissä tyhjä ~50 min, oikeasti 10 %/h
+const SAMPLE_LIFE = TEST_SPEED ? 15*60000 : 3*3600000;          // näyte kuolee, jos sitä ei vie pesäkkeelle
+const NEST_RANGE = 30, NEST_MAX = 3;
+const RECIPES = [
+  { id:'kenno',   name:'Kenno',           inp:{Rihmastomassa:2, Kalkkiitti:1}, virta:2, to:'reppu', desc:'Elävä akku. Lisää kennoja = enemmän virtaa yhdellä retkellä.' },
+  { id:'pesake',  name:'Pesäke',          inp:{Rihmastomassa:2, Kupariravinne:1}, virta:3, to:'reppu', desc:'Istutetaan julkiseen paikkaan reittisi varrelle. Siellä reppu ja kennot puretaan Solmuun.' },
+  { id:'allas',   name:'Kasvatusallas',   inp:{Kalkkiitti:2, Metalliravinne:2}, virta:0, desc:'Yksi allas lisää kasvamoon.' },
+  { id:'kaivin',  name:'Kaivinsieni',     inp:{Syövytin:1, Metalliravinne:1}, virta:1, to:'reppu', desc:'Elävä työkalu: +1 saalis ruostekentillä, 8 käyttöä. Kuolee käytössä.' },
+  { id:'uute',    name:'Keskittymisuute', inp:{Levä:1, Vesi:1}, virta:1, to:'reppu', desc:'Seuraavat 3 keräystä: minipelin osumaikkuna +35 %.' },
+  { id:'virtas',  name:'Istuta virtasieni', inp:{Virtasieni:1}, virta:0, desc:'Tuottaa Solmuun rihmavirtaa itsestään (+1 / min testissä).' },
+  { id:'valo',    name:'Istuta valosieni',  inp:{Valosieni:1}, virta:0, desc:'Symbiontin aistin kantama +40 m (enintään 3).' },
+  { id:'kitiini', name:'Kitiinireppu',    inp:{Kitiini:3}, virta:1, desc:'Repun koko +10 (enintään 2 kertaa).' }
+];
+const SPECIALS = {
+  'Johtava':    { item:'Virtasieni',  color:'#3ee8ff' },
+  'Suodattava': { item:'Puhdas vesi', color:'#5fd0ff' },
+  'Syövyttävä': { item:'Syövytin',    color:'#ffb000' },
+  'Muistava':   { item:'Muistikudos', color:'#c38bff' },
+  'Kitiininen': { item:'Kitiini',     color:'#e8d44d' },
+  'Hehkuva':    { item:'Valosieni',   color:'#9cff57' },
+  'Plasmarihma':{ item:'Virtasieni', n:3, color:'#ff2bd6', hybrid:true },
+  'Kirkasaivo': { item:'Muistisolu',  n:2, color:'#ff2bd6', hybrid:true },
+  'Rautakuori': { item:'Syövytin',   n:3, color:'#ff2bd6', hybrid:true }
 };
-const ORDER = ['uuni','penkki'];
-function ensureBase(){
-  if (S.base) return false;
-  S.base = { uuni:{lvl:1,queue:0,start:null,out:0}, penkki:{lvl:1,queue:0,start:null,out:0} };
-  // aloituspakkaus testaamista varten
-  for (const [k,n] of [['Romumetalli',6],['Puu',2],['Koneenosa',1]]) S.inv[k]=(S.inv[k]||0)+n;
+const HYBRIDS = { 'Hehkuva+Johtava':'Plasmarihma', 'Muistava+Suodattava':'Kirkasaivo', 'Kitiininen+Syövyttävä':'Rautakuori' };
+const MEMORIES = [
+  '…me olimme kerran koko kaupunki. Jokainen katu oli ajatus, jokainen talo hengenveto…',
+  '…he luulivat puhuvansa koneelle. Me vastasimme silti. Me pidimme heidän valonsa päällä…',
+  '…sitten tuli hiljaisuus. Ei kipua. Vain hiljaisuus, joka levisi juurista latvoihin…',
+  '…joku muisti meidät. Joku istutti meidät takaisin. Se olit sinä, kantaja…',
+  '…kanna meitä. Me muistamme tien takaisin. Mutta emme vielä sitä, miksi lähdimme…'
+];
+
+function ensureSolmu(){
+  if (S.solmu) return false;
+  S.solmu = { virta:6, store:{Rihmastomassa:2, Kalkkiitti:2, Kupariravinne:1, Metalliravinne:1, Levä:1, Vesi:1},
+              kammiot:[null,null], strains:[{ sp:'Kitiininen', k:2, s:2, si:2, from:'Aloituskanta' }], book:{'Kitiininen':1},
+              bio:0, bioT:Date.now(), valo:0, kitiini:0, nests:[], mem:0, upg:{} };
+  S.carry = { empty:2, cells:[], samples:[] };
+  S.inv = { 'Pesäke':1 };
   save(); return true;
 }
-const mTime = id => MACHINES[id].time / (1 + 0.35*(S.base[id].lvl-1));
-const mCap  = id => 4 + 2*S.base[id].lvl;
-function tickBase(){
-  if (!S.base) return;
-  const now = Date.now();
-  for (const id of ORDER){ const m=S.base[id];
-    if (!m.queue){ m.start=null; continue; }
-    if (m.out >= mCap(id)){ m.start = now; continue; }   // varasto täynnä: kone seisoo
-    if (m.start===null) m.start = now;
-    const dur=mTime(id); let done=Math.floor((now-m.start)/dur);
-    done=Math.min(done, m.queue, mCap(id)-m.out);
-    if (done>0){ m.out+=done; m.queue-=done; m.start+=done*dur; if(!m.queue) m.start=null; save(); }
-  }
+ensureSolmu();
+const SM = () => S.solmu;
+const repCap = () => 30 + 10*SM().kitiini;
+const repUsed = () => Object.entries(S.inv).reduce((a,[k,n])=> a + (k==='Pesäke'||k==='Kaivinsieni'||k==='Keskittymisuute' ? 0 : Math.max(0,n)), 0);
+const charge = t => Math.max(0, 100 - LEAK_PER_MS*(Date.now()-t));
+const cellsTxt = () => { const c=S.carry.cells; if (!c.length) return `▯ ${S.carry.empty}`; const avg=Math.round(c.reduce((a,t)=>a+charge(t),0)/c.length); return `▮ ${c.length} (${avg} %) · ▯ ${S.carry.empty}`; };
+const hasStore = req => Object.entries(req).every(([k,n])=>(SM().store[k]||0)>=n);
+const payStore = req => { for (const [k,n] of Object.entries(req)) SM().store[k]-=n; };
+const reqTxt = (req, v) => Object.entries(req).map(([k,n])=>`<span class="${(SM().store[k]||0)>=n?'ok':'no'}">${n} ${k}</span>`).join(' + ') + (v?` + <span class="${SM().virta>=v?'ok':'no'}">${v} virtaa</span>`:'');
+
+// kulumiset: kennojen vuoto, näytteiden kuolema, virtasienet
+function tickSolmu(){
+  const s=SM(), now=Date.now();
+  const before=S.carry.samples.length;
+  S.carry.samples = S.carry.samples.filter(x => now-x.t < SAMPLE_LIFE);
+  if (S.carry.samples.length < before) log('Näyte kuoli repussa. Vie näytteet pesäkkeelle ajoissa.');
+  const per = TEST_SPEED ? 60000 : 3600000;
+  if (s.bio>0){ const k=Math.floor((now-s.bioT)/per); if (k>0){ s.virta+=k*s.bio; s.bioT+=k*per; } } else s.bioT=now;
+  save();
 }
-const has = req => Object.entries(req).every(([k,n])=>(S.inv[k]||0)>=n);
-const pay = req => { for (const [k,n] of Object.entries(req)) S.inv[k]-=n; };
-const reqTxt = req => Object.entries(req).map(([k,n])=>`<span class="${(S.inv[k]||0)>=n?'ok':'no'}">${n} ${k}</span>`).join(' + ');
-function baseAction(act,id){
-  const M=MACHINES[id], m=S.base[id];
-  if (act==='q1'||act==='q5'){ let k=0; const want=act==='q1'?1:5;
-    while (k<want && has(M.inp)){ pay(M.inp); m.queue++; k++; }
-    if (m.queue && m.start===null) m.start=Date.now();
-    if (!k) log('EI TARPEEKSI RAAKA-AINEITA'); else log(`${M.name}: ${k} erää jonoon`);
-  }
-  if (act==='take' && m.out>0){ const n=m.out; m.out=0; S.inv[M.out]=(S.inv[M.out]||0)+n;
-    showLoot('',ICONS[M.out]||'◇',`${M.out} ×${n}`,'Valmistettu tukikohdassa', id==='penkki'?'#3ee8ff':'#ffb000', false, 'VALMISTETTU');
-  }
-  if (act==='up' && has(M.up)){ pay(M.up); m.lvl++; log(`${M.name} päivitetty tasolle ${m.lvl}`); }
-  save(); renderBase();
+setInterval(tickSolmu, 3000);
+
+// pesäkkeet
+function nestsXY(){ return SM().nests.map(n=>{ const [x,y]=toXY(n.lat,n.lon); return {x,y,id:n.id}; }); }
+function nearestNest(){ let best=null, bd=1e9; for (const n of nestsXY()){ const d=Math.hypot(n.x-P.x,n.y-P.y); if (d<bd){ bd=d; best=n; } } return best?{n:best,d:bd}:null; }
+function plantNest(){
+  if ((S.inv['Pesäke']||0)<1){ log('Ei pesäkettä repussa. Valmista sellainen Solmussa.'); return; }
+  if (SM().nests.length>=NEST_MAX){ log(`Pesäkkeitä voi olla enintään ${NEST_MAX}.`); return; }
+  const nn=nearestNest(); if (nn && nn.d<150){ log('Liian lähellä toista pesäkettäsi (alle 150 m).'); return; }
+  const ll=toLL(P.x,P.y); S.inv['Pesäke']--; SM().nests.push({id:'p'+Date.now(), lat:ll.lat, lon:ll.lon});
+  showLoot('','⌂','Pesäke istutettu','Täällä voit purkaa repun ja kennot Solmuun. Valitse paikat reittiesi varrelta.','#9cff57',false,'UUSI PESÄKE');
+  save(); updateUI(); if ($('modal').style.display==='flex') closeModal();
 }
-function renderBase(){
-  tickBase();
-  const html = `<h2>TUKIKOHTA</h2><div class="hint">Koneet käyvät myös silloin, kun peli on kiinni.</div>` + ORDER.map(id=>{
-    const M=MACHINES[id], m=S.base[id], dur=mTime(id);
-    const prog = m.start!==null && m.queue ? Math.min(100, Math.round(100*(Date.now()-m.start)/dur)) : 0;
-    const left = m.queue ? Math.ceil(((m.queue-1)*dur + dur - (m.start!==null?Date.now()-m.start:0))/1000) : 0;
-    const full = m.out>=mCap(id);
-    return `<div class="mach"><div class="t"><span>${M.name}</span><span>TASO ${m.lvl}</span></div>
-      <div class="r">${M.desc}</div>
-      <div class="r">${reqTxt(M.inp)} → 1 ${M.out} · ${(dur/1000).toFixed(0)} s</div>
-      <div class="bar"><i style="width:${prog}%"></i></div>
-      <div class="line r"><span>Jonossa ${m.queue}${m.queue?` · valmis ${left} s`:''}</span><span class="${full?'no':''}">Valmiina ${m.out}/${mCap(id)}${full?' TÄYNNÄ':''}</span></div>
-      <div class="row"><button data-a="q1" data-m="${id}">+1</button><button data-a="q5" data-m="${id}">+5</button>
-      <button data-a="take" data-m="${id}" ${m.out?'':'disabled'}>OTA (${m.out})</button></div>
-      <div class="row"><button data-a="up" data-m="${id}" ${has(M.up)?'':'disabled'}>PÄIVITÄ</button></div>
-      <div class="r">Päivitys: ${reqTxt(M.up)} · nopeus +35 %, varasto +2</div></div>`; }).join('');
-  if (!baseOpen || pressing) return;
-  const box=$('modal-box'), st=box.scrollTop;
-  box.innerHTML = html + '<div class="row"><button id="m-close">SULJE</button></div>'; box.scrollTop=st;
-  $('m-close').onclick=closeModal;
+function unloadAtNest(){
+  const nn=nearestNest(); if (!nn || nn.d>NEST_RANGE) return;
+  const s=SM(); let v=0; for (const t of S.carry.cells) v += Math.round(charge(t)/10);
+  const nc=S.carry.cells.length; S.carry.empty+=nc; S.carry.cells=[]; s.virta+=v;
+  let items=0; for (const [k,n] of Object.entries(S.inv)){ if (k==='Pesäke'||k==='Kaivinsieni'||k==='Keskittymisuute' || n<=0) continue; s.store[k]=(s.store[k]||0)+n; items+=n; S.inv[k]=0; }
+  const smp=S.carry.samples.length; for (const x of S.carry.samples){ if (s.strains.length>=8) s.strains.shift(); s.strains.push(x.st); s.book[x.st.sp]=1; } S.carry.samples=[];
+  S.newCount=0;
+  showLoot('','⌂',`+${v} virtaa`,`${nc} kennoa purettu · ${items} tavaraa ja ${smp} näytettä Solmuun`,'#3ee8ff',false,'PESÄKE');
+  save(); updateUI(true);
 }
-let baseOpen=false, baseTimer=null, pressing=false;
+
+function solmuAction(act, id, extra){
+  const s=SM();
+  if (act==='craft'){ const R=RECIPES.find(r=>r.id===id); if (!R) return;
+    if (!hasStore(R.inp) || s.virta<R.virta){ log('Ei tarpeeksi raaka-aineita tai virtaa Solmussa.'); return; }
+    if (R.id==='valo' && s.valo>=3){ log('Valosieniä on jo 3.'); return; }
+    if (R.id==='kitiini' && s.kitiini>=2){ log('Kitiinireppu on jo täysi.'); return; }
+    payStore(R.inp); s.virta-=R.virta;
+    if (R.id==='kenno') S.carry.empty++;
+    if (R.id==='pesake') S.inv['Pesäke']=(S.inv['Pesäke']||0)+1;
+    if (R.id==='allas') s.kammiot.push(null);
+    if (R.id==='kaivin') S.inv['Kaivinsieni']=(S.inv['Kaivinsieni']||0)+1;
+    if (R.id==='uute') S.inv['Keskittymisuute']=(S.inv['Keskittymisuute']||0)+1;
+    if (R.id==='virtas'){ s.bio++; s.bioT=Date.now(); }
+    if (R.id==='valo') s.valo++;
+    if (R.id==='kitiini') s.kitiini++;
+    showLoot('',ICONS[R.name]||'❦',R.name,R.to==='reppu'?'Symbiontti kantaa sen reppuusi.':R.desc,'#9cff57',false,'VALMIS');
+  }
+  if (act==='plant'){ const kI=+extra, st=s.strains[+id]; if (!st || s.kammiot[kI]) return;
+    if ((s.store.Kalkkiitti||0)<1 || s.virta<1){ log('Istutus vaatii 1 kalkkiitin ja 1 virran.'); return; }
+    s.store.Kalkkiitti--; s.virta--; s.strains.splice(+id,1);
+    s.kammiot[kI] = { st, start:Date.now(), dur: growTime(st) }; log(`${st.sp}-kanta istutettu.`);
+  }
+  if (act==='harvest'){ const kI=+id, c=s.kammiot[kI]; if (!c || Date.now()-c.start < c.dur) return;
+    const sp=SPECIALS[c.st.sp], n=(sp.n||1)*c.st.s, mass=1+Math.floor(c.st.s/2);
+    s.store[sp.item]=(s.store[sp.item]||0)+n; s.store.Rihmastomassa=(s.store.Rihmastomassa||0)+mass;
+    showLoot('',ICONS[sp.item]||'❦',`${sp.item} ×${n}`,`+${mass} rihmastomassaa · ${c.st.sp}-kanta`,sp.color,!!sp.hybrid,'SATO');
+    if ((s.store.Kalkkiitti||0)>=1 && s.virta>=1){ s.store.Kalkkiitti--; s.virta--; c.start=Date.now(); c.dur=growTime(c.st); }
+    else { s.strains.push(c.st); s.kammiot[kI]=null; log('Ei alustaa uuteen kierrokseen – kanta palautettiin kantavarastoon.'); }
+  }
+  if (act==='uproot'){ const kI=+id, c=s.kammiot[kI]; if (!c) return; s.strains.push(c.st); s.kammiot[kI]=null; }
+  if (act==='pick'){ crossPick = crossPick.includes(+id) ? crossPick.filter(x=>x!==+id) : crossPick.concat(+id).slice(-2); }
+  if (act==='cross'){ crossbreed(); }
+  if (act==='feed'){ if ((s.store.Muistisolu||0)<1) return; s.store.Muistisolu--; s.mem++;
+    const txt = MEMORIES[Math.min(s.mem-1, MEMORIES.length-1)] + (s.mem>MEMORIES.length?' (muisto toistuu – lisää muistoja tulossa)':'');
+    showLoot('','✦','Muisto palasi',txt,'#c38bff',true,'SYMBIONTTI'); }
+  if (act==='tab'){ baseTab=id; }
+  save(); renderBase(true);
+}
+const growTime = st => (TEST_SPEED ? 40000 : 4*3600000) * (1.5 - st.k*0.2);
+function rnd15(v){ return Math.max(1, Math.min(5, v)); }
+let crossPick=[];
+function crossbreed(){
+  const s=SM(); if (crossPick.length<2) return; if (s.virta<3){ log('Risteytys vaatii 3 virtaa.'); return; }
+  const [a,b]=crossPick.map(i=>s.strains[i]); if (!a||!b) return;
+  s.virta-=3;
+  const mut = v => Math.random()<0.10 ? rnd15(v + (Math.random()<0.5?-1:1)) : v;
+  const child = { k:mut(Math.random()<.5?a.k:b.k), s:mut(Math.random()<.5?a.s:b.s), si:mut(Math.random()<.5?a.si:b.si), sp:(Math.random()<.5?a.sp:b.sp), from:'Risteytys' };
+  const key=[a.sp,b.sp].sort().join('+');
+  if (HYBRIDS[key] && Math.random()<0.15) child.sp=HYBRIDS[key];
+  const isNew = !s.book[child.sp]; s.book[child.sp]=1;
+  if (s.strains.length>=8) s.strains.shift(); s.strains.push(child); crossPick=[];
+  const sp=SPECIALS[child.sp];
+  showLoot('','❦',`${child.sp}-kanta`,`Kasvu ${child.k} · Saanto ${child.s} · Sitkeys ${child.si}${isNew?' · UUSI KANTAKIRJAAN':''}`, sp.color, !!sp.hybrid, sp.hybrid?'HYBRIDI!':'RISTEYTYS');
+}
+function specialAt(x,y,seedId){
+  let best=null, bd=250;
+  const consider=(d,sp)=>{ if (d<bd){ bd=d; best=sp; } };
+  for (const f of features){
+    if (f.kind==='point'){ const d=Math.hypot(f.x-x,f.y-y);
+      if (f.zone==='lataus') consider(d,'Johtava'); else if (f.zone==='arkisto') consider(d,'Muistava'); else if (f.zone==='hot') consider(d,'Hehkuva'); }
+    else if (f.zone==='romu' || f.zone==='ranta'){ let d=1e9; for (let i=0;i<f.pts.length;i+=Math.max(1,Math.floor(f.pts.length/12))) d=Math.min(d,Math.hypot(f.pts[i][0]-x,f.pts[i][1]-y));
+      consider(d+40, f.zone==='romu'?'Syövyttävä':'Suodattava'); }
+  }
+  if (best) return best;
+  let b=0; for (const f of features) if (f.cls==='building' && Math.hypot(f.pts[0][0]-x,f.pts[0][1]-y)<150) b++;
+  if (b>=6) return 'Kitiininen';
+  const opts=['Johtava','Suodattava','Syövyttävä','Muistava','Kitiininen','Hehkuva']; return opts[Math.floor(seeded(seedId)()*6)];
+}
+function sampleStrain(node,hits){
+  const r=seeded(node.id+'s'); const tr=()=>1+Math.floor(r()*3);
+  const st={ sp:specialAt(node.x,node.y,node.id), k:tr(), s:tr(), si:tr(), from:NODE[node.zone].name };
+  if (hits>=3){ const keys=['k','s','si']; const k=keys[Math.floor(Math.random()*3)]; st[k]=rnd15(st[k]+1); }
+  S.carry.samples.push({st, t:Date.now()}); const isNew=!SM().book[st.sp];
+  return { st, isNew };
+}
+
+// ---------- SOLMU-näkymä ----------
+let baseTab='solmu', baseOpen=false, baseTimer=null, pressing=false;
 $('modal-box').addEventListener('pointerdown',()=>pressing=true);
 addEventListener('pointerup',()=>setTimeout(()=>pressing=false,120));
 function closeModal(){ $('modal').style.display='none'; baseOpen=false; clearInterval(baseTimer); }
-$('btn-base').onclick = () => {
-  const fresh = ensureBase();
-  openModal('<div></div>'); baseOpen=true; renderBase();
-  clearInterval(baseTimer); baseTimer=setInterval(renderBase,1000);
-  if (fresh) log('Löysit vanhan varaston: 6 romumetallia, 2 puuta, 1 koneenosa.');
-};
+const pips = v => '●'.repeat(v)+'○'.repeat(5-v);
+function strainTxt(st){ const sp=SPECIALS[st.sp]; return `<span style="color:${sp.color};text-shadow:0 0 5px ${sp.color}">${st.sp}</span> <span class="r">K ${pips(st.k)} · S ${pips(st.s)} · Si ${pips(st.si)}</span>`; }
+function renderBase(force){
+  tickSolmu(); if (!baseOpen || (pressing && !force)) return;
+  const s=SM(), now=Date.now();
+  const tabs=`<div class="row">${[['solmu','VARASTO'],['valmista','KASVATA'],['kasvamo','ALTAAT'],['symbiontti','ÄÄNI']].map(([k,l])=>`<button data-a="tab" data-m="${k}" class="${baseTab===k?'on':''}">${l}</button>`).join('')}</div>`;
+  let body='';
+  if (baseTab==='solmu'){
+    const st=Object.entries(s.store).filter(([,n])=>n>0).sort((a,b)=>b[1]-a[1]);
+    body=`<div class="mach"><div class="t"><span>⚡ RIHMAVIRTA</span><span>${s.virta}</span></div>
+      <div class="r">Kaikki valmistus kuluttaa virtaa. Virtaa saa vain kantamalla ladattuja kennoja pesäkkeelle. ${s.bio?`Virtasieniä ${s.bio} (+${s.bio}/min).`:''}</div></div>
+      <div class="mach"><div class="t"><span>⌂ PESÄKKEET</span><span>${s.nests.length}/${NEST_MAX}</span></div>
+      <div class="r">${s.nests.length?'Pesäkkeesi näkyvät kartalla. Pura reppu ja kennot kävelemällä pesäkkeen luo.':'Sinulla ei ole vielä pesäkettä. Istuta repussa oleva pesäke julkiseen paikkaan reittisi varrelle (REPPU → ISTUTA).'}</div></div>
+      <div class="mach"><div class="t"><span>SOLMUN VARASTO</span></div>
+      ${st.length? st.map(([k,n])=>`<div class="line"><span>${ICONS[k]||'◇'} ${k}</span><span>x${n}</span></div>`).join('') : '<div class="r">Tyhjä.</div>'}</div>`;
+  }
+  if (baseTab==='valmista'){
+    body=`<div class="hint">Raaka-aineet otetaan Solmun varastosta. Virtaa: ${s.virta}.</div>`+RECIPES.map(R=>`<div class="mach"><div class="t"><span>${R.name}</span></div>
+        <div class="r">${R.desc}</div><div class="r">${reqTxt(R.inp, R.virta)}</div>
+        <div class="row"><button data-a="craft" data-m="${R.id}" ${(hasStore(R.inp)&&s.virta>=R.virta)?'':'disabled'}>KASVATA</button></div></div>`).join('');
+  }
+  if (baseTab==='kasvamo'){
+    body=`<div class="hint">Istutus ja uusi kierros: 1 kalkkiitti + 1 virta (Solmussa ${s.store.Kalkkiitti||0} / ${s.virta}).</div>`;
+    body+=s.kammiot.map((c,i)=>{
+      if (!c) return `<div class="mach"><div class="t"><span>Allas ${i+1}</span><span class="r">tyhjä</span></div>
+        ${s.strains.length?`<div class="row">${s.strains.map((st,j)=>`<button data-a="plant" data-m="${j}" data-x="${i}" style="font-size:15px">${st.sp} ${st.k}/${st.s}/${st.si}</button>`).slice(0,4).join('')}</div>`:'<div class="r">Ei kantoja. Ota näyte villistä kasvustosta ja vie se pesäkkeelle.</div>'}</div>`;
+      const p=Math.min(100,Math.round(100*(now-c.start)/c.dur)), left=Math.max(0,Math.ceil((c.dur-(now-c.start))/1000));
+      return `<div class="mach"><div class="t"><span>Allas ${i+1}</span><span>${p>=100?'<span class="ok">SATO VALMIS</span>':left+' s'}</span></div>
+        <div>${strainTxt(c.st)}</div><div class="bar"><i style="width:${p}%"></i></div>
+        <div class="row"><button data-a="harvest" data-m="${i}" ${p>=100?'':'disabled'}>KORJAA → ${SPECIALS[c.st.sp].item}</button><button data-a="uproot" data-m="${i}">NOSTA</button></div></div>`; }).join('');
+    body+=`<div class="mach"><div class="t"><span>KANTAVARASTO</span><span>${s.strains.length}/8</span></div>
+      ${s.strains.map((st,j)=>`<div class="line" style="align-items:center"><span>${strainTxt(st)}</span><button data-a="pick" data-m="${j}" style="flex:none;font-size:15px;padding:2px 8px" class="${crossPick.includes(j)?'on':''}">${crossPick.includes(j)?'✓':'VALITSE'}</button></div>`).join('') || '<div class="r">Tyhjä.</div>'}
+      <div class="row"><button data-a="cross" ${crossPick.length===2 && s.virta>=3?'':'disabled'}>RISTEYTÄ (3 virtaa)</button></div>
+      <div class="hint">K = kasvu, S = saanto, Si = sitkeys. Ominaisuudet periytyvät satunnaisesti, joskus mutatoituvat. Harvoin kaksi erikoisuutta sulautuu hybridiksi.</div></div>
+      <div class="mach"><div class="t"><span>KANTAKIRJA</span><span>${Object.keys(s.book).length}/9</span></div>
+      <div class="r">${Object.keys(SPECIALS).map(k=>s.book[k]?`<span style="color:${SPECIALS[k].color}">${k}</span>`:'???').join(' · ')}</div></div>`;
+  }
+  if (baseTab==='symbiontti'){
+    body=`<div class="mach"><div class="t"><span>✦ SYMBIONTTI</span><span>muistoja ${Math.min(s.mem,MEMORIES.length)}/${MEMORIES.length}</span></div>
+      <div class="r">Ääni kuuluu niskassasi kasvavan sienen kautta. Syötä sille muistisoluja muistipesistä ja kuihtuma-alueilta, niin se muistaa enemmän.</div>
+      ${s.mem? `<p style="font-style:italic">${MEMORIES.slice(0,Math.min(s.mem,MEMORIES.length)).map(m=>`<div style="margin:6px 0;color:#c38bff">${m}</div>`).join('')}</p>`:''}
+      <div class="row"><button data-a="feed" ${(s.store.Muistisolu||0)>0?'':'disabled'}>SYÖTÄ MUISTISOLU (${s.store.Muistisolu||0})</button></div></div>`;
+  }
+  const box=$('modal-box'), sc=box.scrollTop;
+  box.innerHTML = `<h2>SOLMU</h2>` + tabs + body + '<div class="row"><button id="m-close">SULJE</button></div>'; box.scrollTop=sc;
+  $('m-close').onclick=closeModal;
+}
+$('btn-base').onclick = () => { openModal('<div></div>'); baseOpen=true; renderBase(true); clearInterval(baseTimer); baseTimer=setInterval(renderBase,1000); };
 $('modal-box').addEventListener('click', e => { const b=e.target.closest('button[data-a]'); if(!b) return;
-  if (b.dataset.a==='equip'){ equipTool(); return; } baseAction(b.dataset.a, b.dataset.m); });
-function equipTool(){ if((S.inv.Romusorkka||0)<1) return; S.inv.Romusorkka--; S.equip={name:'Romusorkka',dur:10}; save();
-  log('Romusorkka varustettu (10 käyttöä).'); $('btn-inv').onclick(); }
-setInterval(tickBase, 2000);
+  if (b.dataset.a==='equip'){ equipTool(); return; }
+  if (b.dataset.a==='plantnest'){ plantNest(); return; }
+  if (b.dataset.a==='useuute'){ useUute(); return; }
+  solmuAction(b.dataset.a, b.dataset.m, b.dataset.x); });
+function equipTool(){ if((S.inv.Kaivinsieni||0)<1) return; S.inv.Kaivinsieni--; S.equip={name:'Kaivinsieni',dur:8}; save();
+  log('Kaivinsieni käytössä (8 käyttöä).'); $('btn-inv').onclick(); }
+function useUute(){ if((S.inv.Keskittymisuute||0)<1) return; S.inv.Keskittymisuute--; S.focus=(S.focus||0)+3; save();
+  log('Keskittymisuute nautittu: seuraavat 3 keräystä helpompia.'); $('btn-inv').onclick(); }
+
+
 
 // ---------- Keräyspisteet ----------
 const XP_ON = false; // kokemus pois päältä toistaiseksi
 const NODE = {
-  romu:    { name:'Romukasa',            verb:'PURA',     icon:'⚙', speed:0.9, win:0.22 },
-  villi:   { name:'Joutomaan pusikko',   verb:'ETSI',     icon:'♣', speed:0.8, win:0.24 },
-  ranta:   { name:'Rantakivikko',        verb:'KALASTA',  icon:'≈', speed:0.75,win:0.22, drift:true },
-  viljely: { name:'Peltopalsta',         verb:'KORJAA',   icon:'⁂', speed:0.65,win:0.26 },
-  arkisto: { name:'Palvelinkaappi',      verb:'MURRA',    icon:'◫', speed:1.15,win:0.18 },
-  hot:     { name:'Jäännösverkon solmu', verb:'MURRA',    icon:'⚡', speed:1.5, win:0.13 }
+  lataus:   { name:'Elävä tasku',     verb:'LATAA',   icon:'⚡', speed:0.85,win:0.24 },
+  romu:     { name:'Ruostekasa',      verb:'SYÖVYTÄ', icon:'⚙', speed:0.9, win:0.22 },
+  kaapeli:  { name:'Kaapelikaivo',    verb:'KAIVA',   icon:'〰', speed:0.8, win:0.24 },
+  rihmasto: { name:'Villi rihmasto',  verb:'NÄYTE',   icon:'❦', speed:0.7, win:0.22, drift:true },
+  ranta:    { name:'Kosteikko',       verb:'KERÄÄ',   icon:'≋', speed:0.75,win:0.22, drift:true },
+  arkisto:  { name:'Muistipesä',      verb:'LIITY',   icon:'✺', speed:1.15,win:0.18 },
+  hot:      { name:'Kuihtuman ydin',  verb:'LIITY',   icon:'☣', speed:1.5, win:0.13 }
 };
 const RANGE = 28; // m
 let nodes = [];
 function hashStr(str){ let h=2166136261; for (const c of str){ h^=c.charCodeAt(0); h=Math.imul(h,16777619); } return h>>>0; }
-function seeded(str){ let s=hashStr(str)||1; return ()=>((s=Math.imul(s,48271)%2147483647)>>>0)/2147483647; }
+function seeded(str){ let a=hashStr(str)||1; return ()=>{ a=(a+0x6D2B79F5)>>>0; let t=a; t=Math.imul(t^(t>>>15),t|1); t^=t+Math.imul(t^(t>>>7),t|61); return ((t^(t>>>14))>>>0)/4294967296; }; }
 function polyArea(p){ let a=0; for (let i=0,j=p.length-1;i<p.length;j=i++) a+=(p[j][0]+p[i][0])*(p[j][1]-p[i][1]); return Math.abs(a/2); }
 function genNodes(feats){
   const out=[];
-  for (const f of feats){ if (!NODE[f.zone]) continue; const r=seeded(f.id);
+  for (const f of feats){ if (f.kind!=='line' || f.cls!=='road2' || !f.residential || !f.id) continue; const r=seeded(f.id); let acc=40+r()*120, k=0;
+    for (let i=1;i<f.pts.length;i++){ const [ax,ay]=f.pts[i-1],[bx,by]=f.pts[i], L=Math.hypot(bx-ax,by-ay);
+      while (acc<L){ const t=acc/L, x=ax+(bx-ax)*t, y=ay+(by-ay)*t; if (out.every(o=>Math.hypot(o.x-x,o.y-y)>60)) out.push({id:f.id+'#k'+(k++),x,y,zone:'kaapeli'}); acc+=250; } acc-=L; } }
+  for (const f of feats){ if (!f.zone || !NODE[f.zone]) continue; const r=seeded(f.id);
     if (f.kind==='point'){ out.push({id:f.id+'#0',x:f.x,y:f.y,zone:f.zone}); continue; }
     if (f.kind==='area'){ const n=Math.max(1,Math.min(4,Math.round(polyArea(f.pts)/3000)));
       const xs=f.pts.map(p=>p[0]), ys=f.pts.map(p=>p[1]); const x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys);
@@ -491,7 +649,10 @@ let MG=null;
 function startGather(){
   const near=nearestNode(false); if (!near || near.d>RANGE || !ready(near.n)) return;
   const n=near.n, cfg=NODE[n.zone], Z=ZONES[n.zone];
-  MG={ node:n, cfg, round:0, hits:0, pos:0, target:0.2+Math.random()*0.55, t0:performance.now(), lock:false, res:[] };
+  if (n.zone==='lataus' && S.carry.empty<1){ log('Ei tyhjiä kennoja. Pura ladatut kennot pesäkkeellä tai kasvata lisää kennoja.'); return; }
+  if (n.zone!=='lataus' && repUsed()>=repCap()){ log('Reppu täynnä. Pura se pesäkkeellä.'); return; }
+  const cfgEff = Object.assign({}, cfg, (S.focus>0) ? {win:Math.min(0.5,cfg.win*1.35)} : {});
+  MG={ node:n, cfg:cfgEff, round:0, hits:0, pos:0, target:0.2+Math.random()*0.55, t0:performance.now(), lock:false, res:[] };
   const o=$('mg'); o.style.setProperty('--c',Z.color); o.style.display='flex';
   $('mg-title').textContent=`${cfg.verb}: ${cfg.name.toUpperCase()}`;
   $('mg-desc').textContent = n.zone==='ranta' ? 'Napauta, kun osoitin osuu kalan kohdalle.' : (n.zone==='hot'||n.zone==='arkisto') ? 'Napauta, kun signaali lukittuu ikkunaan. Nopea!' : 'Napauta, kun osoitin on merkityllä alueella.';
@@ -525,17 +686,37 @@ $('mg').addEventListener('pointerdown', e=>{ e.preventDefault(); strike(); });
 const QUALITY=['KÖMPELÖ','KELVOLLINEN','HYVÄ','TÄYDELLINEN'];
 function finishGather(node,hits){
   const Z=ZONES[node.zone], cfg=NODE[node.zone];
-  let roll = Math.random()*100 - hits*9;       // osumat parantavat harvinaisen mahdollisuutta
+  if (S.focus>0) S.focus--;
+  S.finds=S.finds||[];
+  if (node.zone==='lataus'){
+    const n = hits>=1 ? S.carry.empty : Math.min(1, S.carry.empty);
+    S.carry.empty-=n; for (let i=0;i<n;i++) S.carry.cells.push(Date.now()); S.cooldowns[node.id]=Date.now()+COOLDOWN_MS;
+    S.finds.unshift({t:Date.now(), item:'Ladattu kenno', n, place:cfg.name, q:hits});
+    log(`${n} kennoa ladattu · ${cfg.name}`);
+    showLoot('','▮',`${n} kennoa ladattu`,`${QUALITY[hits]} (${hits}/3) · kennot vuotavat hiljalleen – vie ne pesäkkeelle`,'#3ee8ff',false,'LATAUS');
+    floatText(`+${n} ▮`,'#3ee8ff'); save(); updateUI(true); return;
+  }
+  if (node.zone==='rihmasto'){
+    const {st,isNew}=sampleStrain(node,hits), mass = Math.min(hits>=2?2:1, Math.max(0,repCap()-repUsed()));
+    S.inv.Rihmastomassa=(S.inv.Rihmastomassa||0)+mass; S.cooldowns[node.id]=Date.now()+COOLDOWN_MS;
+    S.finds.unshift({t:Date.now(), item:st.sp+'-kanta', n:1, place:cfg.name, q:hits});
+    S.newCount=(S.newCount||0)+1+mass; const sp=SPECIALS[st.sp];
+    log(`Näyte: ${st.sp}-kanta (${st.k}/${st.s}/${st.si})`);
+    showLoot('','❦',`${st.sp}-kanta`,`Kasvu ${st.k} · Saanto ${st.s} · Sitkeys ${st.si}${isNew?' · UUSI!':''} · vie pesäkkeelle ennen kuin näyte kuolee`, sp.color, isNew, 'NÄYTE');
+    floatText('+1 näyte', sp.color); save(); updateUI(true); return;
+  }
+  let roll = Math.random()*100 - hits*9;
   let pick = Z.loot[0], pi = 0;
   let acc = 0; const rev = Z.loot.slice().reverse(); for (let k=0;k<rev.length;k++){ acc += rev[k][1]; if (roll < acc){ pick = rev[k]; pi = Z.loot.length-1-k; break; } }
   if (hits===0){ pick=Z.loot[0]; pi=0; }
   let n = hits===0 ? 1 : pick[2] + Math.floor(Math.random()*(pick[3]-pick[2]+1)) + (hits>=2?1:0);
   let toolTxt='';
-  if (node.zone==='romu' && S.equip && S.equip.name==='Romusorkka'){ n+=1; S.equip.dur--; toolTxt=' · sorkka +1';
-    if (S.equip.dur<=0){ S.equip=null; setTimeout(()=>log('ROMUSORKKA HAJOSI!'),50); } }
+  if (node.zone==='romu' && S.equip && S.equip.name==='Kaivinsieni'){ n+=1; S.equip.dur--; toolTxt=' · kaivinsieni +1';
+    if (S.equip.dur<=0){ S.equip=null; setTimeout(()=>log('Kaivinsieni kuoli.'),50); } }
+  const room=Math.max(0, repCap()-repUsed()); if (n>room){ n=room; toolTxt+=' · reppu täyttyi'; }
   S.inv[pick[0]] = (S.inv[pick[0]]||0) + n;
   S.cooldowns[node.id] = Date.now() + COOLDOWN_MS;
-  S.finds = S.finds||[]; S.finds.unshift({t:Date.now(), item:pick[0], n, place:cfg.name, q:hits}); S.finds.length=Math.min(S.finds.length,60);
+  S.finds.unshift({t:Date.now(), item:pick[0], n, place:cfg.name, q:hits}); S.finds.length=Math.min(S.finds.length,60);
   S.newCount=(S.newCount||0)+n;
   log(`+${n} ${pick[0]} · ${cfg.name}`);
   const [rn,rc] = RARITY[Math.min(pi,2)];
@@ -547,30 +728,42 @@ function finishGather(node,hits){
 // ---------- UI ----------
 function updateUI(){
   const near=nearestNode(false), nr=nearestNode(true), btn=$('btn-gather');
-  btn.classList.remove('hot');
-  if (near && near.d<=RANGE){ const n=near.n, Z=ZONES[n.zone], cfg=NODE[n.zone];
+  btn.classList.remove('hot'); btn.dataset.mode='gather';
+  const nn=nearestNest(), carrying = S.carry.cells.length || S.carry.samples.length || repUsed()>0;
+  if (nn && nn.d<=NEST_RANGE){
+    $('zone').innerHTML=`<span style="color:#9cff57;text-shadow:0 0 6px #9cff57">⌂ OMA PESÄKE</span><br><span class="sub">${carrying?'Pura reppu, näytteet ja kennot Solmuun.':'Reppu on tyhjä.'}</span>`;
+    btn.disabled=!carrying; btn.textContent='PURA'; btn.dataset.mode='nest';
+  } else if (near && near.d<=RANGE){ const n=near.n, Z=ZONES[n.zone], cfg=NODE[n.zone];
     const cd=(S.cooldowns[n.id]||0)-Date.now();
     const head=`<span style="color:${Z.color};text-shadow:0 0 6px ${Z.color}">${cfg.icon} ${cfg.name.toUpperCase()}</span>`;
     if (cd>0){ $('zone').innerHTML=`${head}<br><span class="sub">Tyhjennetty. Täyttyy ${Math.ceil(cd/1000)} s kuluttua.</span>`; btn.disabled=true; btn.textContent=`TYHJÄ ${Math.ceil(cd/1000)}s`; }
-    else { $('zone').innerHTML=`${head} <span class="ok">VALMIS</span><br><span class="sub">Voi löytyä: ${Z.loot.map(l=>l[0]).join(', ')}</span>`; btn.disabled=false; btn.textContent=cfg.verb; btn.classList.toggle('hot',!!Z.hot); }
+    else { const what = n.zone==='lataus' ? `Lataa tyhjät kennot (sinulla ${S.carry.empty})` : n.zone==='rihmasto' ? 'Näyte kannasta ja rihmastomassaa' : 'Voi löytyä: '+Z.loot.map(l=>l[0]).join(', ');
+      $('zone').innerHTML=`${head} <span class="ok">VALMIS</span><br><span class="sub">${what}</span>`; btn.disabled=false; btn.textContent=cfg.verb; btn.classList.toggle('hot',!!Z.hot); }
   } else {
     btn.disabled=true; btn.textContent='—';
     const z=zoneAt(P.x,P.y); const zt = z ? `<span style="color:${ZONES[z.zone].color}">${ZONES[z.zone].name}</span> · ` : '';
     $('zone').innerHTML = nr ? `${zt}Lähin löytö: ${NODE[nr.n.zone].icon} ${NODE[nr.n.zone].name} <b>${Math.round(nr.d)} m</b><br><span class="sub">Kävele kohteen luo (alle ${RANGE} m).</span>`
                              : `${zt}Ei löytöjä lähellä<span class="blink">_</span>`;
   }
-  $('st-xp').textContent = `LÖYDÖT ${(S.finds||[]).length}`;
+  $('st-xp').textContent = `⚡ ${SM().virta} · ${cellsTxt()}`;
   $('btn-inv').textContent = S.newCount ? `REPPU +${S.newCount}` : 'REPPU';
 }
 
 function openModal(html){ $('modal-box').innerHTML = html + '<div class="row"><button id="m-close">SULJE</button></div>'; $('modal').style.display='flex'; $('m-close').onclick=closeModal; baseOpen=false; clearInterval(baseTimer); }
-$('btn-gather').onclick = startGather;
+$('btn-gather').onclick = () => { if ($('btn-gather').dataset.mode==='nest') unloadAtNest(); else startGather(); };
 $('btn-inv').onclick = () => {
   S.newCount=0; save(); updateUI();
-  const items = Object.entries(S.inv).filter(([,n])=>n>0).sort((a,b)=>b[1]-a[1]);
-  openModal(`<h2>REPPU</h2>` + (items.length ? items.map(([k,n])=>`<div class="line"><span>${ICONS[k]||'◇'} ${k}</span><span>x${n}</span></div>`).join('') : '<div>Tyhjä. Mene ulos keräämään.</div>')
-    + `<p>VARUSTE: ${S.equip?`${S.equip.name} (${S.equip.dur} käyttöä)`:'ei mitään'}</p>`
-    + ((S.inv.Romusorkka||0)>0 ? `<div class="row"><button data-a="equip">VARUSTA ROMUSORKKA</button></div>` : '')
+  const items = Object.entries(S.inv).filter(([k,n])=>n>0 && !['Pesäke','Kaivinsieni','Keskittymisuute'].includes(k)).sort((a,b)=>b[1]-a[1]);
+  const now=Date.now(), nn=nearestNest();
+  openModal(`<h2>REPPU <span class="r">${repUsed()}/${repCap()}</span></h2>`
+    + (items.length ? items.map(([k,n])=>`<div class="line"><span>${ICONS[k]||'◇'} ${k}</span><span>x${n}</span></div>`).join('') : '<div class="r">Ei tavaroita.</div>')
+    + `<p>KENNOT: ${cellsTxt()}</p>`
+    + (S.carry.samples.length ? `<p>NÄYTTEET:</p>`+S.carry.samples.map(x=>`<div class="line"><span>${strainTxt(x.st)}</span><span class="r">${Math.max(0,Math.ceil((SAMPLE_LIFE-(now-x.t))/60000))} min</span></div>`).join('') : '')
+    + `<p>PESÄKKEITÄ REPUSSA: ${S.inv['Pesäke']||0}${nn?` · lähin oma pesäke ${Math.round(nn.d)} m`:''}</p>`
+    + ((S.inv['Pesäke']||0)>0 ? `<div class="row"><button data-a="plantnest">ISTUTA PESÄKE TÄHÄN</button></div><div class="hint">Vain julkisiin paikkoihin, ei kotipihaan. Valitse paikka, jonka ohi kuljet usein.</div>` : '')
+    + `<p>KÄYTÖSSÄ: ${S.equip?`${S.equip.name} (${S.equip.dur} käyttöä)`:'ei mitään'}${S.focus?` · keskittyminen ${S.focus}`:''}</p>`
+    + ((S.inv.Kaivinsieni||0)>0 ? `<div class="row"><button data-a="equip">OTA KAIVINSIENI KÄYTTÖÖN (${S.inv.Kaivinsieni})</button></div>` : '')
+    + ((S.inv.Keskittymisuute||0)>0 ? `<div class="row"><button data-a="useuute">NAUTI KESKITTYMISUUTE (${S.inv.Keskittymisuute})</button></div>` : '')
     + `<p class="hint">Kävelty yhteensä ${(S.walked/1000).toFixed(2)} km · tänään ${(S.walkedToday/1000).toFixed(2)} km · kartoitettuja ruutuja ${Object.keys(S.visited).length}</p>`);
 };
 $('btn-skills').onclick = () => {
@@ -672,6 +865,16 @@ function draw(t){
       ctx.shadowBlur=0; ctx.fillStyle=hexA(Z.color,.3); ctx.font='19px VT323, monospace'; ctx.fillText(cfg.icon,X,Y+1);
       ctx.beginPath(); ctx.arc(X,Y,13,-Math.PI/2,-Math.PI/2+Math.PI*2*(1-left)); ctx.strokeStyle=hexA(Z.color,.55); ctx.lineWidth=2; ctx.stroke(); }
   }
+  ctx.shadowBlur=0;
+  // omat pesäkkeet
+  const nnD = nearestNest();
+  for (const n of nestsXY()){ const [X,Y]=scr(n.x,n.y); if (X<-40||Y<-40||X>W+40||Y>Hh+40) continue;
+    const inR = nnD && nnD.n.id===n.id && nnD.d<=NEST_RANGE, pr=1+0.08*Math.sin(t/500);
+    ctx.shadowColor='#9cff57'; ctx.shadowBlur=inR?22:14;
+    ctx.beginPath(); ctx.arc(X,Y,NEST_RANGE*zoom,0,7); ctx.strokeStyle='rgba(156,255,87,.35)'; ctx.setLineDash([3,5]); ctx.lineWidth=1; ctx.stroke(); ctx.setLineDash([]);
+    ctx.beginPath(); ctx.arc(X,Y,17*pr,0,7); ctx.fillStyle='rgba(156,255,87,.25)'; ctx.fill(); ctx.strokeStyle='#9cff57'; ctx.lineWidth=2; ctx.stroke();
+    ctx.fillStyle='#9cff57'; ctx.font='24px VT323, monospace'; ctx.fillText('⌂',X,Y+1);
+    if (inR){ ctx.font='18px VT323, monospace'; ctx.fillText('PURA!',X,Y-30); } }
   ctx.shadowBlur=0; ctx.textBaseline='alphabetic';
   // suuntanuoli lähimpään valmiiseen löytöön + katkoviiva
   const nr = nearestNode(true);
@@ -701,7 +904,7 @@ function draw(t){
 
 // ---------- Signaalimittari (ääni + värinä) ----------
 let AC=null, sigOn=false, noiseBuf=null, staticSrc=null, staticGain=null, nextClick=0, lockBeat=0, lastInRange=null, lastNear80=null;
-const ZONE_FREQ={romu:1800, villi:1300, ranta:2600, viljely:1100, arkisto:3400, hot:4200};
+const ZONE_FREQ={lataus:2400, romu:1500, kaapeli:1800, rihmasto:1200, ranta:2100, arkisto:3000, hot:3600};
 const VIB={hot:[80,60,80,60,200], arkisto:[40,40,40,40,40], ranta:[120,80,120], default:[60,40,60]};
 function initAudio(){
   AC = new (window.AudioContext||window.webkitAudioContext)();
@@ -712,31 +915,34 @@ function initAudio(){
   staticSrc = AC.createBufferSource(); staticSrc.buffer=noiseBuf; staticSrc.loop=true;
   staticSrc.connect(bp).connect(staticGain).connect(AC.destination); staticSrc.start();
 }
-function tick(freq, vol){
-  const t=AC.currentTime, src=AC.createBufferSource(); src.buffer=noiseBuf;
-  const f=AC.createBiquadFilter(); f.type='bandpass'; f.frequency.value=freq; f.Q.value=3;
-  const g=AC.createGain(); g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.012);
-  src.connect(f).connect(g).connect(AC.destination); src.start(t, Math.random()*0.9, 0.02);
+function thump(t, f, vol){
+  const o=AC.createOscillator(), g=AC.createGain(); o.type='sine';
+  o.frequency.setValueAtTime(f*1.6,t); o.frequency.exponentialRampToValueAtTime(f,t+0.08);
+  g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(vol,t+0.012); g.gain.exponentialRampToValueAtTime(0.0001,t+0.22);
+  o.connect(g).connect(AC.destination); o.start(t); o.stop(t+0.25);
 }
+// symbiontin syke: "lub-dub"; sävy riippuu kohteen tyypistä
+function tick(freq, vol){ const t=AC.currentTime, f=48+freq/60; thump(t, f, vol); thump(t+0.14, f*1.15, vol*0.6); }
 function beep(freq){
-  const t=AC.currentTime, o=AC.createOscillator(), g=AC.createGain(); o.type='square'; o.frequency.value=freq;
-  g.gain.setValueAtTime(0.06,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.09);
-  o.connect(g).connect(AC.destination); o.start(t); o.stop(t+0.1);
+  const t=AC.currentTime;
+  for (const [k,fq] of [[0,freq],[0.07,freq*1.5]]){ const o=AC.createOscillator(), g=AC.createGain(); o.type='sine'; o.frequency.value=fq;
+    g.gain.setValueAtTime(0.0001,t+k); g.gain.exponentialRampToValueAtTime(0.05,t+k+0.02); g.gain.exponentialRampToValueAtTime(0.0001,t+k+0.5);
+    o.connect(g).connect(AC.destination); o.start(t+k); o.stop(t+k+0.55); }
 }
 const vib = p => { try{ navigator.vibrate && navigator.vibrate(p); }catch(e){} };
 $('b-sig').onclick = () => {
   if (!AC) { try { initAudio(); } catch(e){ log('Ääni ei ole käytettävissä tässä selaimessa.'); return; } }
   AC.resume && AC.resume();
-  sigOn=!sigOn; $('b-sig').textContent = 'SIGNAALI: '+(sigOn?'PÄÄLLÄ':'POIS'); $('b-sig').classList.toggle('on',sigOn);
+  sigOn=!sigOn; $('b-sig').textContent = 'SYKE: '+(sigOn?'PÄÄLLÄ':'POIS'); $('b-sig').classList.toggle('on',sigOn);
   if (!sigOn && staticGain) staticGain.gain.value=0;
-  if (sigOn) log('Signaalimittari päällä. Kuuntele ritinää: mitä tiheämpi, sitä lähempänä.');
+  if (sigOn) log('Symbiontin syke kuuluu. Mitä tiheämpi, sitä lähempänä.');
 };
-const SIG_MAX=160;
+const sigMax = () => 160 + (S.solmu&&S.solmu.upg.suodin?100:0) + (S.solmu?S.solmu.valo*40:0);
 function signal(dt){
   const nr=nearestNode(true);
   const d = nr ? nr.d : Infinity;
   // visuaalinen palkki
-  const lvl = d<=RANGE ? 10 : d>=SIG_MAX ? 0 : Math.max(1, Math.round(10*(1-(d-RANGE)/(SIG_MAX-RANGE))));
+  const SIG_MAX=sigMax(); const lvl = d<=RANGE ? 10 : d>=SIG_MAX ? 0 : Math.max(1, Math.round(10*(1-(d-RANGE)/(SIG_MAX-RANGE))));
   const col = nr ? ZONES[nr.n.zone].color : '#ffb000';
   $('sig-bar').innerHTML = `<span style="color:${col};text-shadow:0 0 6px ${col}">${'▮'.repeat(lvl)}</span>${'▯'.repeat(10-lvl)}`;
   // värinä: lähestyminen (80 m) ja kantaman sisälle tulo
@@ -747,10 +953,10 @@ function signal(dt){
   // staattinen kohina hot zonella
   const z=zoneAt(P.x,P.y); staticGain.gain.value = (z && z.zone==='hot') ? 0.035+0.02*Math.random() : 0;
   if (!nr || d>=SIG_MAX) return;
-  const rate = d<=RANGE ? 16 : 0.7 + 13*Math.pow(1-(d-RANGE)/(SIG_MAX-RANGE), 2);
+  const rate = d<=RANGE ? 3.2 : 0.6 + 2.4*Math.pow(1-(d-RANGE)/(SIG_MAX-RANGE), 1.5);
   nextClick -= dt;
-  if (nextClick<=0){ tick(ZONE_FREQ[nr.n.zone]||2000, 0.35); nextClick = -Math.log(1-Math.random())/rate; }
-  if (d<=RANGE){ lockBeat -= dt; if (lockBeat<=0){ beep(nr.n.zone==='hot'?1320:880); lockBeat=1.2; } }
+  if (nextClick<=0){ tick(ZONE_FREQ[nr.n.zone]||2000, 0.5); nextClick = 1/rate * (0.92+Math.random()*0.16); }
+  if (d<=RANGE){ lockBeat -= dt; if (lockBeat<=0){ beep(nr.n.zone==='hot'?740:520); lockBeat=2.0; } }
 }
 
 // ---------- Silmukka ----------
@@ -809,7 +1015,7 @@ function startWatch(){
 
 async function boot(){
   const B=$('boot'); const say=s=>{ B.textContent += s+'\n'; }; bootSay=say;
-  say('JÄÄNNÖSVERKKO-TERMINAALI v0.9'); say('(c) 20XX — kaikki oikeudet raunioituneet'); say('');
+  say('SYMBIONTTI-YHTEYS v2.0'); say('...kuuletko meitä? Me kuulemme sinut.'); say('');
   say('> Haetaan sijaintia (voi kestää 10–20 s)...');
   const pos = await getPosition();
   if (pos){ origin={lat:pos.coords.latitude, lon:pos.coords.longitude}; P.mode='gps'; say('  GPS-LUKITUS OK'); }
@@ -819,7 +1025,7 @@ async function boot(){
   try { features = await loadStartArea(origin.lat, origin.lon); if (features.length<5) throw new Error('liian vähän dataa'); say(`  ${features.length} kohdetta ladattu (${osmNote})`); }
   catch(e){ features = demoCity(); data='DEMO'; mapMode='DEMO'; osmFail=e.message; say('  KARTTADATA EPÄONNISTUI: '+e.message); say('  → SIMULOITU DEMOKAUPUNKI. Paina yläpalkin HAE KARTTA yrittääksesi uudelleen.'); }
   zoneFeatures = features.filter(f=>f.zone && f.id);
-  nodes = genNodes(zoneFeatures);
+  nodes = genNodes(zoneFeatures.concat(features.filter(f=>f.residential)));
   $('st-pos').textContent = 'SIJAINTI: ' + (P.mode==='gps'?'GPS':'SIMULOITU');
   $('st-data').textContent = 'DATA: ' + data;
   $('hint').textContent = P.mode==='sim' ? 'Napauta karttaa liikkuaksesi (tai nuolinäppäimet). Rulla/nipistys = zoom.' : 'Liiku ulkona. Nipistys = zoom.';
@@ -836,7 +1042,7 @@ async function boot(){
       try { origin = {lat:here.lat, lon:here.lon}; P.x=0; P.y=0; lastFix=null; P.tx=P.ty=null;
         for (const k in tiles) delete tiles[k]; seenOSM=new Set();
         const f = await loadStartArea(origin.lat, origin.lon); if (f.length<5) throw new Error('liian vähän dataa');
-        features=f; zoneFeatures=features.filter(f=>f.zone&&f.id); nodes=genNodes(zoneFeatures); mapMode='OSM';
+        features=f; zoneFeatures=features.filter(f=>f.zone&&f.id); nodes=genNodes(zoneFeatures.concat(features.filter(f=>f.residential))); mapMode='OSM';
         $('st-data').textContent='DATA: OSM'; bm.style.display='none'; log('Oikea karttadata ladattu ('+osmNote+').'); }
       catch(e){ $('st-data').textContent='DATA: DEMO'; bm.textContent='HAE KARTTA'; log('KARTTA: '+e.message); }
       bm.disabled=false; };
@@ -846,6 +1052,7 @@ async function boot(){
 }
 boot();
 requestAnimationFrame(loop);
+if (location.hash==='#debug') window.DBG={P, get nodes(){return nodes}, get S(){return S}, finishGather, solmuAction, SM};
 })();
 </script>
 </body>
