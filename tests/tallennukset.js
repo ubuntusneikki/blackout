@@ -21,6 +21,5 @@ const {chromium}=require('playwright');
  console.log('ulko jälkeen', s.schema, !!s.rooms, s.hopea, s.spores, s.vesselInv, s.memories);
  await pg.goto(''+BASE+'/koti/'); await pg.waitForTimeout(400);
  console.log('koti taas', await pg.evaluate(()=>({h:__S().hopea, k:__S().known})));
- await pg.goto(''+BASE+'/'); await pg.waitForTimeout(200); console.log(await pg.textContent('#st'));
  console.log('errors',errs); await b.close();
 })();
