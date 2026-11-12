@@ -24,8 +24,8 @@ index.html          aloitussivu (linkit protoihin)
 ulko/index.html     ULKO-01: 2D-pikselikartta OSM-datasta, GPS, syke, löydöt (yksi tiedosto)
 koti/index.html     KOTI-01: hylly + astian poikkileikkaus, kasvatus, markkina (yksi tiedosto)
 iso/index.html      kokeilu: isometrinen 3D-kartta three.js r128:lla + pikselöintivarjostin
-blender/            Blender-skriptit (bpy): room.py (huone), kit.py (katupakkaus + talot), pix.py (pikselöinti), sheet.py
-docs/               ydinvisio.md, prototyypin-tila.md
+blender/            Blender-skriptit (bpy): room.py (huone), kit.py (katupakkaus + talot), koti.py (kodin spritet), koti_sheet.py, pix.py (pikselöinti), sheet.py
+docs/               ydinvisio.md, prototyypin-tila.md, kotipeli-v1.md, grafiikka-koti.md (kodin spritet ja atlas), kuvat/
 ```
 
 Ei build-vaihetta: staattisia sivuja GitHub Pagesissa. Paikallisesti: `python3 -m http.server` repon juuressa.
