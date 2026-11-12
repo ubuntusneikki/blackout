@@ -4,7 +4,8 @@ Tämä ohje kertoo, miten kotipelin grafiikka tehdään ja miten se liitetään 
 
 ## Tyylin lähteet
 
-- `docs/kuvat/huone_tyylitesti.png`: isometrinen huone, valaistus ja kolme elinvoimatasoa. Tämä on kotipelin päätyyli.
+- `docs/kuvat/huone_tyylitesti.png`: isometrinen huone, valaistus ja kolme elinvoimatasoa.
+- `docs/kuvat/koti_tyylitesti.png` (tyylitesti 2): futuristisempi biopunk-laboratorio Juuson palautteen mukaan: tummat teräs- ja paneelipinnat, laattalattia, lämmin valolista, ravinneputket, köynnökset ja nurkasta seinille kasvava rihmasto. Ikkunasta näkyy villiintynyt kaupunki (kylmä violetti).
 - `docs/kuvat/katupakkaus_tyylilevy.png` ja `docs/kuvat/katukulma_vertailu.png`: materiaalit (ruoste, patina, sammal), ääriviivat ja paletti.
 - `docs/kuvat/terraario_tyylikuva.png`: poikkileikkausnäkymä (2D, piirretty koodilla).
 - Moodboardin henki sanoin: isometriset aukileikatut pikselidioraamat, hehkuvat lasisäiliöt ja akvaariot, lämmin sisävalo tummassa ja viileässä ympäristössä, sammaloitunut rappio, kupariputket.
@@ -14,7 +15,7 @@ Tämä ohje kertoo, miten kotipelin grafiikka tehdään ja miten se liitetään 
 
 - **Kamera:** ortografinen isometrinen, kierto `(60°, 0, 45°)`, kuten `blender/room.py` ja `blender/kit.py`.
 - **Mittakaava:** **30 px/m** kaikille kodin spriteille. Huoneen ruutu on 1 m × 1 m, joten 4×4-huone on noin 170 px leveä ja mahtuu 192 px näkymään.
-  - Toteutus (`blender/koti.py`): ruutu on tasan **44 × 22 px** (≈31 px/m), jotta ruutujen ankkurit osuvat kokonaislukupikseleihin. Ruudun (c, r) ankkuri on huoneen ankkurista (22·(c−r), 11·(c+r−3)) px; c kulkee takaseinää pitkin vasemmalta oikealle, r takaa eteen. 4×4-huone on 176 px leveä.
+  - Toteutus (`blender/koti.py`, tyylitesti 2): Juuson palautteesta tarkkuus tuplattiin. Ruutu on tasan **88 × 44 px** (≈62 px/m), ja 4×4-huone on 352 px leveä (kangas 384 px). Ruudun (c, r) ankkuri on huoneen ankkurista (44·(c−r), 22·(c+r−3)) px; c kulkee takaseinää pitkin vasemmalta oikealle, r takaa eteen. Ankkurit kirjoitetaan `koti.json`-tiedostoon.
   - Astiat renderöidään kahtena kerroksena: `astia_x` (jalusta, multa, takalasit) ja `astia_x_etu` (etukulman kehys), ja sieni piirretään niiden väliin.
 - **Renderöinti:** Cycles CPU, `filter_width = 0.01`, väri + ID-kerros, jälkikäsittely `blender/pix.py`:llä (paletti, ääriviivat, pistekuviointi). Läpinäkyvä tausta.
 - **Valaistus:** sama kaikissa spriteissä, jotta ne sopivat yhteen: lämmin päävalo vasemmalta ylhäältä ja viileä täyttövalo kamerasta päin. Emissiiviset osat (sienet, LEDit) hehkuvat itse.
