@@ -20,9 +20,10 @@ Pelaaja ei valmista esineitä vaan kasvattaa elävää rihmastoa: kantoja ristey
 ## Rakenne
 
 ```
-index.html          aloitussivu (linkit protoihin)
+index.html          aloitussivu: ohjaa suoraan kotipeliin (ulko/ ja iso/ jäädytetty tästä protosta)
 ulko/index.html     ULKO-01: 2D-pikselikartta OSM-datasta, GPS, syke, löydöt (yksi tiedosto)
 koti/index.html     KOTI-01: hylly + astian poikkileikkaus, kasvatus, markkina (yksi tiedosto)
+koti/pwa.js, sw.js  puhelinversio: asennus (manifest.webmanifest, ikonit/), offline, tallennuksen vienti/tuonti koodina
 iso/index.html      kokeilu: isometrinen 3D-kartta three.js r128:lla + pikselöintivarjostin
 blender/            Blender-skriptit (bpy): room.py (huone), kit.py (katupakkaus + talot), pix.py (pikselöinti), sheet.py
 docs/               ydinvisio.md, prototyypin-tila.md
@@ -65,6 +66,7 @@ Kun koti kasvaa, sen saa pilkkoa ES-moduuleiksi (`koti/js/*.js`), mutta pidä pe
 - URL-parametrit: koti `?reset` (uusi peli); ulko `?sim` (ei GPS:ää), `?demo` (demokaupunki ilman OSM:ää); iso `?demo`.
 - Debug-koukut: koti `window.__S()`, ulko `window.DBG` (P, finds, S, collect), iso `window.DBG`.
 - Katso aina kuvakaappaus ennen kuin sanot jonkin visuaalisen asian olevan valmis.
+- Puhelinversio: `node tests/pwa.js` (oma palvelin). Service worker hakee verkosta ensin, joten uusi versio näkyy seuraavalla käynnistyksellä; tiedostolistaa ei tarvitse päivittää. Tallennuksen tuonti kulkee sessionStoragen (`solmu_tuonti`) kautta, ettei pelin oma save() ylikirjoita sitä.
 - Julkaisu: GitHub Pages. Käyttäjä ohittaa välimuistin lisäämällä `?v=N`; näytä versionumero käyttöliittymässä (`VERSION`).
 
 ## Tehtävät järjestyksessä
