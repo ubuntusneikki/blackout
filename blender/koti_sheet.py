@@ -43,7 +43,7 @@ SS = 3; mh = max(im[n].height for n in names)
 strip_w = sum(im[n].width * SS + 24 for n in names) + 30
 W = max(RW * S + 60, strip_w); H = RH * S + 60 + mh * SS + 70
 out = Image.new('RGB', (W, H), (11, 16, 24)); d = ImageDraw.Draw(out)
-d.text((30, 15), f'KOTI · TYYLITESTI 2  ·  4×4-huone {RW} px, ruutu {TW}×{TH} px (≈{meta["ppm"]:.0f} px/m), ×{S}', fill=(168, 251, 238), font=font)
+d.text((30, 15), f'KOTI · TYYLITESTI 3  ·  4×4-huone {RW} px, ruutu {TW}×{TH} px (≈{meta["ppm"]:.0f} px/m), ×{S}', fill=(168, 251, 238), font=font)
 big = scene.resize((RW * S, RH * S), Image.NEAREST); out.paste(big, (30, 45))
 x = 30; y0 = RH * S + 60
 for n in names:

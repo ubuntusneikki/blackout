@@ -5,7 +5,7 @@ Tämä ohje kertoo, miten kotipelin grafiikka tehdään ja miten se liitetään 
 ## Tyylin lähteet
 
 - `docs/kuvat/huone_tyylitesti.png`: isometrinen huone, valaistus ja kolme elinvoimatasoa.
-- `docs/kuvat/koti_tyylitesti.png` (tyylitesti 2): futuristisempi biopunk-laboratorio Juuson palautteen mukaan: tummat teräs- ja paneelipinnat, laattalattia, lämmin valolista, ravinneputket, köynnökset ja nurkasta seinille kasvava rihmasto. Ikkunasta näkyy villiintynyt kaupunki (kylmä violetti).
+- `docs/kuvat/koti_tyylitesti.png` (tyylitesti 2): futuristisempi biopunk-laboratorio Juuson palautteen mukaan: tummat teräs- ja paneelipinnat, laattalattia, lämmin valolista, ravinneputket, köynnökset ja nurkasta seinille kasvava rihmasto. Tyylitesti 3: hautomo terraarion tyyliin (teräsjalusta, tummat paneelit, teräskehys), ikkunassa syvä teräskarmi eikä maisemaa, vain hämärä valo, ei ikkunalautaa eikä rihmastoa seinillä.
 - `docs/kuvat/katupakkaus_tyylilevy.png` ja `docs/kuvat/katukulma_vertailu.png`: materiaalit (ruoste, patina, sammal), ääriviivat ja paletti.
 - `docs/kuvat/terraario_tyylikuva.png`: poikkileikkausnäkymä (2D, piirretty koodilla).
 - Moodboardin henki sanoin: isometriset aukileikatut pikselidioraamat, hehkuvat lasisäiliöt ja akvaariot, lämmin sisävalo tummassa ja viileässä ympäristössä, sammaloitunut rappio, kupariputket.
