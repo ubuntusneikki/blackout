@@ -22,22 +22,23 @@ Pelaaja ei valmista esineitä vaan kasvattaa elävää rihmastoa: kantoja ristey
 ```
 index.html          aloitussivu (linkit protoihin)
 ulko/index.html     ULKO-01: 2D-pikselikartta OSM-datasta, GPS, syke, löydöt (yksi tiedosto)
-koti/index.html     KOTI-01: hylly + astian poikkileikkaus, kasvatus, markkina (yksi tiedosto)
+koti/index.html     KOTI-01 v1: kotipeli ES-moduuleina koti/js/ (data, gfx, state, sim, room, xsec, ui, main)
 iso/index.html      kokeilu: isometrinen 3D-kartta three.js r128:lla + pikselöintivarjostin
 blender/            Blender-skriptit (bpy): room.py (huone), kit.py (katupakkaus + talot), pix.py (pikselöinti), sheet.py
-docs/               ydinvisio.md, prototyypin-tila.md
+docs/               ydinvisio.md, kotipeli-v1.md (+ suunnitelma), prototyypin-tila.md
+tests/              Playwright-skriptit: v1-lapipeluu.js (botti pelaa tilaukseen asti), tallennukset.js
 ```
 
 Ei build-vaihetta: staattisia sivuja GitHub Pagesissa. Paikallisesti: `python3 -m http.server` repon juuressa.
-Kun koti kasvaa, sen saa pilkkoa ES-moduuleiksi (`koti/js/*.js`), mutta pidä peli ajettavana ilman bundleria.
+Koti on ES-moduuleina (`koti/js/*.js`) ilman bundleria; se vaatii http-palvelimen (file:// ei toimi).
 
 ## Yhteinen tallennus
 
 - `localStorage` avain **`solmu_yhteinen_v1`**, sama ulko- ja kotisivulla (toimii vain samassa origin-osoitteessa).
-- Kenttiä: `speed, rows, slots[9], spores{kanta:n}, vesselInv[], bought, expand, kotiLast, firstHarvest, found{}, cells{}, memories[], walked, mk, goods{tuote-id:n}, seen{kanta:1}, market{sat{}, spike, nextSpike}`.
-- Tuote-id: `r:kanta` perussato, `j:kanta` jaloste, `s:kanta` itiö (itiöt ovat `spores`-kentässä). Valuutan työnimi on MK.
-- Vanhat kentät `sato`, `uute`, `places`, `healed` voivat olla vanhoissa tallennuksissa. Kodin `ensure()` muuntaa `sato`- ja `uute`-arvot rahaksi.
-- Koti omistaa kentät `KOTI_OWNS` (slots, kotiLast, mk, goods, market, bought, expand, rows). Kun toinen välilehti kirjoittaa (`storage`-tapahtuma), koti ottaa uuden tilan mutta pitää nämä omat arvonsa. Ulko tekee muutokset aina tuoreimpaan tallennukseen (`mutate`).
+- Kodin v1-skeema (`schema:1`): `speed, hopea, rooms{huone,kellari}{owned, cells[]}, cur, inv{raw:kanta, dry:kanta, suodatin, villi, agar}, spores{kanta:n}, vesselInv[], deviceInv[], bought, sold, known{}, tried{}, market{sat, spike, nextSpike}, flags{}, order, kotiLast`. Ulko käyttää: `spores, vesselInv, found, cells, memories, walked`.
+- Ruutu on `{kind:'vessel', type, strain, growth, moist, ready}` tai `{kind:'device', type, t, busy, done, dish|job}`. Mutaatiokannan avain on `kanta~grow` tai `kanta~yield`.
+- Tallennus ilman `schema`-kenttää on vanha (V0.2/V0.3): `state.js` `migrate()` muuntaa sen (sato, uute, mk, jalosteet ja tulikääpä → hopeaksi; hylly 3 sarakkeesta 4×4-ruudukkoon).
+- Koti omistaa kentät `KOTI_OWNS` (state.js). Kun toinen välilehti kirjoittaa (`storage`-tapahtuma), koti ottaa uuden tilan mutta pitää nämä omat arvonsa. Ulko tekee muutokset aina tuoreimpaan tallennukseen (`mutate`).
 - Kotiproton offline-kasvu käyttää `kotiLast`-kenttää (ei `last`).
 - Jos skeema muuttuu, tee `ensure()`-funktioon oletusarvot äläkä riko vanhoja tallennuksia.
 
@@ -63,13 +64,13 @@ Kun koti kasvaa, sen saa pilkkoa ES-moduuleiksi (`koti/js/*.js`), mutta pidä pe
 
 - Selaintestit Playwrightilla (headless Chrome). WebGL: `--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader`.
 - URL-parametrit: koti `?reset` (uusi peli); ulko `?sim` (ei GPS:ää), `?demo` (demokaupunki ilman OSM:ää); iso `?demo`.
-- Debug-koukut: koti `window.__S()`, ulko `window.DBG` (P, finds, S, collect), iso `window.DBG`.
+- Debug-koukut: koti `window.__S()` (tila), `__sim(s)` (pelisekunteja eteenpäin), `__G` (pelilogiikka), `__U` (käyttöliittymä); ulko `window.DBG` (P, finds, S, collect), iso `window.DBG`.
 - Katso aina kuvakaappaus ennen kuin sanot jonkin visuaalisen asian olevan valmis.
 - Julkaisu: GitHub Pages. Käyttäjä ohittaa välimuistin lisäämällä `?v=N`; näytä versionumero käyttöliittymässä (`VERSION`).
 
 ## Tehtävät järjestyksessä
 
 1. ~~**Ulko:** poista HERÄTÄ-toiminto, `places`-piirto ja parantamisen palkinnot. Jätä löydöt, syke ja muistot.~~ Tehty (ULKO-01 V0.2).
-2. **Kotipeli v1:** koko määrittely on tiedostossa **docs/kotipeli-v1.md** (suodatinputki: kasvatus, laboratorio ja risteytys, muottikasvatus, kuivaus, hoitajasieni, 4×4-huone ja kellari, HOPEA-markkina, tilaus). Se korvaa aiemmat tehtävät 2–5. KOTI-01 V0.3:n markkina (MK, jalosteet) sovitetaan tähän määrittelyyn.
+2. ~~**Kotipeli v1:**~~ toteutettu (KOTI-01 V1.0). Koko määrittely on tiedostossa **docs/kotipeli-v1.md** (suodatinputki: kasvatus, laboratorio ja risteytys, muottikasvatus, kuivaus, hoitajasieni, 4×4-huone ja kellari, HOPEA-markkina, tilaus). Se korvaa aiemmat tehtävät 2–5. KOTI-01 V0.3:n markkina (MK, jalosteet) sovitetaan tähän määrittelyyn.
 
 Ennen isoja suunnittelumuutoksia kysy Juusolta. Pienissä toteutusvalinnoissa valitse yksinkertaisin toimiva ratkaisu ja kerro se.
