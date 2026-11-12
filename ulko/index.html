@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
-<title>ULKO-01 – Kuihtunut kaupunki</title>
+<title>ULKO-01 – Villi kaupunki</title>
 <style>
   html,body{margin:0;height:100%;background:#0b1018;overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none}
   body{display:flex;align-items:center;justify-content:center}
@@ -15,16 +15,16 @@
 <script>
 (() => {
 'use strict';
-const VERSION = 'ULKO-01 V0.1';
+const VERSION = 'ULKO-01 V0.2';
 
 // ================= YHTEINEN TALLENNUS (sama kuin kotiprotossa) =================
 const SAVE_KEY = 'solmu_yhteinen_v1';
 function newGame(){
-  return { sato:0, uute:0, speed:60, rows:2, healed:0, bought:{purkki:0,terraario:0}, expand:0, trips:0, retkiReady:0,
+  return { speed:60, rows:2, bought:{purkki:0,terraario:0}, expand:0, trips:0, retkiReady:0,
     slots:[ {id:1,type:'terraario',strain:null,growth:0,moist:1,ready:false}, {id:2,type:'purkki',strain:null,growth:0,moist:1,ready:false},
             {id:3,type:'purkki',strain:null,growth:0,moist:1,ready:false}, null,null,null,null,null,null ],
     spores:{heltta:2}, vesselInv:[], kotiLast:Date.now(), firstHarvest:false,
-    places:[], found:{}, cells:{}, memories:[], walked:0 };
+    found:{}, cells:{}, memories:[], walked:0 };
 }
 function ensure(s){ const d=newGame(); for (const k in d) if (s[k]===undefined) s[k]=d[k]; return s; }
 function loadS(){ let s=null; try { s=JSON.parse(localStorage.getItem(SAVE_KEY)); } catch(e){}
@@ -52,20 +52,14 @@ const VES_COL = ['#2d4a55','#9fd3d6','#f3fbff'];
 const MEMORIES = [
   'TÄSSÄ OLI ENNEN KAHVILA. IHMISET ISTUIVAT IKKUNASSA JA ODOTTIVAT SADETTA.',
   'VERKKO LAULOI TÄÄLLÄ. NYT SE VAIN KUUNTELEE.',
-  'KUIHTUMINEN TULI HILJAA. ENSIN HAALISTUIVAT VÄRIT, SITTEN ÄÄNET.',
+  'VILLIINTYMINEN TULI HILJAA. ENSIN RIHMASTO LAULOI VÄÄRIN, SITTEN SE EI ENÄÄ KUUNNELLUT.',
   'JOKU KASVATTI TÄSSÄ TOMAATTEJA PARVEKKEELLA. RIHMASTO MUISTAA JUURET.',
   'EMME OLE SIENIÄ EMMEKÄ IHMISIÄ. OLEMME SE, MIKÄ JÄI VÄLIIN.',
   'KIRJASTO OLI LÄMMIN. PALVELIMET HURISIVAT KUIN MEHILÄISET.',
-  'JOKI EI KUIHTUNUT. SIKSI ME KASVAMME SEN RANNOILLA.',
-  'KUN HERÄTÄT PAIKAN, ME KUULEMME SEN. KUIN JOKU AVAISI IKKUNAN.',
+  'JOKI EI VILLIINTYNYT. SIKSI ME KASVAMME SEN RANNOILLA.',
+  'VILLI RIHMASTO EI OLE PAHA. SE ON VAIN NÄLKÄINEN, KUTEN ME KAIKKI.',
   'VANHA MAAILMA ANTOI ASTIAT. ME TEEMME TYÖN.',
   'ET OLE ENSIMMÄINEN KANTAJA. TOIVOTTAVASTI ET VIIMEINEN.'
-];
-const HEAL_REWARD = [
-  {kind:'strain', key:'hamara', n:2, txt:'HERÄNNEELTÄ PIHALTA NOUSI HÄMÄRÄNUPPEJA.'},
-  {kind:'vessel', key:'terraario',   txt:'NAAPURI TOI VANHAN TERRAARION. SE ODOTTAA KOTONA.'},
-  {kind:'strain', key:'kaapa',  n:2, txt:'KANNOISTA PUHKESI TULIKÄÄPIÄ.'},
-  {kind:'vessel', key:'palvelin',    txt:'KELLARISTA LÖYTYI PALVELINKAAPPI. SE ODOTTAA KOTONA.'}
 ];
 // paikan tyyppi -> löydön mahdollisuudet
 const ZONE_LOOT = {
@@ -74,10 +68,9 @@ const ZONE_LOOT = {
   teollinen:[['strain','ruusu',2,65],['vessel','palvelin',1,15],['memory',null,1,20]],
   arkisto: [['memory',null,1,55],['strain','hamara',1,30],['vessel','palvelin',1,15]],
   piha:    [['strain','hamara',1,55],['strain','heltta',1,25],['memory',null,1,20]],
-  verkko:  [['memory',null,1,60],['vessel','palvelin',1,25],['strain','ruusu',1,15]],
-  herannyt:[['strain','hoitaja',1,30],['strain','kaapa',2,25],['strain','ruusu',2,25],['vessel','akvaario',1,20]]
+  verkko:  [['memory',null,1,60],['vessel','palvelin',1,25],['strain','ruusu',1,15]]
 };
-const ZONE_NAME = { puisto:'PUISTO', ranta:'RANTA', teollinen:'TEOLLISUUSALUE', arkisto:'VANHA ARKISTO', piha:'VANHA PIHA', verkko:'VERKON SOLMU', herannyt:'HERÄNNYT PAIKKA' };
+const ZONE_NAME = { puisto:'PUISTO', ranta:'RANTA', teollinen:'TEOLLISUUSALUE', arkisto:'VANHA ARKISTO', piha:'VANHA PIHA', verkko:'VERKON SOLMU' };
 const SAY = {
   heltta:'KOSTEA VARJO. TUNNEN SINIHELTAN.', ruusu:'LÄMMIN ROMU. RUUSUSIENI VIIHTYY TÄÄLLÄ.',
   kaapa:'VESI MUISTAA. TULIKÄÄPÄ KASVAA RANNOILLA.', hamara:'VANHA PIHA HUOKAA. HÄMÄRÄNUPPI NUKKUU SAMMALESSA.',
@@ -257,7 +250,7 @@ function demoCity(){
 }
 
 // ================= LÖYDÖT =================
-// Maailma jaetaan 150 m soluihin. Osaan soluista syntyy päivittäin yksi löytö. Herätetyt paikat tuottavat aina löydön.
+// Maailma jaetaan 150 m soluihin. Osaan soluista syntyy päivittäin yksi löytö.
 const CELL=150, CELL_P=0.16;
 let finds=[];
 function cellKey(x,y){ const ll=toLL(x,y); return Math.floor(ll.lat/0.00135)+':'+Math.floor(ll.lon/0.0027); }
@@ -272,10 +265,6 @@ function rebuildFinds(){
     if (S.found[id]) continue;
     finds.push({id,x:a.x,y:a.y,zone:a.zone,kind,key,n,mem:(r()*MEMORIES.length)|0, cell:k});
   }
-  // herätetyt paikat
-  (S.places||[]).forEach((p,i)=>{ const id='h|'+day+'|'+i; if (S.found[id]) return; const [x,y]=toXY(p.lat,p.lon);
-    const r=seeded(id), [kind,key,n]=pickLoot('herannyt',r); const ang=r()*6.28;
-    finds.push({id,x:x+Math.cos(ang)*22,y:y+Math.sin(ang)*22,zone:'herannyt',kind,key,n,mem:0,cell:'h'+i}); });
 }
 function findColor(f){ return f.kind==='strain'?STRAIN[f.key].col : f.kind==='vessel'?VES_COL : MEM_COL; }
 function nearestFind(){ let best=null,bd=1e9; for(const f of finds){ const d=Math.hypot(f.x-P.x,f.y-P.y); if(d<bd){bd=d;best=f;} } return best?{f:best,d:bd}:null; }
@@ -296,7 +285,7 @@ function collect(f){
   let isNew=false;
   mutate(s=>{
     s.found[f.id]=1;
-    if (f.cell[0]!=='h' && !s.cells[f.cell]){ s.cells[f.cell]=today(); isNew=true; }
+    if (!s.cells[f.cell]){ s.cells[f.cell]=today(); isNew=true; }
     const n=f.n+(isNew&&f.kind==='strain'?1:0);
     if (f.kind==='strain') s.spores[f.key]=(s.spores[f.key]||0)+n;
     else if (f.kind==='vessel') s.vesselInv.push(f.key);
@@ -310,20 +299,6 @@ function collect(f){
   burst={x:f.x,y:f.y,t:performance.now(),col:findColor(f)[2]};
   vib([40,60,40,60,120]); if(AC) chime();
 }
-function canHeal(){ if ((S.uute||0)<1) return 'TARVITSET ELINVOIMAUUTETTA. JALOSTA SITÄ KOTONA.';
-  for (const p of S.places){ const [x,y]=toXY(p.lat,p.lon); if (Math.hypot(x-P.x,y-P.y)<70) return 'TÄMÄ PAIKKA ON JO HERÄTETTY. KÄVELE KAUEMMAS.'; }
-  return null; }
-function heal(){
-  const ll=toLL(P.x,P.y); let rw=null, idx=0;
-  mutate(s=>{ s.uute--; s.places.push({lat:ll.lat,lon:ll.lon,t:Date.now(),r:55}); idx=s.healed||0; s.healed=idx+1;
-    rw=HEAL_REWARD[idx%HEAL_REWARD.length];
-    if (idx<HEAL_REWARD.length){ if(rw.kind==='strain') s.spores[rw.key]=(s.spores[rw.key]||0)+rw.n; else s.vesselInv.push(rw.key); } });
-  healAnim={t:performance.now(), x:P.x, y:P.y};
-  rebuildFinds();
-  setTimeout(()=>{ modal={type:'healed', line: idx<HEAL_REWARD.length ? rw.txt : 'PAIKKA HERÄSI. TÄÄLTÄ LÖYTYY JOKA PÄIVÄ JOTAIN.', n:S.places.length}; },2200);
-  vib([30,40,30,40,30,40,200]); if(AC) chime(true);
-}
-
 // ================= ÄÄNI =================
 let AC=null, sigOn=false, nextBeat=0;
 function initAudio(){ AC=new (window.AudioContext||window.webkitAudioContext)(); }
@@ -371,7 +346,8 @@ function unscr(X,Y){ const u=(X-LW/2)*mpp, v=(Y-CYm())*mpp, c=Math.cos(ROT), s=M
 function path(pts){ g.beginPath(); pts.forEach(([x,y],i)=>{ const [X,Y]=scr(x,y); i?g.lineTo(X,Y):g.moveTo(X,Y); }); }
 const MAPC={ ground:'#4a4436', building:'#7a6250', bline:'#2e2420', road1:'#b5a68a', road2:'#8f8572', path:'#6f6a58',
   puisto:'#4f7a2c', ranta:'#1f6f80', teollinen:'#5e5650', arkisto:'#6a5a70', verkko:'#5a5040', piha:'#4a4436' };
-let burst=null, healAnim=null;
+let burst=null;
+const MAP_V=0.3;           // kartan värikylläisyys (0 harmaa … 1 täysi). Vakio: kaupunkia ei enää paranneta.
 
 function drawMap(t){
   g.save(); g.beginPath(); g.rect(0,MAP_TOP,LW,mapH()); g.clip();
@@ -384,11 +360,9 @@ function drawMap(t){
   for(const f of features) if(f.kind==='line'&&f.cls==='road2'){ path(f.pts); g.strokeStyle=MAPC.road2; g.lineWidth=Math.max(1.5,6/mpp); g.stroke(); }
   for(const f of features) if(f.kind==='line'&&f.cls==='road1'){ path(f.pts); g.strokeStyle=MAPC.road1; g.lineWidth=Math.max(2,10/mpp); g.stroke(); }
   g.restore();
-  // pikselikäsittely: puut, vesi ja elinvoima
+  // pikselikäsittely: puut, vesi ja hillitty värimaailma (löydöt hehkuvat sen päällä)
   const H=mapH(), img=g.getImageData(0,MAP_TOP,LW,H), d=img.data;
-  const places=S.places.map(p=>{ const [x,y]=toXY(p.lat,p.lon); return {x,y,r:p.r||55}; });
-  let anim=null; if(healAnim){ const a=(performance.now()-healAnim.t)/2000; if(a<1.3) anim={x:healAnim.x,y:healAnim.y,R:ease(a)*55}; else healAnim=null; }
-  const base=Math.min(0.35, 0.08+0.03*S.places.length);
+  const base=MAP_V;
   const c=Math.cos(ROT), s=Math.sin(ROT);
   const park=hexRGB(MAPC.puisto), water=hexRGB(MAPC.ranta);
   for(let y=0;y<H;y++){ const vy=(y+MAP_TOP-CYm())*mpp;
@@ -396,17 +370,11 @@ function drawMap(t){
       // puut ja aallot maailmankoordinaateissa, jotta ne pysyvät paikallaan
       if(Math.abs(d[i]-park[0])<6&&Math.abs(d[i+1]-park[1])<6){ const h=hashStr(((wx/3)|0)+','+((wy/3)|0))%7; if(h===0){ d[i]=47; d[i+1]=90; d[i+2]=36; } else if(h===1){ d[i]=121; d[i+1]=168; d[i+2]=58; } }
       else if(Math.abs(d[i]-water[0])<6&&Math.abs(d[i+2]-water[2])<6){ if(((((wx/2)|0)+((wy/2)|0)*3+((t*2)|0))%11)===0){ d[i]=95; d[i+1]=199; d[i+2]=208; } }
-      let v=base;
-      for(const p of places){ const dd=Math.hypot(wx-p.x,wy-p.y); if(dd<p.r) v=Math.max(v, dd<p.r*0.6?1:1-(dd-p.r*0.6)/(p.r*0.4)); }
-      if(anim){ const dd=Math.hypot(wx-anim.x,wy-anim.y); if(dd<anim.R) v=Math.max(v,1-dd/80*0.2); else if(dd<anim.R+2&&BAYER[y&3][x&3]<8){ d[i]=168; d[i+1]=251; d[i+2]=238; continue; } }
-      if(v<1) vital(d,i,v);
+      vital(d,i,base);
     } }
   g.putImageData(img,0,MAP_TOP);
 
   g.save(); g.beginPath(); g.rect(0,MAP_TOP,LW,mapH()); g.clip();
-  // herätetyt paikat: pieni hehkuva itu keskellä
-  for(const p of places){ const [X,Y]=scr(p.x,p.y); if(X<-10||X>LW+10||Y<MAP_TOP-10||Y>MAP_TOP+H+10) continue;
-    rect(X,Y-3,1,3,'#79a83a'); px(X,Y-4,Math.sin(t*2)>0?CY_[2]:CY_[1]); px(X-1,Y-2,'#79a83a'); px(X+1,Y-2,'#79a83a'); }
   // simuloitu kohde
   if(P.tx!==null){ const [X,Y]=scr(P.tx,P.ty); for(let k=0;k<1;k+=0.06){ const ax=LW/2+(X-LW/2)*k, ay=CYm()+(Y-CYm())*k; px(ax,ay,AMB[1]); } rect(X-1,Y-1,3,3,AMB[2]); }
   // löydöt
@@ -456,7 +424,7 @@ function drawUI(t){
   rect(0,0,LW,13,UI.ui0); rect(0,13,LW,1,UI.ui2);
   text('ULKONA',4,4,UI.ui3);
   const sp=Object.values(S.spores||{}).reduce((a,b)=>a+b,0);
-  const res='ITIÖT '+sp+'  UUTE '+(S.uute||0); text(res,LW-4-tw(res),4,AMB[2]);
+  const res='ITIÖT '+sp+'  MUISTOT '+(S.memories||[]).length; text(res,LW-4-tw(res),4,AMB[2]);
   text(P.mode==='gps'?'GPS':'SIM',32,4,P.mode==='gps'?'#6ae07a':UI.uiD);
   HIT.push({x:0,y:0,w:LW,h:13,fn:()=>{ modal={type:'settings'}; }});
   // paneeli
@@ -484,8 +452,7 @@ function drawUI(t){
   } else {
     holdZone=null;
     button(4,by,58,13,sigOn?'SYKE: PÄÄLLÄ':'SYKE: POIS',toggleSig,sigOn?'g':'n');
-    const why=canHeal();
-    button(66,by,62,13,'HERÄTÄ',()=>{ const w=canHeal(); if(w){ say(w,UI.ui3); return; } modal={type:'healAsk'}; }, why?'n':'a');
+    button(66,by,62,13,'MUISTOT',()=>{ modal={type:'memories'}; });
     button(132,by,56,13,'KOTIIN',()=>{ location.href='../koti/'; });
   }
 }
@@ -494,8 +461,7 @@ function hintText(nr){
   if(!sigOn) return 'KYTKE SYKE PÄÄLLE. SYMBIONTTI KUULEE LÖYDÖT ENNEN KUIN NÄET NE.';
   if(nr&&nr.d<=REVEAL) return 'LÖYTÖ ON LÄHELLÄ. MENE SEN LUO.';
   if(nr&&nr.d<SIG_MAX) return 'SYKE TIHENEE, KUN LÄHESTYT. SEURAA SITÄ.';
-  if((S.uute||0)>0) return 'SINULLA ON UUTETTA. HERÄTÄ JOKIN PAIKKA, JOTA KULJET USEIN.';
-  return 'KAUPUNKI ON HILJAA. KÄVELE, NIIN SYKE HERÄÄ.';
+  return 'VILLI KAUPUNKI ON HILJAA. KÄVELE, NIIN SYKE HERÄÄ.';
 }
 let holdZone=null;
 function toggleSig(){ if(!AC){ try{ initAudio(); }catch(e){ say('ÄÄNI EI OLE KÄYTETTÄVISSÄ.',UI.ui3); } } AC&&AC.resume&&AC.resume(); sigOn=!sigOn; if(sigOn) say('SYMBIONTIN SYKE KUULUU. MITÄ TIHEÄMPI, SITÄ LÄHEMPÄNÄ.'); }
@@ -517,15 +483,6 @@ function drawModal(t){
     if(modal.isNew) textC('UUSI ALUE: +1 BONUS',cx,Y+67,AMB[2]);
     wrap(modal.line,X+8,Y+80,WW-16,UI.ui3);
     textC(modal.kind==='memory'?'TALLENNETTU MUISTOIHIN':'ODOTTAA KOTONA SOLMUSSA',cx,Y+HH-30,UI.uiD);
-  } else if(modal.type==='healAsk'){
-    textC('HERÄTÄ TÄMÄ PAIKKA?',X+WW/2,Y+8,AMB[2]);
-    wrap('KÄYTÄT 1 ELINVOIMAUUTTEEN. PAIKKA SAA VÄRINSÄ TAKAISIN PYSYVÄSTI, JA SIELTÄ LÖYTYY JATKOSSA JOKA PÄIVÄ JOTAIN.',X+8,Y+22,WW-16,UI.ui3);
-    wrap('VALITSE PAIKKA, JOSSA KULJET USEIN: KOTIKATU, PUISTO TAI REITTI TÖIHIN.',X+8,Y+70,WW-16,UI.uiD);
-    button(X+8,Y+HH-36,WW-16,13,'HERÄTÄ (1 UUTE)',()=>{ modal=null; heal(); },'a');
-  } else if(modal.type==='healed'){
-    textC('PAIKKA HERÄSI',X+WW/2,Y+8,CY_[2]);
-    wrap(modal.line,X+8,Y+24,WW-16,UI.ui3);
-    textC('HERÄTETTYJÄ PAIKKOJA: '+modal.n,X+WW/2,Y+80,AMB[2]);
   } else if(modal.type==='settings'){
     textC('ASETUKSET',X+WW/2,Y+8,AMB[2]);
     const lbl={kulku:'KULKUSUUNTA',kompassi:'KOMPASSI',pohjoinen:'POHJOINEN YLÖS'};
@@ -647,7 +604,7 @@ async function boot(){
 }
 boot();
 requestAnimationFrame(loop);
-window.DBG={P, get finds(){return finds}, get S(){return S}, collect, heal, get anchors(){return anchors}};
+window.DBG={P, get finds(){return finds}, get S(){return S}, collect, get anchors(){return anchors}};
 })();
 </script>
 </body>
