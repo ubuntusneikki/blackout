@@ -14,7 +14,7 @@
 <canvas id="c"></canvas>
 <script>
 'use strict';
-const VERSION = 'KOTI-01 V0.2';
+const VERSION = 'KOTI-01 V0.3';
 
 // ================= PALETTI =================
 const P = {
@@ -49,27 +49,53 @@ const STRAINS = {
   hoitaja:{name:'HOITAJASIENI', wet:true,  warm:false, grow:400,  yield:0, col:['#2f5a3a','#8fd0a0','#e8fff0'], style:'tall', auto:true}
 };
 const MATCH_MULT = [0.5, 0.8, 1.3];
-const BLOCK_COST = [1, 2, 3, 4, 5];
-const BLOCK_REWARD = [
-  {kind:'strain', key:'hamara', n:2, txt:'PARANNETULTA PIHALTA LÖYTYI HÄMÄRÄNUPPEJA'},
-  {kind:'vessel', key:'terraario', txt:'NAAPURI JÄTTI VANHAN TERRAARION'},
-  {kind:'strain', key:'kaapa', n:2, txt:'PUISTON KANNOISTA LÖYTYI TULIKÄÄPIÄ'},
-  {kind:'vessel', key:'palvelin', txt:'KELLARISTA PALVELINKAAPPI'},
-  {kind:'end', txt:'KORTTELI ON HERÄNNYT!'}
-];
+
+// ================= MARKKINA =================
+// Valuutan työnimi: MK. Tuote-id: 'r:kanta' = perussato, 'j:kanta' = jaloste, 's:kanta' = itiö.
+const CUR = 'MK';
+const RAW_PRICE   = {heltta:2, ruusu:3, kaapa:4, hamara:3};          // perussato / kpl
+const SPORE_PRICE = {heltta:4, ruusu:8, kaapa:10, hamara:7, hoitaja:25};
+const REFINE = {   // jalostus: n perussatoa -> 1 jaloste
+  heltta:{name:'SINITEE',     n:3},
+  ruusu: {name:'RUUSUHILLO',  n:3},
+  kaapa: {name:'TAULA',       n:3},
+  hamara:{name:'HÄMÄRÄMUSTE', n:3}
+};
+const REFINE_BONUS = 1.6;   // jaloste on arvokkaampi kuin raaka-aineensa
+const SAT_STEP = {r:0.06, j:0.14, s:0.2};  // kuinka paljon yksi myynti painaa hintaa
+const SAT_HALF = 3600;      // pelisekunteja: kyllääntyminen puolittuu tunnissa (×60: minuutissa)
+const SPIKE_EVERY = [1800, 4200], SPIKE_LEN = 1500, SPIKE_MULT = [1.8, 2.6];
+function prodKind(id){ return id[0]; }
+function prodKey(id){ return id.slice(2); }
+function basePrice(id){ const k=prodKey(id);
+  if (prodKind(id)==='r') return RAW_PRICE[k];
+  if (prodKind(id)==='j') return Math.round(RAW_PRICE[k]*REFINE[k].n*REFINE_BONUS);
+  return SPORE_PRICE[k]; }
+function prodName(id){ const k=prodKey(id);
+  if (prodKind(id)==='j') return REFINE[k].name;
+  return STRAINS[k].name+(prodKind(id)==='s'?'-ITIÖ':''); }
 
 // ================= TILA =================
+var started = false;                    // true kun piirtosilmukka on käynnissä
 const SAVE_KEY = 'solmu_yhteinen_v1';   // sama tallennus kuin ulkoprotossa
 function newGame(){
   return {
-    sato:0, uute:0, speed:60, rows:2, healed:0, bought:{purkki:0, terraario:0}, expand:0, trips:0,
+    speed:60, rows:2, bought:{purkki:0, terraario:0}, expand:0, trips:0,
     retkiReady:0,
     slots:[ v('terraario'), v('purkki'), v('purkki'), null, null, null, null, null, null ],
     spores:{heltta:2}, vesselInv:[], kotiLast:Date.now(), firstHarvest:false,
-    places:[], found:{}, cells:{}, memories:[], walked:0
+    found:{}, cells:{}, memories:[], walked:0,
+    mk:0, goods:{}, seen:{}, market:{sat:{}, spike:null, nextSpike:900}
   };
 }
-function ensure(s){ const d=newGame(); for (const k in d) if (s[k]===undefined) s[k]=d[k]; return s; }
+function ensure(s){ const d=newGame(); for (const k in d) if (s[k]===undefined) s[k]=d[k];
+  // vanha tallennus: yksi sato-luku ja uute -> muunnetaan rahaksi (tehtävä 2 poisti uutteen)
+  if (s.sato>0 || s.uute>0){ s.mk += (s.sato||0)*2 + (s.uute||0)*15; s.sato=0; s.uute=0; }
+  if (!s.market.sat) s.market.sat={};
+  return s; }
+// koti omistaa nämä kentät: toisen välilehden tallennus ei saa ylikirjoittaa niitä
+const KOTI_OWNS = ['slots','kotiLast','mk','goods','market','bought','expand','rows'];
+function mergeIncoming(inc){ for (const k of KOTI_OWNS) inc[k]=S[k]; return ensure(inc); }
 let uid = 1;
 function v(type){ return {id:uid++, type, strain:null, growth:0, moist:1, ready:false}; }
 let S;
@@ -139,6 +165,44 @@ function tickGame(dt){
       if (vs.growth>=1){ vs.growth=1; vs.ready = !T.auto; }
     }
   });
+  marketTick(dt);
+}
+// markkinan oma aika: kyllääntyminen purkautuu ja kysyntäpiikit tulevat ja menevät
+function marketTick(dt){
+  const M=S.market, f=Math.pow(0.5, dt/SAT_HALF);
+  for (const id in M.sat){ M.sat[id]*=f; if (M.sat[id]<0.005) delete M.sat[id]; }
+  if (M.spike){ M.spike.left-=dt; if (M.spike.left<=0) M.spike=null; }
+  M.nextSpike-=dt;
+  if (M.nextSpike<=0){
+    M.nextSpike = SPIKE_EVERY[0] + Math.random()*(SPIKE_EVERY[1]-SPIKE_EVERY[0]);
+    // piikki osuu tuotteeseen, joka on jo tuttu (pelaaja on kasvattanut kantaa) tai satunnaiseen perussatoon
+    const known = Object.keys(RAW_PRICE).filter(k=>S.seen[k]);
+    const pool = known.length ? known : ['heltta'];
+    const k = pool[(Math.random()*pool.length)|0], kind = Math.random()<0.5 ? 'r' : 'j';
+    M.spike = {id:kind+':'+k, mult: SPIKE_MULT[0]+Math.random()*(SPIKE_MULT[1]-SPIKE_MULT[0]), left:SPIKE_LEN};
+    if (started) toast('KYSYNTÄPIIKKI: '+prodName(M.spike.id)+' NYT ×'+M.spike.mult.toFixed(1));
+  }
+}
+function unitPrice(id, extraSat){
+  const M=S.market, sat=(M.sat[id]||0)+(extraSat||0);
+  const sp = M.spike && M.spike.id===id ? M.spike.mult : 1;
+  return Math.max(1, Math.round(basePrice(id)*sp/(1+sat)));
+}
+function owned(id){ return prodKind(id)==='s' ? (S.spores[prodKey(id)]||0) : (S.goods[id]||0); }
+function take(id,n){ if (prodKind(id)==='s'){ S.spores[prodKey(id)]-=n; if (S.spores[prodKey(id)]<=0) delete S.spores[prodKey(id)]; }
+  else { S.goods[id]-=n; if (S.goods[id]<=0) delete S.goods[id]; } }
+// paljonko n kappaleen myynti tuottaa (hinta laskee kappale kappaleelta)
+function quote(id,n){ let sum=0; for(let i=0;i<n;i++) sum+=unitPrice(id, i*SAT_STEP[prodKind(id)]); return sum; }
+function sell(id,n){
+  n=Math.min(n,owned(id)); if(n<=0) return;
+  const got=quote(id,n); take(id,n); S.mk+=got;
+  S.market.sat[id]=(S.market.sat[id]||0)+n*SAT_STEP[prodKind(id)];
+  toast('MYIT '+n+' × '+prodName(id)+' +'+got+' '+CUR); save();
+}
+function refineOne(k){
+  const R=REFINE[k], id='r:'+k; if ((S.goods[id]||0)<R.n) return;
+  take(id,R.n); S.goods['j:'+k]=(S.goods['j:'+k]||0)+1;
+  toast(R.n+' × '+STRAINS[k].name+' > 1 × '+R.name); save();
 }
 
 let msg = '', msgT = 0;
@@ -147,11 +211,12 @@ function toast(m){ msg=m; msgT=performance.now(); }
 function harvest(vs){
   const T=STRAINS[vs.strain];
   const n=Math.max(1, Math.round(T.yield*VESSELS[vs.type].size*MATCH_MULT[matchOf(vs,vs.strain)]));
-  S.sato+=n; vs.ready=false; vs.growth=0.35;
+  S.goods['r:'+vs.strain]=(S.goods['r:'+vs.strain]||0)+n; vs.ready=false; vs.growth=0.35;
+  S.seen[vs.strain]=1;
   let extra='';
   if (Math.random()<0.35){ S.spores[vs.strain]=(S.spores[vs.strain]||0)+1; extra=' + 1 ITIÖ'; }
   if (!S.firstHarvest){ S.firstHarvest=true; extra+='. VIE SATO MARKKINALLE TAI JALOSTA'; }
-  toast('+'+n+' SATOA'+extra);
+  toast('+'+n+' × '+T.name+extra);
   burst = {t:performance.now()};
   save();
 }
@@ -161,8 +226,8 @@ function plant(vs, key){
   wake[vs.id]=0; toast(STRAINS[key].name+' ISTUTETTU');
   save();
 }
-function marketPrice(type){ return type==='purkki' ? 4+3*S.bought.purkki : 10+6*S.bought.terraario; }
-function expandPrice(){ return 30+30*S.expand; }
+function marketPrice(type){ return type==='purkki' ? 10+6*S.bought.purkki : 25+12*S.bought.terraario; }
+function expandPrice(){ return 80+80*S.expand; }
 function retki(){
   const now=Date.now(); if (now<S.retkiReady) return;
   S.trips++; S.retkiReady = now + 12000;
@@ -171,28 +236,20 @@ function retki(){
   else if (S.trips===2) r={kind:'vessel',key:'akvaario'};
   else if (S.trips===3) r={kind:'strain',key:'hoitaja',n:1};
   else { const pool=[{kind:'strain',key:'ruusu',n:1},{kind:'strain',key:'heltta',n:2},{kind:'strain',key:'kaapa',n:1},
-      {kind:'strain',key:'hamara',n:1},{kind:'vessel',key:'palvelin'},{kind:'vessel',key:'akvaario'},{kind:'strain',key:'hoitaja',n:1},{kind:'sato',n:5}];
+      {kind:'strain',key:'hamara',n:1},{kind:'vessel',key:'palvelin'},{kind:'vessel',key:'akvaario'},{kind:'strain',key:'hoitaja',n:1}];
     r=pool[(Math.random()*pool.length)|0]; }
   give(r);
-  const what = r.kind==='strain' ? r.n+' × '+STRAINS[r.key].name+'-ITIÖ'
-             : r.kind==='vessel' ? VESSELS[r.key].name : r.n+' SATOA';
+  const what = r.kind==='strain' ? r.n+' × '+STRAINS[r.key].name+'-ITIÖ' : VESSELS[r.key].name;
   toast('RETKI: LÖYSIT '+what);
   save();
 }
 function give(r){
   if (r.kind==='strain') S.spores[r.key]=(S.spores[r.key]||0)+r.n;
   else if (r.kind==='vessel') S.vesselInv.push(r.key);
-  else if (r.kind==='sato') S.sato+=r.n;
-}
-function refine(){ if (S.sato<5) return; S.sato-=5; S.uute++; toast('5 SATOA > 1 ELINVOIMAUUTE'); save(); }
-function healBlock(){
-  if (S.healed>=5) return; const c=BLOCK_COST[S.healed]; if (S.uute<c) return;
-  S.uute-=c; const rw=BLOCK_REWARD[S.healed]; S.healed++;
-  give(rw); healAnim={seg:S.healed-1, t0:performance.now()}; toast(rw.txt); modal=null; save();
 }
 
 // ================= UI-TILA =================
-let winRect=null, roomV=0, view='room', sel=-1, modal=null, burst=null, healAnim=null;
+let winRect=null, roomV=0, view='room', sel=-1, modal=null, burst=null;
 const wake={};               // vessel id -> 0..1 heräämisanimaatio
 S.slots.forEach(vs=>{ if(vs) wake[vs.id]= vs.strain?1:0; });
 let HIT=[];
@@ -248,10 +305,8 @@ function drawWindow(t){
   }
   rect(X0+WW/2-1,Y0,2,HH,P.cu1);
   rect(X0,Y0+HH/2-1,WW,1,P.cu0);
-  // mono-maskit parantamattomille lohkoille
-  const np=(S.places||[]).length, wv=clamp(0.06+np*0.19,0,1);
-  winRect=[X0,Y0,WW,HH,wv];
-  text(np?'HERÄTETTY '+np+' PAIKKAA':'KAUPUNKI ON KUIHTUNUT', X0+3, Y0+3, P.ui3);
+  // ikkunanäkymä pysyy hillittynä (kaupungin värin palauttaminen poistettiin suunnasta)
+  winRect=[X0,Y0,WW,HH,0.45];
 }
 
 function drawMiniVessel(vs,x,y,t,i){
@@ -315,7 +370,7 @@ function drawMiniVessel(vs,x,y,t,i){
 function drawRoom(t){
   drawWall();
   { const vs=S.slots.slice(0,S.rows*3).filter(x=>x&&x.strain); const avg=vs.length?vs.reduce((a,b)=>a+vesselV(b),0)/vs.length:0;
-    roomV=clamp(0.08+0.45*avg*Math.min(1,vs.length/3)+0.12*Math.min(4,(S.places||[]).length),0,1); }
+    roomV=clamp(0.08+0.45*avg*Math.min(1,vs.length/3)+0.15,0,1); }
   // lamppu
   rect(96,14,1,6,P.st0);
   drawWindow(t);
@@ -336,9 +391,11 @@ function drawRoom(t){
   // paneeli
   panelBase();
   const now=Date.now(), rd=now>=S.retkiReady;
-  button(4,318,58,14,'MARKKINA',()=>modal={type:'market'});
-  button(66,318,58,14,'JALOSTA',refine, S.sato>=5?'a':'d');
-  button(128,318,60,14,'ULOS >',()=>{ save(); location.href='../ulko/'; }, (S.uute>0||Object.keys(S.spores).length===0)?'g':'n');
+  const canRefine=Object.keys(REFINE).some(k=>(S.goods['r:'+k]||0)>=REFINE[k].n);
+  const spikeOwned=S.market.spike && owned(S.market.spike.id)>0;
+  button(4,318,58,14,'MARKKINA',()=>modal={type:'market',tab:'sell',page:0}, spikeOwned?'a':'n');
+  button(66,318,58,14,'JALOSTA',()=>modal={type:'refine'}, canRefine?'n':'d');
+  button(128,318,60,14,'ULOS >',()=>{ save(); location.href='../ulko/'; }, Object.keys(S.spores).length===0?'g':'n');
 }
 
 function panelBase(){
@@ -356,10 +413,11 @@ function hint(){
   if (S.slots.some(x=>x&&x.ready)) return 'SATO ON VALMIS. NAPAUTA HEHKUVAA ASTIAA.';
   if (S.slots.some(x=>x&&x.strain&&x.moist<0.25)) return 'JOKU ASTIA KUIVUU. SUMUTA SE.';
   if (S.vesselInv.length) return 'ULKOA TUOTU ASTIA ODOTTAA. NAPAUTA TYHJÄÄ PAIKKAA.';
-  if (S.uute>0) return 'SINULLA ON UUTETTA. VIE SE ULOS JA HERÄTÄ JOKIN PAIKKA.';
-  if (S.sato>=5) return 'JALOSTA SATO ELINVOIMAUUTTEEKSI.';
+  const sp=S.market.spike; if (sp && owned(sp.id)>0) return 'KYSYNTÄPIIKKI: '+prodName(sp.id)+' MYY NYT ×'+sp.mult.toFixed(1)+'. AVAA MARKKINA.';
+  if (Object.keys(S.goods).length && !S.mk) return 'SATO ODOTTAA. MYY SE MARKKINALLA TAI JALOSTA ARVOKKAAMMAKSI.';
+  if (sp) return 'MARKKINOILLA KYSYTÄÄN NYT: '+prodName(sp.id)+'.';
   if (!Object.keys(S.spores).length) return 'ITIÖT LOPPUIVAT. ULKOA LÖYTYY UUSIA KANTOJA.';
-  return 'KASVATA JA JALOSTA. UUSIA KANTOJA JA ASTIOITA LÖYTYY ULKOA.';
+  return 'MONIPUOLINEN SATO MYY PAREMMIN. UUSIA KANTOJA LÖYTYY ULKOA.';
 }
 
 // ================= POIKKILEIKKAUS =================
@@ -535,14 +593,60 @@ function drawModal(){
     if(sub) text(sub,X+10,y+12,ok?P.uiD:P.ui2);
     if(ok) HIT.push({x:X+6,y,w:WW-12,h:sub?20:13,fn});
     y+=sub?23:16; };
+  // rivi, jossa on oikealla pieni sivunappi (esim. MYY KAIKKI)
+  const row2=(label,right,sub,fn,ok,side,sideFn,rightCol,subCol)=>{
+    const rw=WW-12-(side?38:0);
+    rect(X+6,y,rw,20,ok?P.ui2:P.ui1); rect(X+6,y,rw,1,ok?P.bg4:P.ui1);
+    text(label,X+10,y+4,ok?P.ui3:P.uiD); if(right) text(right,X+6+rw-4-tw(right),y+4,ok?(rightCol||P.ui3):P.uiD);
+    if(sub) text(sub,X+10,y+12,subCol||(ok?P.uiD:P.ui2));
+    if(ok) HIT.push({x:X+6,y,w:rw,h:20,fn});
+    if(side) button(X+WW-6-36,y,36,20,side,sideFn,ok?'n':'d');
+    y+=23; };
+  const pager=(n,per)=>{ const pages=Math.max(1,Math.ceil(n/per)); modal.page=Math.min(modal.page||0,pages-1);
+    if(pages>1){ const lbl=(modal.page+1)+'/'+pages; button(X+WW-36,Y+HH-18,30,13,'>',()=>{ modal.page=(modal.page+1)%pages; }); text(lbl,X+8,Y+HH-14,P.uiD); }
+    return modal.page*per; };
   if (modal.type==='market'){
-    textC('LASINPUHALTAJAN KOJU',X+WW/2,Y+7,AMB[2]);
-    text('SATOA: '+S.sato,X+10,y,P.ui3); y+=12;
-    const pp=marketPrice('purkki'), pt=marketPrice('terraario'), pe=expandPrice();
-    row('LASIPURKKI',pp+' SATOA',()=>{ S.sato-=pp; S.bought.purkki++; S.vesselInv.push('purkki'); toast('OSTIT LASIPURKIN. ASETA SE HYLLYYN'); modal=null; save(); }, S.sato>=pp,'KUIVA / VIILEÄ');
-    row('TERRAARIO',pt+' SATOA',()=>{ S.sato-=pt; S.bought.terraario++; S.vesselInv.push('terraario'); toast('OSTIT TERRAARION. ASETA SE HYLLYYN'); modal=null; save(); }, S.sato>=pt,'KOSTEA / VIILEÄ');
-    if (S.rows<3) row('LAAJENNA HYLLY',pe+' SATOA',()=>{ S.sato-=pe; S.expand++; S.rows++; toast('HYLLYSSÄ ON NYT 3 UUTTA PAIKKAA'); modal=null; save(); }, S.sato>=pe,'+3 PAIKKAA');
-    y+=4; wrap('ERIKOISASTIOITA EI MYYDÄ TÄÄLLÄ. NE LÖYTYVÄT ULKOA.',X+10,y,154,P.uiD);
+    textC('MARKKINA',X+WW/2,Y+5,AMB[2]);
+    button(X+6,Y+14,78,11,'MYY',()=>{ modal.tab='sell'; modal.page=0; }, modal.tab==='sell'?'g':'n');
+    button(X+WW-84,Y+14,78,11,'OSTA',()=>{ modal.tab='buy'; modal.page=0; }, modal.tab==='buy'?'g':'n');
+    y=Y+30;
+    text('RAHAA: '+S.mk+' '+CUR,X+8,y,P.ui3);
+    const sp=S.market.spike;
+    if (sp){ const m=Math.ceil(sp.left/60/S.speed); const s2='PIIKKI '+(m>0?m:1)+' MIN'; text(s2,X+WW-8-tw(s2),y,AMB[1]); }
+    y+=10;
+    if (modal.tab==='sell'){
+      const ids=[];
+      for (const k of Object.keys(RAW_PRICE)){ if(S.goods['r:'+k]) ids.push('r:'+k); if(S.goods['j:'+k]) ids.push('j:'+k); }
+      for (const k of Object.keys(SPORE_PRICE)) if (S.spores[k]) ids.push('s:'+k);
+      // kysyntäpiikin tuote ensin
+      if (sp) ids.sort((a,b)=>(b===sp.id)-(a===sp.id));
+      if (!ids.length) wrap('EI MYYTÄVÄÄ. KORJAA SATOA TAI JALOSTA SITÄ.',X+10,y,154,P.uiD);
+      const first=pager(ids.length,6);
+      ids.slice(first,first+6).forEach(id=>{
+        const n=owned(id), up=unitPrice(id), base=basePrice(id), spike=sp&&sp.id===id;
+        const pct=Math.round((up/base-1)*100);
+        const trend = spike ? 'KYSYNTÄ ×'+sp.mult.toFixed(1) : pct<=-5 ? 'HINTA '+pct+'%' : 'NORMAALIHINTA';
+        row2(prodName(id), up+' '+CUR, '× '+n+'  '+trend, ()=>sell(id,1), true,
+             'KAIKKI', ()=>sell(id,n), spike?AMB[2]:P.ui3, spike?AMB[1]:pct<=-25?'#c4428f':P.uiD);
+      });
+    } else {
+      const pp=marketPrice('purkki'), pt=marketPrice('terraario'), pe=expandPrice();
+      const buy=(cost,fn)=>()=>{ if(S.mk<cost) return; S.mk-=cost; fn(); modal=null; save(); };
+      row2('LASIPURKKI',pp+' '+CUR,'KUIVA / VIILEÄ',buy(pp,()=>{ S.bought.purkki++; S.vesselInv.push('purkki'); toast('OSTIT LASIPURKIN. ASETA SE HYLLYYN'); }), S.mk>=pp);
+      row2('TERRAARIO',pt+' '+CUR,'KOSTEA / VIILEÄ',buy(pt,()=>{ S.bought.terraario++; S.vesselInv.push('terraario'); toast('OSTIT TERRAARION. ASETA SE HYLLYYN'); }), S.mk>=pt);
+      if (S.rows<3) row2('LAAJENNA HYLLY',pe+' '+CUR,'+3 PAIKKAA',buy(pe,()=>{ S.expand++; S.rows++; toast('HYLLYSSÄ ON NYT 3 UUTTA PAIKKAA'); }), S.mk>=pe);
+      y+=4; wrap('ERIKOISASTIOITA EI MYYDÄ TÄÄLLÄ. NE LÖYTYVÄT ULKOA.',X+10,y,154,P.uiD);
+    }
+  }
+  else if (modal.type==='refine'){
+    textC('JALOSTAMO',X+WW/2,Y+5,AMB[2]);
+    y=Y+18; wrap('JALOSTE ON ARVOKKAAMPI KUIN RAAKA-AINEENSA.',X+8,y,156,P.uiD); y+=20;
+    const ks=Object.keys(REFINE).filter(k=>S.seen[k]||S.goods['r:'+k]||S.goods['j:'+k]);
+    if (!ks.length) wrap('KORJAA ENSIN SATOA.',X+10,y,154,P.uiD);
+    ks.forEach(k=>{ const R=REFINE[k], have=S.goods['r:'+k]||0, ok=have>=R.n;
+      row2(R.name, R.n+' > 1', STRAINS[k].name+' '+have+'  HINTA '+unitPrice('j:'+k)+' '+CUR, ()=>refineOne(k), ok,
+           'KAIKKI', ()=>{ const n=Math.floor((S.goods['r:'+k]||0)/R.n); for(let i=0;i<n;i++) refineOne(k); if(n>1) toast('JALOSTIT '+n+' × '+R.name); },
+           ok?P.ui3:P.uiD, ok?P.uiD:P.ui2); });
   }
   else if (modal.type==='place'){
     textC('ASETA ASTIA',X+WW/2,Y+7,AMB[2]);
@@ -559,13 +663,6 @@ function drawModal(){
     keys.forEach(k=>{ const T=STRAINS[k], m=matchOf(vs,k);
       row(T.name,['HUONO','KELPO','TÄYDELLINEN'][m],()=>{ plant(vs,k); modal=null; }, true,
         'ITIÖITÄ '+S.spores[k]+'  '+(T.wet?'KOSTEA':'KUIVA')+' / '+(T.warm?'LÄMMIN':'VIILEÄ')); });
-  }
-  else if (modal.type==='heal'){
-    textC('PARANNA KORTTELIA',X+WW/2,Y+7,AMB[2]);
-    text('ELINVOIMAUUTETTA: '+S.uute,X+10,y,P.ui3); y+=12;
-    for(let k=0;k<5;k++){ const done=k<S.healed, next=k===S.healed;
-      row('LOHKO '+(k+1), done?'HERÄNNYT':BLOCK_COST[k]+' UUTETTA', healBlock, next && S.uute>=BLOCK_COST[k]); }
-    wrap('UUTE JALOSTETAAN SADOSTA: 5 SATOA = 1 UUTE.',X+10,y,154,P.uiD);
   }
   else if (modal.type==='settings'){
     textC('ASETUKSET',X+WW/2,Y+7,AMB[2]);
@@ -596,7 +693,8 @@ function render(ms){
   // yläpalkki
   rect(0,0,W,13,P.ui0); rect(0,13,W,1,P.ui2);
   text(view==='room'?'SOLMU':'SOLMU > '+(S.slots[sel]?VESSELS[S.slots[sel].type].name:''),4,4,P.ui3);
-  const res='SATO '+S.sato+'  UUTE '+S.uute;
+  const nGoods=Object.values(S.goods).reduce((a,b)=>a+b,0);
+  const res='SATO '+nGoods+'  '+S.mk+' '+CUR;
   text(res,W-4-tw(res),4,AMB[2]);
   if (S.speed!==1) text('×60',view==='room'?30:W-4-tw(res)-18,4,P.uiD);
   HIT.push({x:0,y:0,w:W,h:13,fn:()=>{ modal={type:'settings'}; }});
@@ -638,10 +736,11 @@ screen.addEventListener('pointerdown',e=>{
   for(let i=HIT.length-1;i>=0;i--){ const h=HIT[i]; if(x>=h.x&&x<h.x+h.w&&y>=h.y&&y<h.y+h.h){ h.fn(); render(performance.now()); return; } }
 });
 document.addEventListener('visibilitychange',()=>{ if(document.hidden) save(); else {
-  try { const inc=JSON.parse(localStorage.getItem(SAVE_KEY)); if(inc){ inc.slots=S.slots; inc.kotiLast=S.kotiLast; S=ensure(inc); } } catch(e){}
+  try { const inc=JSON.parse(localStorage.getItem(SAVE_KEY)); if(inc) S=mergeIncoming(inc); } catch(e){}
   const away=Math.min(8*3600,(Date.now()-S.kotiLast)/1000)*S.speed; if(away>2) simulate(away); lastMs=performance.now(); } });
-addEventListener('storage',e=>{ if(e.key!==SAVE_KEY||!e.newValue) return; try { const inc=JSON.parse(e.newValue); inc.slots=S.slots; inc.kotiLast=S.kotiLast; S=ensure(inc); } catch(_){} });
+addEventListener('storage',e=>{ if(e.key!==SAVE_KEY||!e.newValue) return; try { S=mergeIncoming(JSON.parse(e.newValue)); } catch(_){} });
 window.__S=()=>S; window.__sim=simulate;
+started=true;
 requestAnimationFrame(loop);
 </script>
 </body>
