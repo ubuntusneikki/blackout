@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
+<title>ULKO-01 – Kuihtunut kaupunki</title>
+<style>
+  html,body{margin:0;height:100%;background:#0b1018;overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none}
+  body{display:flex;align-items:center;justify-content:center}
+  canvas{image-rendering:pixelated;image-rendering:crisp-edges;display:block}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+(() => {
+'use strict';
+const VERSION = 'ULKO-01 V0.1';
+
+// ================= YHTEINEN TALLENNUS (sama kuin kotiprotossa) =================
+const SAVE_KEY = 'solmu_yhteinen_v1';
+function newGame(){
+  return { sato:0, uute:0, speed:60, rows:2, healed:0, bought:{purkki:0,terraario:0}, expand:0, trips:0, retkiReady:0,
+    slots:[ {id:1,type:'terraario',strain:null,growth:0,moist:1,ready:false}, {id:2,type:'purkki',strain:null,growth:0,moist:1,ready:false},
+            {id:3,type:'purkki',strain:null,growth:0,moist:1,ready:false}, null,null,null,null,null,null ],
+    spores:{heltta:2}, vesselInv:[], kotiLast:Date.now(), firstHarvest:false,
+    places:[], found:{}, cells:{}, memories:[], walked:0 };
+}
+function ensure(s){ const d=newGame(); for (const k in d) if (s[k]===undefined) s[k]=d[k]; return s; }
+function loadS(){ let s=null; try { s=JSON.parse(localStorage.getItem(SAVE_KEY)); } catch(e){}
+  if (!s){ try { s=JSON.parse(localStorage.getItem('koti_proto_v1')); } catch(e){} }
+  return ensure(s||newGame()); }
+let S = loadS();
+try { if(!localStorage.getItem(SAVE_KEY)) localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch(e){}
+function save(){ try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch(e){} }
+// muutokset tehdään aina tuoreimpaan tallennukseen, jotta kotiproton tila ei katoa
+function mutate(fn){ S=loadS(); fn(S); save(); }
+addEventListener('storage', e=>{ if (e.key===SAVE_KEY && e.newValue){ try { S=ensure(JSON.parse(e.newValue)); } catch(_){} } });
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) S=loadS(); });
+
+// ================= SISÄLTÖ =================
+const STRAIN = {
+  heltta: {name:'SINIHELTTA',  col:['#1d5c58','#34b8ac','#a8fbee']},
+  ruusu:  {name:'RUUSUSIENI',  col:['#5a1f4a','#c4428f','#ffa6d6']},
+  kaapa:  {name:'TULIKÄÄPÄ',   col:['#6b2e12','#d9702a','#ffc46a']},
+  hamara: {name:'HÄMÄRÄNUPPI', col:['#3a1f5a','#8a4ad0','#d6b0ff']},
+  hoitaja:{name:'HOITAJASIENI',col:['#2f5a3a','#8fd0a0','#e8fff0']}
+};
+const VESSEL = { akvaario:'AKVAARIO', palvelin:'PALVELINKAAPPI', terraario:'TERRAARIO' };
+const MEM_COL = ['#4a3a6a','#b8a0ff','#f0e8ff'];
+const VES_COL = ['#2d4a55','#9fd3d6','#f3fbff'];
+const MEMORIES = [
+  'TÄSSÄ OLI ENNEN KAHVILA. IHMISET ISTUIVAT IKKUNASSA JA ODOTTIVAT SADETTA.',
+  'VERKKO LAULOI TÄÄLLÄ. NYT SE VAIN KUUNTELEE.',
+  'KUIHTUMINEN TULI HILJAA. ENSIN HAALISTUIVAT VÄRIT, SITTEN ÄÄNET.',
+  'JOKU KASVATTI TÄSSÄ TOMAATTEJA PARVEKKEELLA. RIHMASTO MUISTAA JUURET.',
+  'EMME OLE SIENIÄ EMMEKÄ IHMISIÄ. OLEMME SE, MIKÄ JÄI VÄLIIN.',
+  'KIRJASTO OLI LÄMMIN. PALVELIMET HURISIVAT KUIN MEHILÄISET.',
+  'JOKI EI KUIHTUNUT. SIKSI ME KASVAMME SEN RANNOILLA.',
+  'KUN HERÄTÄT PAIKAN, ME KUULEMME SEN. KUIN JOKU AVAISI IKKUNAN.',
+  'VANHA MAAILMA ANTOI ASTIAT. ME TEEMME TYÖN.',
+  'ET OLE ENSIMMÄINEN KANTAJA. TOIVOTTAVASTI ET VIIMEINEN.'
+];
+const HEAL_REWARD = [
+  {kind:'strain', key:'hamara', n:2, txt:'HERÄNNEELTÄ PIHALTA NOUSI HÄMÄRÄNUPPEJA.'},
+  {kind:'vessel', key:'terraario',   txt:'NAAPURI TOI VANHAN TERRAARION. SE ODOTTAA KOTONA.'},
+  {kind:'strain', key:'kaapa',  n:2, txt:'KANNOISTA PUHKESI TULIKÄÄPIÄ.'},
+  {kind:'vessel', key:'palvelin',    txt:'KELLARISTA LÖYTYI PALVELINKAAPPI. SE ODOTTAA KOTONA.'}
+];
+// paikan tyyppi -> löydön mahdollisuudet
+const ZONE_LOOT = {
+  puisto:  [['strain','heltta',2,70],['strain','hoitaja',1,12],['memory',null,1,18]],
+  ranta:   [['strain','kaapa',1,65],['vessel','akvaario',1,20],['memory',null,1,15]],
+  teollinen:[['strain','ruusu',2,65],['vessel','palvelin',1,15],['memory',null,1,20]],
+  arkisto: [['memory',null,1,55],['strain','hamara',1,30],['vessel','palvelin',1,15]],
+  piha:    [['strain','hamara',1,55],['strain','heltta',1,25],['memory',null,1,20]],
+  verkko:  [['memory',null,1,60],['vessel','palvelin',1,25],['strain','ruusu',1,15]],
+  herannyt:[['strain','hoitaja',1,30],['strain','kaapa',2,25],['strain','ruusu',2,25],['vessel','akvaario',1,20]]
+};
+const ZONE_NAME = { puisto:'PUISTO', ranta:'RANTA', teollinen:'TEOLLISUUSALUE', arkisto:'VANHA ARKISTO', piha:'VANHA PIHA', verkko:'VERKON SOLMU', herannyt:'HERÄNNYT PAIKKA' };
+const SAY = {
+  heltta:'KOSTEA VARJO. TUNNEN SINIHELTAN.', ruusu:'LÄMMIN ROMU. RUUSUSIENI VIIHTYY TÄÄLLÄ.',
+  kaapa:'VESI MUISTAA. TULIKÄÄPÄ KASVAA RANNOILLA.', hamara:'VANHA PIHA HUOKAA. HÄMÄRÄNUPPI NUKKUU SAMMALESSA.',
+  hoitaja:'TÄMÄ ON HARVINAINEN. HOITAJASIENI HUOLEHTII TOISISTA.', akvaario:'LASIA, EHJÄÄ! TÄMÄ KANTAA VETTÄ.',
+  palvelin:'VANHA KONE. SEN SISÄLLÄ ON YHÄ LÄMPÖÄ.'
+};
+
+// ================= APURIT =================
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+const ease=t=>t<0?0:t>1?1:t*t*(3-2*t);
+const BAYER=[[0,8,2,10],[12,4,14,6],[3,11,1,9],[15,7,13,5]];
+function hashStr(str){ let h=2166136261; for (const c of str){ h^=c.charCodeAt(0); h=Math.imul(h,16777619); } return h>>>0; }
+function seeded(str){ let a=hashStr(str)||1; return ()=>{ a=(a+0x6D2B79F5)>>>0; let t=a; t=Math.imul(t^(t>>>15),t|1); t^=t+Math.imul(t^(t>>>7),t|61); return ((t^(t>>>14))>>>0)/4294967296; }; }
+const today=()=>{ const d=new Date(); return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate(); };
+function hexRGB(h){ const n=parseInt(h.slice(1),16); return [n>>16,(n>>8)&255,n&255]; }
+
+// ================= CANVAS & FONTTI =================
+const LW=192; let LH=336, K=2;
+const cv=document.getElementById('c'), sctx=cv.getContext('2d');
+const buf=document.createElement('canvas'); const g=buf.getContext('2d',{willReadFrequently:true});
+function fit(){ K=Math.max(1,Math.floor(innerWidth/LW)); LH=Math.max(300,Math.floor(innerHeight/K)); buf.width=LW; buf.height=LH; cv.width=LW*K; cv.height=LH*K; }
+addEventListener('resize',fit); fit();
+function px(x,y,col){ g.fillStyle=col; g.fillRect(x|0,y|0,1,1); }
+function rect(x,y,w,h,col){ g.fillStyle=col; g.fillRect(x|0,y|0,w|0,h|0); }
+const F={A:'010101111101101',B:'110101110101110',C:'011100100100011',D:'110101101101110',E:'111100110100111',
+F:'111100110100100',G:'011100101101011',H:'101101111101101',I:'111010010010111',J:'001001001101010',
+K:'101101110101101',L:'100100100100111',M:'101111111101101',N:'110101101101101',O:'010101101101010',
+P:'110101110100100',Q:'010101101110011',R:'110101110101101',S:'011100010001110',T:'111010010010010',
+U:'101101101101111',V:'101101101101010',W:'101101111111101',X:'101101010101101',Y:'101101010010010',
+Z:'111001010100111','0':'111101101101111','1':'010110010010111','2':'110001010100111','3':'110001010001110',
+'4':'101101111001001','5':'111100110001110','6':'011100111101111','7':'111001010010010','8':'111101111101111',
+'9':'111101111001110','/':'001001010100100',':':'000010000010000','-':'000000111000000','.':'000000000000010',
+'>':'100010001010100','<':'001010100010001',' ':'000000000000000','%':'101001010100101','+':'000010111010000',
+'!':'010010010000010','=':'000111000111000','(':'010100100100010',')':'010001001001010',',':'000000000010100',
+'?':'110001010000010','×':'000101010101000'};
+function text(str,x,y,col){ for(const ch0 of String(str)){ let ch=ch0,u=false;
+  if(ch==='Ä'){ch='A';u=true;} else if(ch==='Ö'){ch='O';u=true;}
+  const gl=F[ch]||F[' ']; for(let i=0;i<15;i++) if(gl[i]==='1') px(x+i%3,y+(i/3|0),col);
+  if(u){px(x,y-2,col);px(x+2,y-2,col);} x+=4; } }
+const tw=s=>String(s).length*4-1;
+function textC(s,cx,y,col){ text(s,Math.round(cx-tw(s)/2),y,col); }
+function wrapLines(str,maxw){ const out=[]; let line=''; for(const w of String(str).split(' ')){ const t=line?line+' '+w:w; if(tw(t)>maxw&&line){ out.push(line); line=w; } else line=t; } if(line) out.push(line); return out; }
+function wrap(str,x,y,maxw,col,lh){ wrapLines(str,maxw).forEach((l,i)=>text(l,x,y+i*(lh||8),col)); }
+
+const UI={ui0:'#101722',ui1:'#1c2735',ui2:'#3a4b60',bg4:'#46566a',ui3:'#d8e2ea',uiD:'#6a7a8c'};
+const AMB=['#7a4a14','#e8a02a','#ffe08a'], CY_=['#1d5c58','#34b8ac','#a8fbee'];
+let HIT=[];
+function button(x,y,w,h,label,fn,st){ st=st||'n';
+  const bg= st==='a'?AMB[1]: st==='d'?UI.ui1 : st==='g'?CY_[0] : UI.ui2;
+  const hi= st==='a'?AMB[2]: st==='d'?UI.ui1 : st==='g'?CY_[1] : UI.bg4;
+  const fg= st==='a'?UI.ui0: st==='d'?UI.uiD : UI.ui3;
+  rect(x,y,w,h,bg); rect(x,y,w,1,hi); textC(label,x+w/2,y+((h-5)>>1),fg);
+  if (st!=='d') HIT.push({x,y,w,h,fn});
+}
+
+// ================= ELINVOIMA-VÄRITYS =================
+// v=0: haalea, harmaanvihreä ja himmeä. v=1: lopulliset värit täysin kylläisinä.
+function vital(d,i,v){
+  const r=d[i],gg=d[i+1],b=d[i+2], l=0.3*r+0.59*gg+0.11*b;
+  const s=0.1+0.9*v, br=0.6+0.4*v;
+  d[i]  =clamp((l*0.9 +(r -l*0.9 )*s)*br,0,255);
+  d[i+1]=clamp((l*1.0 +(gg-l*1.0 )*s)*br,0,255);
+  d[i+2]=clamp((l*0.84+(b -l*0.84)*s)*br,0,255);
+}
+
+// ================= PROJEKTIO =================
+const START={lat:60.4518, lon:22.2666};
+let origin={...START};
+const kx=()=>Math.cos(origin.lat*Math.PI/180)*111320;
+const toXY=(lat,lon)=>[(lon-origin.lon)*kx(), -(lat-origin.lat)*110540];
+const toLL=(x,y)=>({lat:origin.lat-y/110540, lon:origin.lon+x/kx()});
+
+// ================= OSM =================
+function classify(t){
+  if (!t) return null;
+  if (t.power||t.man_made==='mast'||t.man_made==='communications_tower'||t.man_made==='tower') return 'verkko';
+  if (['library','school','university','college'].includes(t.amenity)) return 'arkisto';
+  if (t.natural==='water'||t.waterway==='riverbank') return 'ranta';
+  if (t.landuse==='industrial'||t.landuse==='retail'||t.shop==='mall') return 'teollinen';
+  if (t.landuse==='forest'||t.landuse==='meadow'||t.landuse==='grass'||t.natural==='wood'||t.natural==='scrub'||t.leisure==='park'||t.leisure==='garden'||t.landuse==='cemetery') return 'puisto';
+  return null;
+}
+let osmNote='', bootLines=[];
+const bootSay=s=>{ bootLines.push(s); if(bootLines.length>18) bootLines.shift(); };
+const SERVERS=['https://overpass-api.de/api/interpreter','https://overpass.private.coffee/api/interpreter','https://maps.mail.ru/osm/tools/overpass/api/interpreter','https://overpass.kumi.systems/api/interpreter'];
+async function overpass(q,label){ const errs=[];
+  for (const url of SERVERS){ const host=url.split('/')[2];
+    for (let a=0;a<2;a++){ const ctrl=new AbortController(), to=setTimeout(()=>ctrl.abort(),30000);
+      try { if(booting) bootSay('  '+label+': '+host+(a?' (UUSI YRITYS)':''));
+        const res=await fetch(url,{method:'POST',body:'data='+encodeURIComponent(q),headers:{'Content-Type':'application/x-www-form-urlencoded'},signal:ctrl.signal});
+        clearTimeout(to); if(res.ok){ osmNote=host; return await res.json(); }
+        errs.push(host+' '+res.status); if([429,502,503,504].includes(res.status)&&a===0){ await new Promise(r=>setTimeout(r,2500)); continue; } break;
+      } catch(e){ clearTimeout(to); errs.push(host+' '+(e.name==='AbortError'?'AIKAKATKAISU':e.message)); break; } } }
+  throw new Error(errs.join(' | '));
+}
+let features=[], anchors=[], seenOSM=new Set(), mapMode='OSM';
+const TLAT=0.005, TLON=0.010, tiles={};
+const tileOf=(lat,lon)=>[Math.floor(lat/TLAT),Math.floor(lon/TLON)];
+function parseOSM(els){ const out=[];
+  for (const el of els){ const uid=el.type[0]+el.id; if(seenOSM.has(uid)) continue; seenOSM.add(uid);
+    const t=el.tags||{}, z=classify(t);
+    if (el.type==='node'||el.center){ if(z){ const c=el.center||el; const [x,y]=toXY(c.lat,c.lon); out.push({kind:'point',x,y,zone:z,id:uid}); } continue; }
+    const geom=el.geometry; if(!geom||geom.length<2) continue;
+    const pts=geom.map(p=>toXY(p.lat,p.lon));
+    const closed=pts.length>3&&geom[0].lat===geom[geom.length-1].lat&&geom[0].lon===geom[geom.length-1].lon;
+    if (t.highway){ out.push({kind:'line',pts,cls:/primary|secondary|trunk|tertiary/.test(t.highway)?'road1':/footway|path|cycleway|pedestrian/.test(t.highway)?'path':'road2',id:uid,zone:/residential|living_street/.test(t.highway)?'piha':null}); continue; }
+    if (t.waterway&&!closed){ out.push({kind:'line',pts,cls:'water',zone:'ranta',id:uid,w:14}); continue; }
+    if (t.building){ out.push({kind:'area',pts,cls:'building'}); continue; }
+    if (z&&closed) out.push({kind:'area',pts,zone:z,id:uid});
+  }
+  return out;
+}
+async function loadTile(ty,tx){
+  const s_=ty*TLAT,w_=tx*TLON,bb=`${s_.toFixed(5)},${w_.toFixed(5)},${(s_+TLAT).toFixed(5)},${(w_+TLON).toFixed(5)}`;
+  const qMain=`[out:json][timeout:25][bbox:${bb}];
+(way["highway"~"^(primary|secondary|tertiary|residential|unclassified|living_street|pedestrian|service|footway|cycleway|path)$"];
+ way["landuse"~"^(industrial|forest|meadow|grass|retail|cemetery)$"];
+ way["natural"~"^(wood|water|scrub)$"];
+ way["leisure"~"^(park|garden)$"];
+ way["waterway"~"^(river|stream|canal)$"];);
+out geom qt;
+(nwr["amenity"~"^(library|school|university|college)$"];
+ nwr["power"~"^(substation|plant|transformer)$"];
+ nwr["man_made"~"^(mast|tower|communications_tower)$"];
+ nwr["shop"="mall"];);
+out center qt;`;
+  const qB=`[out:json][timeout:25][bbox:${bb}];way["building"];out geom qt;`;
+  const ck='osmt_'+ty+'_'+tx; let main=null,bld=null;
+  try { const c=JSON.parse(localStorage.getItem(ck)); if(c&&Date.now()-c.t<7*864e5){ main=c.m; bld=c.b; osmNote='VÄLIMUISTI'; } } catch(e){}
+  if(!main){ main=await overpass(qMain,'KARTTA'); try{ bld=await overpass(qB,'RAKENNUKSET'); }catch(e){ bld={elements:[]}; }
+    try{ localStorage.setItem(ck,JSON.stringify({t:Date.now(),m:main,b:bld})); }catch(e){ try{ for(const k of Object.keys(localStorage)) if(k.startsWith('osmt_')) localStorage.removeItem(k); }catch(_){} } }
+  return parseOSM(main.elements.concat(bld.elements));
+}
+function inPoly(x,y,pts){ let c=false; for(let i=0,j=pts.length-1;i<pts.length;j=i++){ const [xi,yi]=pts[i],[xj,yj]=pts[j]; if(((yi>y)!==(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi)+xi)) c=!c; } return c; }
+function addFeatures(nf){
+  features.push(...nf);
+  // ankkurit: paikat, joihin löytö voi syntyä
+  for (const f of nf){ if(!f.zone) continue;
+    if (f.kind==='point') anchors.push({x:f.x,y:f.y,zone:f.zone,id:f.id});
+    else if (f.kind==='area'){ let cx=0,cy=0; f.pts.forEach(p=>{cx+=p[0];cy+=p[1];}); cx/=f.pts.length; cy/=f.pts.length;
+      if(!inPoly(cx,cy,f.pts)){ cx=(f.pts[0][0]+f.pts[1][0])/2; cy=(f.pts[0][1]+f.pts[1][1])/2; }
+      anchors.push({x:cx,y:cy,zone:f.zone,id:f.id});
+      // isoille alueille lisää ankkureita
+      const r=seeded(f.id); for(let k=0;k<6;k++){ const a=f.pts[(r()*f.pts.length)|0], q=r(); const x=a[0]+(cx-a[0])*q, y=a[1]+(cy-a[1])*q; if(inPoly(x,y,f.pts)) anchors.push({x,y,zone:f.zone,id:f.id+'_'+k}); } }
+    else if (f.kind==='line'){ let acc=0; for(let i=1;i<f.pts.length;i++){ const [ax,ay]=f.pts[i-1],[bx,by]=f.pts[i], L=Math.hypot(bx-ax,by-ay);
+      for(let s=0;s<L;s+=50){ acc++; const q=s/L; anchors.push({x:ax+(bx-ax)*q,y:ay+(by-ay)*q,zone:f.zone,id:f.id+'_'+acc}); } } }
+  }
+  rebuildFinds();
+}
+let tileBusy=false;
+async function tileLoader(){
+  if (mapMode!=='OSM'||tileBusy) return;
+  const me=toLL(P.x,P.y), [cy,cx]=tileOf(me.lat,me.lon), now=Date.now(), cand=[];
+  for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++){ const ty=cy+dy,tx=cx+dx,k=ty+':'+tx,st=tiles[k];
+    if(st==='ok'||st==='loading'||(st&&st.fail&&now-st.fail<30000)) continue;
+    const lat=clamp(me.lat,ty*TLAT,(ty+1)*TLAT), lon=clamp(me.lon,tx*TLON,(tx+1)*TLON), [x1,y1]=toXY(lat,lon), d=Math.hypot(x1-P.x,y1-P.y);
+    if(d<350) cand.push({ty,tx,k,d}); }
+  if(!cand.length) return; cand.sort((a,b)=>a.d-b.d); const c=cand[0];
+  tileBusy=true; tiles[c.k]='loading';
+  try { addFeatures(await loadTile(c.ty,c.tx)); tiles[c.k]='ok'; } catch(e){ tiles[c.k]={fail:Date.now()}; }
+  tileBusy=false;
+}
+setInterval(tileLoader,2500);
+function demoCity(){
+  let seed=1977; const rnd=()=>(seed=(seed*16807)%2147483647)/2147483647; const out=[], H=650, step=95;
+  const river=[]; for(let x=-H;x<=H;x+=40) river.push([x,Math.sin(x/220)*90+x*0.25]);
+  out.push({kind:'area',pts:river.map(([x,y])=>[x,y-22]).concat(river.map(([x,y])=>[x,y+22]).reverse()),zone:'ranta',id:'d-river'});
+  const riverY=x=>Math.sin(x/220)*90+x*0.25; let i=0;
+  for(let gx=-H;gx<H;gx+=step) for(let gy=-H;gy<H;gy+=step){ const x0=gx+6,y0=gy+6,x1=gx+step-6,y1=gy+step-6,cx=(x0+x1)/2,cy=(y0+y1)/2;
+    if(Math.abs(cy-riverY(cx))<60) continue; const r=rnd(), rc=[[x0,y0],[x1,y0],[x1,y1],[x0,y1],[x0,y0]]; let z=null;
+    if(r<0.18) z='puisto'; else if(r<0.28) z='teollinen';
+    if(z) out.push({kind:'area',pts:rc,zone:z,id:'d'+(i++)});
+    if(!z||z==='teollinen') for(let b=0;b<4;b++){ const bx=x0+8+rnd()*(step-40),by=y0+8+rnd()*(step-40),w=12+rnd()*16,h=12+rnd()*16; out.push({kind:'area',pts:[[bx,by],[bx+w,by],[bx+w,by+h],[bx,by+h],[bx,by]],cls:'building'}); } }
+  for(let gx=-H;gx<=H;gx+=step){ const m=gx%(step*3)===0; out.push({kind:'line',pts:[[gx,-H],[gx,H]],cls:m?'road1':'road2',id:'dv'+gx,zone:m?null:'piha'}); out.push({kind:'line',pts:[[-H,gx],[H,gx]],cls:m?'road1':'road2',id:'dh'+gx,zone:m?null:'piha'}); }
+  [[-180,-260,'arkisto'],[240,180,'arkisto'],[60,-90,'arkisto'],[380,-300,'verkko'],[-420,-60,'verkko'],[40,60,'verkko']].forEach(([x,y,z],k)=>out.push({kind:'point',x,y,zone:z,id:'dp'+k}));
+  return out;
+}
+
+// ================= LÖYDÖT =================
+// Maailma jaetaan 150 m soluihin. Osaan soluista syntyy päivittäin yksi löytö. Herätetyt paikat tuottavat aina löydön.
+const CELL=150, CELL_P=0.16;
+let finds=[];
+function cellKey(x,y){ const ll=toLL(x,y); return Math.floor(ll.lat/0.00135)+':'+Math.floor(ll.lon/0.0027); }
+function pickLoot(zone,r){ const L=ZONE_LOOT[zone]; let tot=L.reduce((a,b)=>a+b[3],0), q=r()*tot; for(const it of L){ q-=it[3]; if(q<=0) return it; } return L[0]; }
+function rebuildFinds(){
+  const day=today(), byCell={};
+  for (const a of anchors){ const k=cellKey(a.x,a.y); (byCell[k]=byCell[k]||[]).push(a); }
+  finds=[];
+  for (const k in byCell){ const r=seeded(day+'|'+k); if (r()>CELL_P) continue;
+    const list=byCell[k]; const a=list[(r()*list.length)|0]; const [kind,key,n]=pickLoot(a.zone,r);
+    const id='f|'+day+'|'+k;
+    if (S.found[id]) continue;
+    finds.push({id,x:a.x,y:a.y,zone:a.zone,kind,key,n,mem:(r()*MEMORIES.length)|0, cell:k});
+  }
+  // herätetyt paikat
+  (S.places||[]).forEach((p,i)=>{ const id='h|'+day+'|'+i; if (S.found[id]) return; const [x,y]=toXY(p.lat,p.lon);
+    const r=seeded(id), [kind,key,n]=pickLoot('herannyt',r); const ang=r()*6.28;
+    finds.push({id,x:x+Math.cos(ang)*22,y:y+Math.sin(ang)*22,zone:'herannyt',kind,key,n,mem:0,cell:'h'+i}); });
+}
+function findColor(f){ return f.kind==='strain'?STRAIN[f.key].col : f.kind==='vessel'?VES_COL : MEM_COL; }
+function nearestFind(){ let best=null,bd=1e9; for(const f of finds){ const d=Math.hypot(f.x-P.x,f.y-P.y); if(d<bd){bd=d;best=f;} } return best?{f:best,d:bd}:null; }
+
+// ================= PELAAJA =================
+const P={x:0,y:0,tx:null,ty:null,mode:'sim'};
+const SIM_SPEED=9, RANGE=25, REVEAL=45, SENSE=90, SIG_MAX=260;
+let lastFix=null;
+function moved(dist){ if(dist<=0) return; S.walked=(S.walked||0)+dist; }
+
+// ================= VIESTIT JA MODAALIT =================
+let msg='', msgCol=UI.ui3, msgT=0, modal=null;
+function say(m,col){ msg=m; msgCol=col||CY_[2]; msgT=performance.now(); }
+
+// ================= KERÄÄMINEN =================
+let hold=null;            // {f, p}
+function collect(f){
+  let isNew=false;
+  mutate(s=>{
+    s.found[f.id]=1;
+    if (f.cell[0]!=='h' && !s.cells[f.cell]){ s.cells[f.cell]=today(); isNew=true; }
+    const n=f.n+(isNew&&f.kind==='strain'?1:0);
+    if (f.kind==='strain') s.spores[f.key]=(s.spores[f.key]||0)+n;
+    else if (f.kind==='vessel') s.vesselInv.push(f.key);
+    else if (!s.memories.includes(f.mem)) s.memories.push(f.mem);
+  });
+  finds=finds.filter(x=>x!==f);
+  const n=f.n+(isNew&&f.kind==='strain'?1:0);
+  const title = f.kind==='strain' ? n+' × '+STRAIN[f.key].name+'-ITIÖ' : f.kind==='vessel' ? VESSEL[f.key] : 'MUISTO';
+  const line = f.kind==='memory' ? MEMORIES[f.mem] : SAY[f.key];
+  modal={type:'found', title, line, col:findColor(f), isNew, kind:f.kind, zone:f.zone};
+  burst={x:f.x,y:f.y,t:performance.now(),col:findColor(f)[2]};
+  vib([40,60,40,60,120]); if(AC) chime();
+}
+function canHeal(){ if ((S.uute||0)<1) return 'TARVITSET ELINVOIMAUUTETTA. JALOSTA SITÄ KOTONA.';
+  for (const p of S.places){ const [x,y]=toXY(p.lat,p.lon); if (Math.hypot(x-P.x,y-P.y)<70) return 'TÄMÄ PAIKKA ON JO HERÄTETTY. KÄVELE KAUEMMAS.'; }
+  return null; }
+function heal(){
+  const ll=toLL(P.x,P.y); let rw=null, idx=0;
+  mutate(s=>{ s.uute--; s.places.push({lat:ll.lat,lon:ll.lon,t:Date.now(),r:55}); idx=s.healed||0; s.healed=idx+1;
+    rw=HEAL_REWARD[idx%HEAL_REWARD.length];
+    if (idx<HEAL_REWARD.length){ if(rw.kind==='strain') s.spores[rw.key]=(s.spores[rw.key]||0)+rw.n; else s.vesselInv.push(rw.key); } });
+  healAnim={t:performance.now(), x:P.x, y:P.y};
+  rebuildFinds();
+  setTimeout(()=>{ modal={type:'healed', line: idx<HEAL_REWARD.length ? rw.txt : 'PAIKKA HERÄSI. TÄÄLTÄ LÖYTYY JOKA PÄIVÄ JOTAIN.', n:S.places.length}; },2200);
+  vib([30,40,30,40,30,40,200]); if(AC) chime(true);
+}
+
+// ================= ÄÄNI =================
+let AC=null, sigOn=false, nextBeat=0;
+function initAudio(){ AC=new (window.AudioContext||window.webkitAudioContext)(); }
+function thump(t,f,vol){ const o=AC.createOscillator(),gg=AC.createGain(); o.type='sine'; o.frequency.setValueAtTime(f*1.6,t); o.frequency.exponentialRampToValueAtTime(f,t+0.08);
+  gg.gain.setValueAtTime(0.0001,t); gg.gain.exponentialRampToValueAtTime(vol,t+0.012); gg.gain.exponentialRampToValueAtTime(0.0001,t+0.22); o.connect(gg).connect(AC.destination); o.start(t); o.stop(t+0.25); }
+function beat(vol){ const t=AC.currentTime; thump(t,55,vol); thump(t+0.14,63,vol*0.6); }
+function chime(big){ const t=AC.currentTime; (big?[523,659,784,1047]:[659,988]).forEach((fq,k)=>{ const o=AC.createOscillator(),gg=AC.createGain(); o.type='sine'; o.frequency.value=fq;
+  gg.gain.setValueAtTime(0.0001,t+k*0.09); gg.gain.exponentialRampToValueAtTime(0.06,t+k*0.09+0.02); gg.gain.exponentialRampToValueAtTime(0.0001,t+k*0.09+0.8); o.connect(gg).connect(AC.destination); o.start(t+k*0.09); o.stop(t+k*0.09+0.85); }); }
+const vib=p=>{ try{ navigator.vibrate&&navigator.vibrate(p); }catch(e){} };
+function audioTick(dt){
+  if (!sigOn||!AC) return;
+  const nr=nearestFind(); let rate=0;
+  if (hold) rate=1.2+2.2*hold.p;
+  else if (nr && nr.d<SIG_MAX) rate = nr.d<=RANGE ? 2.6 : 0.5+2.0*Math.pow(1-(nr.d-RANGE)/(SIG_MAX-RANGE),1.5);
+  if (!rate) return;
+  nextBeat-=dt; if(nextBeat<=0){ beat(0.45); if(hold) vib(25); nextBeat=1/rate; }
+}
+
+// ================= KARTAN SUUNTA =================
+let ROT=0, rotTarget=0, moveHeading=null, lastHeadPt=null, compassHeading=null, compassOn=false, dirMode='kulku';
+function lerpAngle(a,b,t){ let d=((b-a+Math.PI)%(2*Math.PI)+2*Math.PI)%(2*Math.PI)-Math.PI; return a+d*t; }
+function updateHeading(dt){
+  if(!lastHeadPt) lastHeadPt={x:P.x,y:P.y,t:performance.now()};
+  const dx=P.x-lastHeadPt.x, dy=P.y-lastHeadPt.y;
+  if(Math.hypot(dx,dy)>4){ moveHeading=Math.atan2(dx,-dy); lastHeadPt={x:P.x,y:P.y,t:performance.now()}; }
+  const still=performance.now()-lastHeadPt.t>4000;
+  if(dirMode==='pohjoinen') rotTarget=0;
+  else if(dirMode==='kompassi'&&compassHeading!==null) rotTarget=compassHeading;
+  else if(still&&compassOn&&compassHeading!==null) rotTarget=compassHeading;
+  else if(moveHeading!==null) rotTarget=moveHeading;
+  ROT=lerpAngle(ROT,rotTarget,Math.min(1,dt*2.2));
+}
+function onOri(e){ let h=null; if(typeof e.webkitCompassHeading==='number') h=e.webkitCompassHeading; else if(e.absolute&&e.alpha!=null) h=360-e.alpha;
+  if(h!==null&&!isNaN(h)){ const r=h*Math.PI/180; compassHeading=compassHeading===null?r:lerpAngle(compassHeading,r,0.25); } }
+async function enableCompass(){ if(compassOn) return true;
+  try{ if(window.DeviceOrientationEvent&&typeof DeviceOrientationEvent.requestPermission==='function'){ const r=await DeviceOrientationEvent.requestPermission(); if(r!=='granted') return false; }
+    addEventListener('deviceorientationabsolute',onOri); addEventListener('deviceorientation',onOri); compassOn=true; return true; } catch(e){ return false; } }
+
+// ================= PIIRTO =================
+let mpp=1.4;              // metriä per pikseli
+const MAP_TOP=14; const mapH=()=>LH-MAP_TOP-62;
+const CYm=()=>MAP_TOP+Math.round(mapH()*0.58);
+function scr(x,y){ const dx=(x-P.x)/mpp, dy=(y-P.y)/mpp, c=Math.cos(-ROT), s=Math.sin(-ROT); return [dx*c-dy*s+LW/2, dx*s+dy*c+CYm()]; }
+function unscr(X,Y){ const u=(X-LW/2)*mpp, v=(Y-CYm())*mpp, c=Math.cos(ROT), s=Math.sin(ROT); return [P.x+u*c-v*s, P.y+u*s+v*c]; }
+function path(pts){ g.beginPath(); pts.forEach(([x,y],i)=>{ const [X,Y]=scr(x,y); i?g.lineTo(X,Y):g.moveTo(X,Y); }); }
+const MAPC={ ground:'#4a4436', building:'#7a6250', bline:'#2e2420', road1:'#b5a68a', road2:'#8f8572', path:'#6f6a58',
+  puisto:'#4f7a2c', ranta:'#1f6f80', teollinen:'#5e5650', arkisto:'#6a5a70', verkko:'#5a5040', piha:'#4a4436' };
+let burst=null, healAnim=null;
+
+function drawMap(t){
+  g.save(); g.beginPath(); g.rect(0,MAP_TOP,LW,mapH()); g.clip();
+  rect(0,MAP_TOP,LW,mapH(),MAPC.ground);
+  g.lineCap='round'; g.lineJoin='round';
+  for(const f of features) if(f.kind==='area'&&f.zone&&MAPC[f.zone]){ path(f.pts); g.fillStyle=MAPC[f.zone]; g.fill(); }
+  for(const f of features) if(f.kind==='line'&&f.cls==='water'){ path(f.pts); g.strokeStyle=MAPC.ranta; g.lineWidth=Math.max(2,f.w/mpp); g.stroke(); }
+  for(const f of features) if(f.cls==='building'){ path(f.pts); g.fillStyle=MAPC.building; g.fill(); g.strokeStyle=MAPC.bline; g.lineWidth=1; g.stroke(); }
+  for(const f of features) if(f.kind==='line'&&f.cls==='path'){ path(f.pts); g.strokeStyle=MAPC.path; g.lineWidth=1; g.stroke(); }
+  for(const f of features) if(f.kind==='line'&&f.cls==='road2'){ path(f.pts); g.strokeStyle=MAPC.road2; g.lineWidth=Math.max(1.5,6/mpp); g.stroke(); }
+  for(const f of features) if(f.kind==='line'&&f.cls==='road1'){ path(f.pts); g.strokeStyle=MAPC.road1; g.lineWidth=Math.max(2,10/mpp); g.stroke(); }
+  g.restore();
+  // pikselikäsittely: puut, vesi ja elinvoima
+  const H=mapH(), img=g.getImageData(0,MAP_TOP,LW,H), d=img.data;
+  const places=S.places.map(p=>{ const [x,y]=toXY(p.lat,p.lon); return {x,y,r:p.r||55}; });
+  let anim=null; if(healAnim){ const a=(performance.now()-healAnim.t)/2000; if(a<1.3) anim={x:healAnim.x,y:healAnim.y,R:ease(a)*55}; else healAnim=null; }
+  const base=Math.min(0.35, 0.08+0.03*S.places.length);
+  const c=Math.cos(ROT), s=Math.sin(ROT);
+  const park=hexRGB(MAPC.puisto), water=hexRGB(MAPC.ranta);
+  for(let y=0;y<H;y++){ const vy=(y+MAP_TOP-CYm())*mpp;
+    for(let x=0;x<LW;x++){ const i=(y*LW+x)*4, u=(x-LW/2)*mpp, wx=P.x+u*c-vy*s, wy=P.y+u*s+vy*c;
+      // puut ja aallot maailmankoordinaateissa, jotta ne pysyvät paikallaan
+      if(Math.abs(d[i]-park[0])<6&&Math.abs(d[i+1]-park[1])<6){ const h=hashStr(((wx/3)|0)+','+((wy/3)|0))%7; if(h===0){ d[i]=47; d[i+1]=90; d[i+2]=36; } else if(h===1){ d[i]=121; d[i+1]=168; d[i+2]=58; } }
+      else if(Math.abs(d[i]-water[0])<6&&Math.abs(d[i+2]-water[2])<6){ if(((((wx/2)|0)+((wy/2)|0)*3+((t*2)|0))%11)===0){ d[i]=95; d[i+1]=199; d[i+2]=208; } }
+      let v=base;
+      for(const p of places){ const dd=Math.hypot(wx-p.x,wy-p.y); if(dd<p.r) v=Math.max(v, dd<p.r*0.6?1:1-(dd-p.r*0.6)/(p.r*0.4)); }
+      if(anim){ const dd=Math.hypot(wx-anim.x,wy-anim.y); if(dd<anim.R) v=Math.max(v,1-dd/80*0.2); else if(dd<anim.R+2&&BAYER[y&3][x&3]<8){ d[i]=168; d[i+1]=251; d[i+2]=238; continue; } }
+      if(v<1) vital(d,i,v);
+    } }
+  g.putImageData(img,0,MAP_TOP);
+
+  g.save(); g.beginPath(); g.rect(0,MAP_TOP,LW,mapH()); g.clip();
+  // herätetyt paikat: pieni hehkuva itu keskellä
+  for(const p of places){ const [X,Y]=scr(p.x,p.y); if(X<-10||X>LW+10||Y<MAP_TOP-10||Y>MAP_TOP+H+10) continue;
+    rect(X,Y-3,1,3,'#79a83a'); px(X,Y-4,Math.sin(t*2)>0?CY_[2]:CY_[1]); px(X-1,Y-2,'#79a83a'); px(X+1,Y-2,'#79a83a'); }
+  // simuloitu kohde
+  if(P.tx!==null){ const [X,Y]=scr(P.tx,P.ty); for(let k=0;k<1;k+=0.06){ const ax=LW/2+(X-LW/2)*k, ay=CYm()+(Y-CYm())*k; px(ax,ay,AMB[1]); } rect(X-1,Y-1,3,3,AMB[2]); }
+  // löydöt
+  const nr=nearestFind();
+  for(const f of finds){ const dist=Math.hypot(f.x-P.x,f.y-P.y); if(dist>SENSE) continue; const [X,Y]=scr(f.x,f.y);
+    if(X<-12||X>LW+12||Y<MAP_TOP-12||Y>MAP_TOP+H+12) continue;
+    const col=findColor(f), inR=dist<=RANGE, near=dist<=REVEAL, pulse=0.5+0.5*Math.sin(t*3+f.x);
+    // dither-hehku
+    const rad=(inR?10:near?7:5)+pulse*2;
+    for(let yy=-rad;yy<=rad;yy++) for(let xx=-rad;xx<=rad;xx++){ const dd=Math.hypot(xx,yy); if(dd>rad) continue; const xX=Math.round(X+xx), yY=Math.round(Y+yy);
+      if(BAYER[yY&3][xX&3]<(1-dd/rad)*(near?12:7)) px(xX,yY,col[0]); }
+    if(!near){ px(X,Y,Math.sin(t*6+f.y)>0?col[2]:col[1]); continue; }
+    drawIcon(f,X,Y,t,col);
+    if(hold&&hold.f===f){ const a=hold.p*Math.PI*2; for(let k=0;k<a;k+=0.08) px(X+Math.cos(k-Math.PI/2)*12,Y+Math.sin(k-Math.PI/2)*12,AMB[2]); }
+  }
+  // purkaus
+  if(burst){ const a=(performance.now()-burst.t)/800; if(a<1){ const [X,Y]=scr(burst.x,burst.y); for(let k=0;k<16;k++){ const an=k*0.39; px(X+Math.cos(an)*a*24,Y+Math.sin(an)*a*24,burst.col); } } else burst=null; }
+  // suuntavihje lähimpään aistittuun löytöön
+  if(nr&&nr.d>RANGE&&nr.d<SIG_MAX){ const [TX,TY]=scr(nr.f.x,nr.f.y); const a=Math.atan2(TY-CYm(),TX-LW/2), col=findColor(nr.f);
+    for(let k=0;k<3;k++){ const rr=12+k*3; px(LW/2+Math.cos(a)*rr, CYm()+Math.sin(a)*rr, k===2?col[2]:col[1]); } }
+  // pelaaja
+  const pa=(moveHeading!==null?moveHeading:ROT)-ROT, X0=LW/2, Y0=CYm();
+  const tri=[[0,-5],[3,3],[0,1],[-3,3]].map(([x,y])=>[X0+x*Math.cos(pa)-y*Math.sin(pa), Y0+x*Math.sin(pa)+y*Math.cos(pa)]);
+  g.beginPath(); tri.forEach(([x,y],i)=>i?g.lineTo(x,y):g.moveTo(x,y)); g.closePath(); g.fillStyle=AMB[2]; g.fill();
+  const rr=RANGE/mpp; for(let k=0;k<6.28;k+=0.12) if(((k*10)|0)%2===0) px(X0+Math.cos(k+t*0.3)*rr, Y0+Math.sin(k+t*0.3)*rr, 'rgba(255,224,138,.5)');
+  // pohjoisnuoli
+  const nx=LW-10, ny=MAP_TOP+10; rect(nx-6,ny-6,13,13,'rgba(16,23,34,.75)');
+  const na=-ROT; for(let k=0;k<5;k++) px(nx+Math.sin(na)*k, ny-Math.cos(na)*k, '#e0504a'); for(let k=1;k<4;k++) px(nx-Math.sin(na)*k, ny+Math.cos(na)*k, UI.uiD);
+  g.restore();
+}
+function drawIcon(f,X,Y,t,col){
+  X=Math.round(X); Y=Math.round(Y);
+  if(f.kind==='strain'){ // pieni sieni
+    rect(X,Y-1,1,4,'#efe6cc'); rect(X-3,Y-3,7,2,col[1]); rect(X-2,Y-4,5,1,col[2]); px(X+3,Y-2,col[0]);
+    if(f.key==='hoitaja'){ rect(X+3,Y-2,1,5,'#efe6cc'); px(X+3,Y-3,col[2]); }
+  } else if(f.kind==='vessel'){ // lasipurkki
+    rect(X-3,Y-4,7,8,col[0]); rect(X-2,Y-3,5,6,'#16262e'); rect(X-2,Y-5,5,1,'#a8602f'); px(X-1,Y-2,col[2]); px(X-1,Y-1,col[1]);
+    px(X+1,Y+1,f.key==='akvaario'?'#5fc7d0':'#e8a02a');
+  } else { // muisto: tähti
+    const p=Math.sin(t*4)>0; px(X,Y,col[2]); px(X-1,Y,col[1]); px(X+1,Y,col[1]); px(X,Y-1,col[1]); px(X,Y+1,col[1]);
+    if(p){ px(X-2,Y,col[0]); px(X+2,Y,col[0]); px(X,Y-2,col[0]); px(X,Y+2,col[0]); }
+  }
+}
+
+function drawUI(t){
+  // yläpalkki
+  rect(0,0,LW,13,UI.ui0); rect(0,13,LW,1,UI.ui2);
+  text('ULKONA',4,4,UI.ui3);
+  const sp=Object.values(S.spores||{}).reduce((a,b)=>a+b,0);
+  const res='ITIÖT '+sp+'  UUTE '+(S.uute||0); text(res,LW-4-tw(res),4,AMB[2]);
+  text(P.mode==='gps'?'GPS':'SIM',32,4,P.mode==='gps'?'#6ae07a':UI.uiD);
+  HIT.push({x:0,y:0,w:LW,h:13,fn:()=>{ modal={type:'settings'}; }});
+  // paneeli
+  const Y=LH-62; rect(0,Y,LW,62,UI.ui0); rect(0,Y,LW,1,UI.ui2);
+  const nr=nearestFind();
+  // signaali
+  const lvl = !nr||nr.d>=SIG_MAX ? 0 : nr.d<=RANGE ? 10 : Math.max(1,Math.round(10*(1-(nr.d-RANGE)/(SIG_MAX-RANGE))));
+  const sc = nr? findColor(nr.f) : CY_;
+  text('SYKE',4,Y+5,UI.uiD); for(let i=0;i<10;i++) rect(24+i*5,Y+5,4,5,i<lvl?(i>=7?sc[2]:sc[1]):UI.ui1);
+  const zone = nr&&nr.d<=REVEAL ? ZONE_NAME[nr.f.zone] : '';
+  if(zone) text(zone,LW-4-tw(zone),Y+5,UI.uiD);
+  // viesti
+  const age=performance.now()-msgT;
+  if(msg&&age<7000) wrap(msg,4,Y+15,184,msgCol);
+  else wrap(hintText(nr),4,Y+15,184,UI.uiD);
+  // napit
+  const by=LH-16;
+  if(nr&&nr.d<=RANGE){
+    const lbl = hold ? 'TAHDISTUU... '+Math.round(hold.p*100)+'%' : 'PIDÄ POHJASSA: KOSKETA';
+    rect(4,by,184,13,hold?AMB[1]:CY_[0]); rect(4,by,184,1,hold?AMB[2]:CY_[1]);
+    if(hold) rect(4,by+11,Math.round(184*hold.p),2,AMB[2]);
+    textC(lbl,96,by+4,hold?UI.ui0:UI.ui3);
+    HIT.push({x:4,y:by,w:184,h:13,fn:()=>{},hold:nr.f});
+    holdZone={x:0,y:by-30,w:LW,h:46,f:nr.f};
+  } else {
+    holdZone=null;
+    button(4,by,58,13,sigOn?'SYKE: PÄÄLLÄ':'SYKE: POIS',toggleSig,sigOn?'g':'n');
+    const why=canHeal();
+    button(66,by,62,13,'HERÄTÄ',()=>{ const w=canHeal(); if(w){ say(w,UI.ui3); return; } modal={type:'healAsk'}; }, why?'n':'a');
+    button(132,by,56,13,'KOTIIN',()=>{ location.href='../koti/'; });
+  }
+}
+function hintText(nr){
+  if(booting) return '';
+  if(!sigOn) return 'KYTKE SYKE PÄÄLLE. SYMBIONTTI KUULEE LÖYDÖT ENNEN KUIN NÄET NE.';
+  if(nr&&nr.d<=REVEAL) return 'LÖYTÖ ON LÄHELLÄ. MENE SEN LUO.';
+  if(nr&&nr.d<SIG_MAX) return 'SYKE TIHENEE, KUN LÄHESTYT. SEURAA SITÄ.';
+  if((S.uute||0)>0) return 'SINULLA ON UUTETTA. HERÄTÄ JOKIN PAIKKA, JOTA KULJET USEIN.';
+  return 'KAUPUNKI ON HILJAA. KÄVELE, NIIN SYKE HERÄÄ.';
+}
+let holdZone=null;
+function toggleSig(){ if(!AC){ try{ initAudio(); }catch(e){ say('ÄÄNI EI OLE KÄYTETTÄVISSÄ.',UI.ui3); } } AC&&AC.resume&&AC.resume(); sigOn=!sigOn; if(sigOn) say('SYMBIONTIN SYKE KUULUU. MITÄ TIHEÄMPI, SITÄ LÄHEMPÄNÄ.'); }
+
+function drawModal(t){
+  if(!modal) return;
+  for(let y=0;y<LH;y++) for(let x=(y&1);x<LW;x+=2) px(x,y,'#0b1018');
+  HIT=[];
+  const X=12,WW=168, Y=Math.round(LH/2-80), HH=160;
+  rect(X,Y,WW,HH,UI.ui0); rect(X,Y,WW,1,UI.ui2); rect(X,Y+HH-1,WW,1,UI.ui2); rect(X,Y,1,HH,UI.ui2); rect(X+WW-1,Y,1,HH,UI.ui2);
+  if(modal.type==='found'){
+    const col=modal.col;
+    // iso ikoni
+    const cx=X+WW/2, cy=Y+34;
+    for(let yy=-16;yy<=16;yy++) for(let xx=-16;xx<=16;xx++){ const dd=Math.hypot(xx,yy); if(dd<16&&BAYER[(cy+yy)&3][(cx+xx)&3]<(1-dd/16)*12) px(cx+xx,cy+yy,col[0]); }
+    g.save(); g.translate(cx,cy); g.scale(2,2); g.translate(-cx,-cy); drawIcon({kind:modal.kind,key:''},cx,cy+1,t,col); g.restore();
+    textC(modal.kind==='memory'?'MUISTO':'LÖYDÖS',cx,Y+6,UI.uiD);
+    textC(modal.title,cx,Y+58,col[2]);
+    if(modal.isNew) textC('UUSI ALUE: +1 BONUS',cx,Y+67,AMB[2]);
+    wrap(modal.line,X+8,Y+80,WW-16,UI.ui3);
+    textC(modal.kind==='memory'?'TALLENNETTU MUISTOIHIN':'ODOTTAA KOTONA SOLMUSSA',cx,Y+HH-30,UI.uiD);
+  } else if(modal.type==='healAsk'){
+    textC('HERÄTÄ TÄMÄ PAIKKA?',X+WW/2,Y+8,AMB[2]);
+    wrap('KÄYTÄT 1 ELINVOIMAUUTTEEN. PAIKKA SAA VÄRINSÄ TAKAISIN PYSYVÄSTI, JA SIELTÄ LÖYTYY JATKOSSA JOKA PÄIVÄ JOTAIN.',X+8,Y+22,WW-16,UI.ui3);
+    wrap('VALITSE PAIKKA, JOSSA KULJET USEIN: KOTIKATU, PUISTO TAI REITTI TÖIHIN.',X+8,Y+70,WW-16,UI.uiD);
+    button(X+8,Y+HH-36,WW-16,13,'HERÄTÄ (1 UUTE)',()=>{ modal=null; heal(); },'a');
+  } else if(modal.type==='healed'){
+    textC('PAIKKA HERÄSI',X+WW/2,Y+8,CY_[2]);
+    wrap(modal.line,X+8,Y+24,WW-16,UI.ui3);
+    textC('HERÄTETTYJÄ PAIKKOJA: '+modal.n,X+WW/2,Y+80,AMB[2]);
+  } else if(modal.type==='settings'){
+    textC('ASETUKSET',X+WW/2,Y+8,AMB[2]);
+    const lbl={kulku:'KULKUSUUNTA',kompassi:'KOMPASSI',pohjoinen:'POHJOINEN YLÖS'};
+    button(X+8,Y+22,WW-16,13,'KARTAN SUUNTA: '+lbl[dirMode],async()=>{ const D=['kulku','kompassi','pohjoinen']; dirMode=D[(D.indexOf(dirMode)+1)%3];
+      if(dirMode!=='pohjoinen'){ const ok=await enableCompass(); if(!ok&&dirMode==='kompassi') dirMode='pohjoinen'; } });
+    button(X+8,Y+38,WW-16,13,'MUISTOT ('+(S.memories||[]).length+'/'+MEMORIES.length+')',()=>{ modal={type:'memories'}; });
+    if(mapMode==='DEMO') button(X+8,Y+54,WW-16,13,'HAE OIKEA KARTTA',()=>{ modal=null; retryMap(); },'a');
+    text('DATA: '+mapMode+(osmNote?' ('+osmNote+')':''),X+8,Y+76,UI.uiD);
+    text('KÄVELTY: '+Math.round(S.walked||0)+' M',X+8,Y+85,UI.uiD);
+    text('LÖYTÖJÄ TÄNÄÄN LÄHELLÄ: '+finds.length,X+8,Y+94,UI.uiD);
+    text(VERSION,X+8,Y+103,UI.uiD);
+  } else if(modal.type==='memories'){
+    textC('MUISTOT',X+WW/2,Y+8,MEM_COL[2]); let yy=Y+22;
+    const m=(S.memories||[]); if(!m.length) wrap('EI VIELÄ MUISTOJA. NE LÖYTYVÄT VANHOISTA PAIKOISTA.',X+8,yy,WW-16,UI.uiD);
+    m.slice(-4).forEach(k=>{ const L=wrapLines(MEMORIES[k],WW-16); L.forEach((l,i)=>text(l,X+8,yy+i*7,UI.ui3)); yy+=L.length*7+5; });
+  }
+  button(X+WW/2-30,Y+HH-17,60,12,'SULJE',()=>{ modal=null; });
+}
+
+let booting=true;
+function drawBoot(t){
+  rect(0,0,LW,LH,'#0b1018');
+  bootLines.forEach((l,i)=>text(l.slice(0,46),4,8+i*9,i===bootLines.length-1?CY_[2]:UI.uiD));
+}
+
+// ================= SILMUKKA =================
+let last=performance.now(), lastDraw=0;
+function loop(t){
+  const dt=Math.min(0.1,(t-last)/1000); last=t;
+  if(!booting){
+    if(P.mode==='sim'&&P.tx!==null){ const dx=P.tx-P.x,dy=P.ty-P.y,d=Math.hypot(dx,dy),s=SIM_SPEED*dt;
+      if(d<=s){ P.x=P.tx; P.y=P.ty; P.tx=P.ty=null; moved(d); } else { P.x+=dx/d*s; P.y+=dy/d*s; moved(s); } }
+    if(keys.size&&P.mode==='sim'){ let vx=0,vy=0; if(keys.has('ArrowLeft'))vx--; if(keys.has('ArrowRight'))vx++; if(keys.has('ArrowUp'))vy--; if(keys.has('ArrowDown'))vy++;
+      if(vx||vy){ const n=Math.hypot(vx,vy),s=SIM_SPEED*dt,c=Math.cos(ROT),si=Math.sin(ROT),ux=vx/n,uy=vy/n; P.x+=(ux*c-uy*si)*s; P.y+=(ux*si+uy*c)*s; P.tx=P.ty=null; moved(s); } }
+    updateHeading(dt);
+    // pitokeräys
+    if(hold){ const d=Math.hypot(hold.f.x-P.x,hold.f.y-P.y); if(d>RANGE+5){ hold=null; } else { hold.p+=dt/2.4; if(hold.p>=1){ const f=hold.f; hold=null; collect(f); } } }
+    audioTick(dt);
+  }
+  if(t-lastDraw>66){ lastDraw=t; render(t/1000); }
+  requestAnimationFrame(loop);
+}
+function render(t){
+  HIT=[];
+  if(booting){ drawBoot(t); }
+  else { drawMap(t); drawUI(t); drawModal(t); }
+  sctx.imageSmoothingEnabled=false; sctx.drawImage(buf,0,0,LW,LH,0,0,cv.width,cv.height);
+}
+
+// ================= SYÖTE =================
+const keys=new Set(); addEventListener('keydown',e=>keys.add(e.key)); addEventListener('keyup',e=>keys.delete(e.key));
+let down=null, pinch=null;
+const toL=e=>{ const r=cv.getBoundingClientRect(); return [(e.clientX-r.left)/r.width*LW, (e.clientY-r.top)/r.height*LH]; };
+cv.addEventListener('pointerdown',e=>{
+  if(booting) return;
+  const [x,y]=toL(e); down={x,y,cx:e.clientX,cy:e.clientY};
+  if(!modal && holdZone && y>=holdZone.y && y<holdZone.y+holdZone.h){ hold={f:holdZone.f,p:0}; if(!AC){ try{ initAudio(); sigOn=true; }catch(_){} } return; }
+  for(let i=HIT.length-1;i>=0;i--){ const h=HIT[i]; if(x>=h.x&&x<h.x+h.w&&y>=h.y&&y<h.y+h.h){ h.fn(); down=null; return; } }
+  if(modal){ down=null; }
+});
+const endHold=()=>{ if(hold&&hold.p<1){ hold=null; say('YHTEYS KATKESI. PIDÄ SORMI PAIKALLAAN, KUNNES SYKE TAHDISTUU.',UI.ui3); } };
+cv.addEventListener('pointerup',e=>{ endHold(); if(!down) return; const mv=Math.hypot(e.clientX-down.cx,e.clientY-down.cy); const d=down; down=null;
+  if(mv<8&&!pinch&&P.mode==='sim'&&d.y>MAP_TOP&&d.y<LH-62){ const [wx,wy]=unscr(d.x,d.y); P.tx=wx; P.ty=wy; } });
+cv.addEventListener('pointercancel',endHold); cv.addEventListener('pointerleave',endHold);
+cv.addEventListener('wheel',e=>{ e.preventDefault(); mpp=clamp(mpp*(e.deltaY<0?0.89:1.12),0.6,4); },{passive:false});
+cv.addEventListener('touchstart',e=>{ if(e.touches.length===2){ const [a,b]=e.touches; pinch={d:Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY),m:mpp}; hold=null; } },{passive:true});
+cv.addEventListener('touchmove',e=>{ if(pinch&&e.touches.length===2){ const [a,b]=e.touches; mpp=clamp(pinch.m*pinch.d/Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY),0.6,4); } },{passive:true});
+cv.addEventListener('touchend',e=>{ if(e.touches.length<2) setTimeout(()=>pinch=null,50); },{passive:true});
+
+// ================= GPS =================
+const GEO_ERR={1:'LUPA EVÄTTY',2:'SIJAINTI EI SAATAVILLA',3:'AIKAKATKAISU'};
+let geoErr='';
+function getPosition(){ return new Promise(res=>{
+  if(!window.isSecureContext){ geoErr='EI HTTPS'; return res(null); }
+  if(!navigator.geolocation){ geoErr='EI TUKEA'; return res(null); }
+  let done=false; const fin=v=>{ if(!done){ done=true; clearTimeout(to); res(v); } };
+  const to=setTimeout(()=>{ geoErr=geoErr||GEO_ERR[3]; fin(null); },25000);
+  const once=(hi,next)=>{ try{ navigator.geolocation.getCurrentPosition(p=>fin(p),e=>{ geoErr=GEO_ERR[e.code]||('VIRHE '+e.code); if(e.code===1) fin(null); else next(); },{enableHighAccuracy:hi,timeout:12000,maximumAge:60000}); }catch(e){ geoErr='VIRHE'; fin(null); } };
+  once(true,()=>once(false,()=>fin(null)));
+}); }
+let watchId=null;
+function startWatch(){
+  if(!navigator.geolocation||!window.isSecureContext||watchId!==null) return;
+  watchId=navigator.geolocation.watchPosition(p=>{
+    const [x,y]=toXY(p.coords.latitude,p.coords.longitude), now=Date.now();
+    if(P.mode!=='gps'){ P.mode='gps'; P.tx=P.ty=null; lastFix=null; say('GPS-LUKITUS SAATU.'); if(Math.hypot(x,y)>2500) say('GPS LÖYTYI KAUKAA. LATAA SIVU UUDELLEEN.',UI.ui3); }
+    if(lastFix){ const d=Math.hypot(x-lastFix.x,y-lastFix.y), sp=d/Math.max(1,(now-lastFix.t)/1000);
+      if(sp>50) return; if(sp<7) moved(d); }
+    lastFix={x,y,t:now}; P.x=x; P.y=y;
+  },()=>{},{enableHighAccuracy:true,maximumAge:2000,timeout:30000});
+}
+async function retryMap(){
+  say('HAETAAN KARTTAA...',UI.ui3); const here=toLL(P.x,P.y);
+  try{ origin={lat:here.lat,lon:here.lon}; P.x=0; P.y=0; lastFix=null; P.tx=P.ty=null;
+    for(const k in tiles) delete tiles[k]; seenOSM=new Set();
+    const [ty,tx]=tileOf(origin.lat,origin.lon); const f=await loadTile(ty,tx); if(f.length<5) throw new Error('LIIAN VÄHÄN DATAA');
+    tiles[ty+':'+tx]='ok'; features=[]; anchors=[]; mapMode='OSM'; addFeatures(f); say('OIKEA KARTTA LADATTU.'); }
+  catch(e){ say('KARTTA EPÄONNISTUI: '+e.message,UI.ui3); }
+}
+
+async function boot(){
+  bootSay('SYMBIONTTIYHTEYS'); bootSay('...KUULETKO MEITÄ? ME KUULEMME SINUT.'); bootSay('');
+  bootSay('> HAETAAN SIJAINTIA...');
+  const qs=new URLSearchParams(location.search);
+  const pos = qs.has('sim') ? null : await getPosition();
+  if(pos){ origin={lat:pos.coords.latitude,lon:pos.coords.longitude}; P.mode='gps'; bootSay('  GPS OK'); }
+  else { origin={...START}; P.mode='sim'; bootSay('  EI GPS: '+(geoErr||'SIMULOITU')); bootSay('  > TURKU, KAUPPATORI (SIMULOITU)'); }
+  bootSay('> LADATAAN KARTTAA...');
+  let f=[];
+  if(qs.has('demo')) { f=demoCity(); mapMode='DEMO'; }
+  else try{ const [ty,tx]=tileOf(origin.lat,origin.lon); tiles[ty+':'+tx]='loading'; f=await loadTile(ty,tx); tiles[ty+':'+tx]='ok'; if(f.length<5) throw new Error('LIIAN VÄHÄN DATAA'); bootSay('  '+f.length+' KOHDETTA'); }
+  catch(e){ f=demoCity(); mapMode='DEMO'; bootSay('  KARTTA EPÄONNISTUI'); bootSay('  > DEMOKAUPUNKI'); }
+  addFeatures(f);
+  startWatch();
+  bootSay(''); bootSay('> VALMIS.');
+  await new Promise(r=>setTimeout(r,700));
+  booting=false;
+  say(P.mode==='sim'?'TESTITILA: NAPAUTA KARTTAA KÄVELLÄKSESI.':'OLET ULKONA. KÄVELE, NIIN SYKE HERÄÄ.');
+}
+boot();
+requestAnimationFrame(loop);
+window.DBG={P, get finds(){return finds}, get S(){return S}, collect, heal, get anchors(){return anchors}};
+})();
+</script>
+</body>
+</html>
