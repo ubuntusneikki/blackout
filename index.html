@@ -21,7 +21,7 @@
   <h1>SOLMU</h1>
   <p>Rihmasto villiintyi, ja kaupunki jäi sen alle. Löydä vanhoja kantoja kaduilta, kasvata ja jalosta niitä kotona ja myy markkinalla.</p>
   <a class="btn ulko" href="ulko/"><b>ULOS &gt;</b><span>Kävele, seuraa sykettä ja löydä kantoja, astioita ja muistoja.</span></a>
-  <a class="btn koti" href="koti/"><b>KOTI &gt;</b><span>Kasvata löytöjäsi astioissa, jalosta satoa, myy markkinalla ja osta lisää tilaa.</span></a>
+  <a class="btn koti" href="koti/"><b>KOTI &gt;</b><span>Kasvata, risteytä laboratoriossa, kasvata suodattimia ja täytä torin väen tilaus.</span></a>
   <a class="btn" href="iso/"><b style="color:#d6b0ff">ISO-TESTI &gt;</b><span>Kokeilu: isometrinen 3D-ulkokartta pikselityylillä. Napauta kulkeaksesi, vedä sivulle kiertääksesi.</span></a>
   <div id="st"></div>
 </main>
@@ -29,9 +29,8 @@
 try {
   const s = JSON.parse(localStorage.getItem('solmu_yhteinen_v1'));
   if (s){ const sp = Object.values(s.spores||{}).reduce((a,b)=>a+b,0);
-    const sato = Object.values(s.goods||{}).reduce((a,b)=>a+b,0);
-    document.getElementById('st').textContent = `Itiöitä ${sp} · satoa ${sato} · rahaa ${s.mk||0} MK · muistoja ${(s.memories||[]).length}/10`; }
-  else document.getElementById('st').textContent = 'Uusi peli. Aloita kotoa: terraariossa odottaa siniheltan itiöitä.';
+    document.getElementById('st').textContent = `Itiöitä ${sp} · hopeaa ${Math.floor(s.hopea||0)} · muistoja ${(s.memories||[]).length}/11` + (s.flags&&s.flags.done?' · v1 läpäisty':''); }
+  else document.getElementById('st').textContent = 'Uusi peli. Aloita kotoa: terraario ja siniheltan itiöt odottavat.';
 } catch(e){}
 </script>
 </body>

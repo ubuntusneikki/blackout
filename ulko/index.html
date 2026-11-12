@@ -15,16 +15,13 @@
 <script>
 (() => {
 'use strict';
-const VERSION = 'ULKO-01 V0.2';
+const VERSION = 'ULKO-01 V0.3';
 
 // ================= YHTEINEN TALLENNUS (sama kuin kotiprotossa) =================
 const SAVE_KEY = 'solmu_yhteinen_v1';
 function newGame(){
-  return { speed:60, rows:2, bought:{purkki:0,terraario:0}, expand:0, trips:0, retkiReady:0,
-    slots:[ {id:1,type:'terraario',strain:null,growth:0,moist:1,ready:false}, {id:2,type:'purkki',strain:null,growth:0,moist:1,ready:false},
-            {id:3,type:'purkki',strain:null,growth:0,moist:1,ready:false}, null,null,null,null,null,null ],
-    spores:{heltta:2}, vesselInv:[], kotiLast:Date.now(), firstHarvest:false,
-    found:{}, cells:{}, memories:[], walked:0 };
+  // ulkosivu käyttää vain näitä kenttiä; kodin kentät (rooms, hopea, ...) säilyvät tallennuksessa sellaisinaan
+  return { spores:{}, vesselInv:[], found:{}, cells:{}, memories:[], walked:0 };
 }
 function ensure(s){ const d=newGame(); for (const k in d) if (s[k]===undefined) s[k]=d[k]; return s; }
 function loadS(){ let s=null; try { s=JSON.parse(localStorage.getItem(SAVE_KEY)); } catch(e){}
@@ -59,12 +56,13 @@ const MEMORIES = [
   'JOKI EI VILLIINTYNYT. SIKSI ME KASVAMME SEN RANNOILLA.',
   'VILLI RIHMASTO EI OLE PAHA. SE ON VAIN NÄLKÄINEN, KUTEN ME KAIKKI.',
   'VANHA MAAILMA ANTOI ASTIAT. ME TEEMME TYÖN.',
-  'ET OLE ENSIMMÄINEN KANTAJA. TOIVOTTAVASTI ET VIIMEINEN.'
+  'ET OLE ENSIMMÄINEN KANTAJA. TOIVOTTAVASTI ET VIIMEINEN.',
+  'TORIN VÄKI LÄHTI ULOS SUODATTIMIESI KANSSA. NYT TIEDÄN, ETTÄ TÄÄLLÄ VOI ELÄÄ.'   // kodin tilauksen palkinto (KOTI V1)
 ];
 // paikan tyyppi -> löydön mahdollisuudet
 const ZONE_LOOT = {
-  puisto:  [['strain','heltta',2,70],['strain','hoitaja',1,12],['memory',null,1,18]],
-  ranta:   [['strain','kaapa',1,65],['vessel','akvaario',1,20],['memory',null,1,15]],
+  puisto:  [['strain','heltta',2,80],['memory',null,1,20]],
+  ranta:   [['strain','heltta',1,45],['vessel','akvaario',1,35],['memory',null,1,20]],
   teollinen:[['strain','ruusu',2,65],['vessel','palvelin',1,15],['memory',null,1,20]],
   arkisto: [['memory',null,1,55],['strain','hamara',1,30],['vessel','palvelin',1,15]],
   piha:    [['strain','hamara',1,55],['strain','heltta',1,25],['memory',null,1,20]],
@@ -263,7 +261,7 @@ function rebuildFinds(){
     const list=byCell[k]; const a=list[(r()*list.length)|0]; const [kind,key,n]=pickLoot(a.zone,r);
     const id='f|'+day+'|'+k;
     if (S.found[id]) continue;
-    finds.push({id,x:a.x,y:a.y,zone:a.zone,kind,key,n,mem:(r()*MEMORIES.length)|0, cell:k});
+    finds.push({id,x:a.x,y:a.y,zone:a.zone,kind,key,n,mem:(r()*(MEMORIES.length-1))|0, cell:k});
   }
 }
 function findColor(f){ return f.kind==='strain'?STRAIN[f.key].col : f.kind==='vessel'?VES_COL : MEM_COL; }

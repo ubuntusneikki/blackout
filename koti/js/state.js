@@ -1,0 +1,83 @@
+// tallennus ja tila. Avain on yhteinen ulkosivun kanssa (CLAUDE.md: Yhteinen tallennus).
+import {STRAINS, ROOMS, SELL_BASE, SPIKE_FIRST} from './data.js';
+export const SAVE_KEY = 'solmu_yhteinen_v1';
+
+let uid = 1;
+export function newId(){ return uid++; }
+export function vessel(type){ return {id:newId(), kind:'vessel', type, strain:null, growth:0, moist:1, ready:false}; }
+export function device(type){ const d={id:newId(), kind:'device', type, t:0, busy:false, done:false};
+  if (type==='hautomo'){ d.dish=null; } if (type==='kuivain'){ d.job=null; d.n=0; } return d; }
+function emptyRoom(r){ return {owned:r==='huone', cells:new Array(ROOMS[r].w*ROOMS[r].h).fill(null)}; }
+
+export function newGame(){
+  const huone=emptyRoom('huone'), kellari=emptyRoom('kellari');
+  huone.cells[4]=vessel('terraario'); huone.cells[5]=vessel('purkki'); huone.cells[6]=vessel('purkki');
+  return {
+    schema:1, speed:60, hopea:20,
+    rooms:{huone, kellari}, cur:'huone',
+    inv:{}, spores:{heltta:2, ruusu:2}, vesselInv:[], deviceInv:[],
+    bought:{purkki:0, terraario:0}, sold:0,
+    known:{heltta:1, ruusu:1}, tried:{},
+    market:{sat:{}, spike:null, nextSpike:SPIKE_FIRST},
+    flags:{firstHarvest:false, lab:false, firstCross:false, mutation:false, done:false},
+    order:null, trips:0, retkiReady:0, kotiLast:Date.now(),
+    found:{}, cells:{}, memories:[], walked:0
+  };
+}
+
+// vanha (KOTI-01 V0.2/V0.3) tallennus -> v1
+function migrate(s){
+  const d=newGame(); const huone=emptyRoom('huone');
+  let hopea = (s.mk||0) + (s.sato||0)*2 + (s.uute||0)*15;
+  (s.slots||[]).forEach((vs,i)=>{ if(!vs) return; const r=(i/3)|0, c=i%3; const nv={...vs, kind:'vessel'};
+    if (nv.strain && !STRAINS[nv.strain]){ nv.strain=null; nv.growth=0; nv.ready=false; }
+    huone.cells[r*4+c]=nv; });
+  const inv={};
+  for (const id in (s.goods||{})){ const n=s.goods[id], k=id.slice(2);
+    if (id[0]==='r' && STRAINS[k]) inv['raw:'+k]=(inv['raw:'+k]||0)+n;
+    else hopea += n*(id[0]==='j'?10:SELL_BASE.raw); }
+  const spores={}; for (const k in (s.spores||{})){ if (STRAINS[k]) spores[k]=s.spores[k]; else hopea += s.spores[k]*SELL_BASE.itio; }
+  if (!spores.ruusu) spores.ruusu=2;   // v1:n alkuitiöt, jotta risteytys on mahdollinen
+  const known={heltta:1, ruusu:1}; for (const k in spores) known[k]=1; for (const k in (s.seen||{})) if (STRAINS[k]) known[k]=1;
+  huone.cells.forEach(c=>{ if(c&&c.strain) known[c.strain]=1; });
+  const out={...d, speed:s.speed||60, hopea:Math.max(hopea,d.hopea), rooms:{huone, kellari:d.rooms.kellari}, inv, spores, known,
+    vesselInv:(s.vesselInv||[]).slice(), bought:{purkki:(s.bought||{}).purkki||0, terraario:(s.bought||{}).terraario||0},
+    kotiLast:s.kotiLast||Date.now(), found:s.found||{}, cells:s.cells||{}, memories:s.memories||[], walked:s.walked||0,
+    trips:s.trips||0, retkiReady:0};
+  out.flags.firstHarvest=!!s.firstHarvest;
+  return out;
+}
+export function ensure(s){
+  if (!s || typeof s!=='object') return newGame();
+  if (!s.schema) s=migrate(s);
+  const d=newGame();
+  for (const k in d) if (s[k]===undefined) s[k]=d[k];
+  for (const k in d.flags) if (s.flags[k]===undefined) s.flags[k]=d.flags[k];
+  for (const k in d.market) if (s.market[k]===undefined) s.market[k]=d.market[k];
+  for (const r in d.rooms) if (!s.rooms[r]) s.rooms[r]=d.rooms[r];
+  // ulkosivu voi tuoda vanhoja kenttiä; ne eivät haittaa
+  return s;
+}
+export const S = ensure(load());
+fixUid();
+function load(){ let s=null; try { s=JSON.parse(localStorage.getItem(SAVE_KEY)); } catch(e){}
+  if (new URLSearchParams(location.search).has('reset')) s=null; return s; }
+export function fixUid(){ let m=0; for (const r in S.rooms) S.rooms[r].cells.forEach(c=>{ if(c&&c.id>m) m=c.id; }); uid=m+1; }
+export function replaceState(ns){ for (const k of Object.keys(S)) delete S[k]; Object.assign(S, ns); fixUid(); }
+export function save(){ S.kotiLast=Date.now(); try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch(e){} }
+
+// koti omistaa nämä kentät: toisen välilehden tallennus ei ylikirjoita niitä
+export const KOTI_OWNS = ['rooms','cur','hopea','inv','deviceInv','bought','sold','known','tried','market','flags','order','kotiLast','speed'];
+export function mergeIncoming(inc){ const keep={}; for (const k of KOTI_OWNS) keep[k]=S[k];
+  const n=ensure(inc); for (const k of KOTI_OWNS) n[k]=keep[k]; replaceState(n); }
+
+// apurit
+export function strain(key){ if(!key) return null; const [base,perk]=key.split('~'); const T=STRAINS[base]; if(!T) return null;
+  if (!perk) return {...T, key, base, short:T.name};
+  return {...T, key, base, perk, mutant:true, name:T.name+' (MUTAATIO)', short:T.name+' (M)', grow: perk==='grow'?T.grow/1.25:T.grow, yield: perk==='yield'?T.yield+1:T.yield}; }
+export function roomOf(r){ return S.rooms[r]; }
+export function neighbors(r,i){ const {w,h}={w:4,h:r==='kellari'?3:4}; const c=i%w, y=(i/w)|0, out=[];
+  if(c>0) out.push(i-1); if(c<w-1) out.push(i+1); if(y>0) out.push(i-w); if(y<h-1) out.push(i+w); return out; }
+export function allCells(){ const out=[]; for (const r in S.rooms){ if(!S.rooms[r].owned) continue; S.rooms[r].cells.forEach((c,i)=>{ if(c) out.push({c,r,i}); }); } return out; }
+export function addInv(id,n){ S.inv[id]=(S.inv[id]||0)+n; if (S.inv[id]<=0) delete S.inv[id]; }
+export function addSpore(k,n){ S.spores[k]=(S.spores[k]||0)+n; if (S.spores[k]<=0) delete S.spores[k]; }
