@@ -22,48 +22,53 @@ Tämä ohje kertoo, miten kotipelin grafiikka tehdään ja miten se liitetään 
 - **Ei animaatiota renderöintinä.** Hehkun sykintä, itiöt, pisarat ja purkaukset tehdään pelissä koodilla (kuten nyt).
 - **Elinvoima tehdään pelissä:** spritet renderöidään täysin värein. Peli laskee haalistetut versiot `vital()`-kaavalla ja tallentaa ne välimuistiin (esim. 6 tasoa: 0, 0,2 … 1).
 
-## Asset-lista v1
+## Asset-lista v1 (toteutettu, `blender/koti.py`)
 
-**Tilat (taustakuvat, sisältävät lattian ruudukon):**
-- `huone`: 4×4, puulattia, kaksi tiiliseinää, ikkuna iltakaupunkiin, ovi kellariin, kupariputki seinällä.
-- `kellari`: 4×3, betoni- tai kivilattia, kostea tiiliseinä, putket, vedenvaluma, sammalta nurkissa, viileämpi valo.
+Muutokset alkuperäiseen listaan (prototyypin loppusuunnitelma 2026-11-13): kuivausteline poistettu, kehikko on yleinen kasvatusmuotti kolmelle tuotteelle, huoneen ovesta lähtee rihmaretki.
 
-**Astiat (yksi ruutu, renderöidään tyhjinä):**
-- `lasipurkki`, `terraario`. Myöhemmin `akvaario` ja `palvelinkaappi` (ulkolöydöt).
+**Tilat** (taustakuvat, sisältävät lattian ruudukon):
+- `tila_huone` 4×4: laattalattia, paneeliseinät, lämmin valolista, ravinneputket, tuuletin, syvä ikkuna hämärään. Vasemman seinän liukuovesta symbiontin rihma kurottaa ulos (rihmaretki), lattialla muutama hehkuva säie.
+- `tila_kellari` 4×3: betonilattia ja lattiakaivo, kosteat betoniseinät, paksut putket ja tippuva vesi, lammikko, tikkaat ylös, häkkivalaisin, sammalta nurkissa, viileämpi valo.
 
-**Sienet (päällekkäiset spritet, sijoitetaan astian sisälle ankkuripisteeseen):**
-- Kannat: siniheltta, ruususieni, hämäränuppi, kalvoheltta, hoitajasieni.
-- Jokaisesta 3 kasvuvaihetta: `itu`, `nuori`, `kypsa`. Mutaatio ja horros tehdään pelissä (kultainen hohde ja elinvoima).
-- Kalvoheltta on verkkomainen ja kalvomainen, hoitajasieni pitkä ja ohut, ja sen rihmat kurottavat sivuille.
+**Astiat** (yksi ruutu, kaksi kerrosta, sieni piirretään väliin):
+- `astia_terraario` + `astia_terraario_etu`, `astia_lasipurkki` + `astia_lasipurkki_etu` (lasilieriö teräsjalustalla).
 
-**Laboratorio ja laitteet (yksi ruutu):**
-- `hautomo`: lämmin, lasiluukullinen kaappi, sisällä maljoja, merivihreä merkkivalo. Tilat: `tyhja`, `kaynnissa`, `valmis` (meripihka).
-- `kuivausteline`: puinen ritilä, jolla sieniä. Tilat: `tyhja`, `kaynnissa`, `valmis`.
-- `kehikko`: pystykehys, johon kalvo kasvaa. Tilat: `tyhja`, `kasvaa_1`, `kasvaa_2`, `valmis` (hehkuva elävä kalvo).
+**Sienet** `sieni_<kanta>_<itu|nuori|kypsa>`, kannat `heltta` (siniheltta), `ruusu` (ruususieni), `hamara` (hämäränuppi), `kalvo` (kalvoheltta, verkkomainen kalvohame), `hoitaja` (hoitajasieni, sivuille kurottavat rihmat ja sumupisarat). Kypsä sieni mahtuu molempiin astioihin.
 
-**Kuvakkeet (16×16 tai 24×24, käyttöliittymään):**
-- Hopea, itiöpussi (yksi per kanta, kannan värinen), agar-malja, raaka sato (per kanta), kuivattu sieni, itiösuodatin, villi näyte.
+**Laitteet** (yksi ruutu):
+- `laite_hautomo_<tyhja|kaynnissa|valmis>`.
+- `laite_kehikko_tyhja` ja `laite_kehikko_<tuote>_<kasvaa_1|kasvaa_2|valmis>`, tuotteet `valokalvo` (siniheltasta, elävä valaisin), `lamporihma` (ruususienestä), `suodatin` (itiösuodatin, kalvoheltasta). Kasvusto täyttää kehyksen alhaalta ylös; valmis = meripihkainen merkkivalo.
+
+**Kuvakkeet** 32×32: `ikoni_hopea`, `ikoni_agar`, `ikoni_villi`, `ikoni_itio_<kanta>` (itiöampulli), `ikoni_sato_<kanta>`, `ikoni_<tuote>`.
+
+**Uuden kannan lisääminen:** lisää värit `STRAIN`-taulukkoon ja rivi `KANNAT`-taulukkoon (nimi ja muotofunktio; muodon voi lainata toiselta kannalta tai kirjoittaa uuden `muoto_*`-funktion). Spritet, kuvakkeet ja atlas-merkinnät syntyvät automaattisesti. Uusi kehikkotuote lisätään samoin `TUOTTEET`-taulukkoon ja `membrane()`-funktioon.
 
 ## Sprite-atlas: liitäntä grafiikan ja pelin välillä
 
-Blender-skripti tuottaa kansion `koti/gfx/`:
+```
+cd blender
+python3 koti.py -- /tmp/koti                 # renderöi kaikki (noin 40 s); valinnaisesti nimet tai *-kuviot
+python3 koti_atlas.py /tmp/koti ../koti/gfx ../docs/kuvat/koti_v1_atlas.png
+```
+
+Tulos:
 
 ```
-koti/gfx/atlas.png      kaikki spritet yhdessä kuvassa
-koti/gfx/atlas.json     { "nimi": { "x":0, "y":0, "w":32, "h":40, "ax":16, "ay":36 } }
+koti/gfx/atlas.png      kaikki spritet yhdessä kuvassa (pix.py:n paletti ja ääriviivat valmiina)
+koti/gfx/atlas.json     { "meta": {...}, "sprites": { "nimi": { "x", "y", "w", "h", "ax", "ay", ["plant": {"x", "y"}] } } }
 ```
 
-- `ax, ay` = ankkuripiste: ruudun keskipiste lattiatasolla. Peli piirtää spriten niin, että ankkuri osuu ruudun keskelle.
-- Sienispriteillä ankkuri on rungon tyvi, ja jokaisella astialla on `json`:issa lisäksi `plant: {x, y}` eli kohta, johon sieni piirretään.
-- Nimeäminen: `astia_terraario`, `sieni_heltta_kypsa`, `laite_hautomo_valmis`, `tila_huone`, `ikoni_hopea`.
-- Piirtojärjestys pelissä: syvyys = ruudun `x + y`, pienin ensin.
-- Paikkamerkit: kunnes atlas on valmis, peli piirtää samankokoiset värilaatikot samoilla nimillä. Kun `atlas.json` löytyy, peli käyttää sitä automaattisesti.
+- `ax, ay` = ankkuri spriten vasemmasta yläkulmasta: ruudun keskipiste lattiatasolla (sienillä tyvi, kuvakkeilla keskipiste). Peli piirtää spriten niin, että ankkuri osuu ruudun keskelle.
+- Astioilla `plant` = kohta, johon sienen ankkuri piirretään. Piirtojärjestys yhdessä ruudussa: `astia_x`, sieni, `astia_x_etu`.
+- `meta.rooms[tila]`: `tile0` = ruudun (0, 0) ankkuri tilan ankkurista, `dc` ja `dr` = siirtymä yhden sarakkeen ja rivin verran. Ruudun (c, r) ankkuri = tilan ankkuri + tile0 + c·dc + r·dr. Piirtojärjestys: c + r, pienin ensin.
+- `meta.kannat` ja `meta.tuotteet` kertovat pelinäkyvät nimet.
+- Paikkamerkit: kunnes peli lukee atlaksen, se voi piirtää samankokoiset värilaatikot samoilla nimillä.
 
 ## Työjärjestys
 
-1. **Tyylitesti:** renderöi huone sekä terraario, siniheltta (kypsä) ja hautomo samaan kuvaan pelin mittakaavassa. Näytä Juusolle ennen kuin jatkat.
-2. **Koko v1-setti** listan mukaan, atlas ja `atlas.json`.
-3. **Esikatselukuva** `docs/kuvat/koti_v1_atlas.png`: kaikki spritet nimettyinä ja yksi koottu esimerkkihuone.
+1. ~~**Tyylitesti:** renderöi huone sekä terraario, siniheltta (kypsä) ja hautomo samaan kuvaan pelin mittakaavassa. Näytä Juusolle ennen kuin jatkat.~~ Tehty (tyylitesti 3 hyväksytty).
+2. ~~**Koko v1-setti** listan mukaan, atlas ja `atlas.json`.~~ Tehty.
+3. ~~**Esikatselukuva** `docs/kuvat/koti_v1_atlas.png`.~~ Tehty (huone ja kellari koottuina).
 4. **Integraatio peliin** (proto-säie): isometrinen ruudukko, piirtojärjestys, elinvoimavälimuisti, hehku ja purkaukset koodilla.
 
 Tarkista jokainen vaihe kuvakaappauksella. Pienellä resoluutiolla luettavuus on tärkeintä: siluetin pitää erottua, ja jokaisella esineellä on hyvä olla yksi selvä tunnistettava yksityiskohta.

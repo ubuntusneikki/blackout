@@ -69,13 +69,13 @@ def brick(name, c1, c2, mortar, scale, size=(0.5, 0.25), mortar_size=0.03, axes=
     nt.links.new(cb.outputs['Vector'], br.inputs['Vector']); nt.links.new(br.outputs['Color'], b.inputs['Base Color'])
     MATS[name] = m; return m
 
-STRAIN = {   # kanta: (lakki, heltat/hehku, tumma)
+STRAIN = {   # kanta: (lakki, heltat/hehku, tumma). Uusi kanta: lisää värit tähän ja rivi KANNAT-taulukkoon.
     'heltta': ('#34b8ac', '#a8fbee', '#1d5c58'),
     'ruusu':  ('#c4428f', '#ffa6d6', '#5a1f4a'),
     'hamara': ('#8a4ad0', '#d6b0ff', '#3a1f5a'),
+    'kalvo':  ('#9fd3d6', '#ffa6d6', '#2d4a55'),
     'hoitaja':('#8fd0a0', '#e8fff0', '#2f5a3a'),
 }
-
 def M():
     return {
       'plank':   wmat('lankku', '#6a4a30', '#8f6a44', 6.0, 0.85, stretch=(1, 7, 1), cut=0.48),
@@ -127,9 +127,10 @@ def M():
       'pot':     mat('ruukku', '#a8602f', 0.8),
     }
 
+CAP_GLOW = {'kalvo': 0.4, 'hoitaja': 0.4}   # vaaleat lakit hehkuvat vähemmän, jotta väri ei puhkea valkoiseksi
 def strain_mats(k):
     cap_c, gill_c, dark_c = STRAIN[k]
-    return (mat('lakki_' + k, cap_c, 0.5, emit=cap_c, estr=1.6),
+    return (mat('lakki_' + k, cap_c, 0.5, emit=cap_c, estr=CAP_GLOW.get(k, 1.6)),
             mat('heltta_' + k, gill_c, 0.5, emit=gill_c, estr=3.0),
             mat('tumma_' + k, dark_c, 0.7))
 
@@ -168,6 +169,18 @@ def cap(loc, r, h, m, droop=0.0):
         v.co.z = v.co.z * h / r - droop * r * rr ** 3
     o.data.materials.append(m); return link(o)
 
+CAM_H = Vector((1, -1, 0)).normalized()     # kameran suunta vaakatasossa (kamera on +x, -y -puolella)
+def half(o, keep='back', cx=0.0, cy=0.0):
+    """Poista kappaleesta kameran puoleinen (keep='back') tai taaempi (keep='front') puolisko."""
+    import bmesh
+    bm = bmesh.new(); bm.from_mesh(o.data)
+    kill = []
+    for f in bm.faces:
+        c = o.matrix_world @ f.calc_center_median()
+        d = (c.x - cx) * CAM_H.x + (c.y - cy) * CAM_H.y
+        if (d > 0.002 and keep == 'back') or (d < -0.002 and keep == 'front'): kill.append(f)
+    bmesh.ops.delete(bm, geom=kill, context='FACES'); bm.to_mesh(o.data); bm.free(); return o
+
 def glow_light(loc, col, energy, size=0.1):
     L = bpy.data.lights.new('hehku', 'POINT'); L.energy = energy; L.color = hexc(col)[:3]; L.shadow_soft_size = size
     o = bpy.data.objects.new('hehku', L); o.location = loc; return link(o)
@@ -201,27 +214,123 @@ def shroom(x, y, z, h, r, k, tilt=(0, 0), light=0.0, ring=True):
     if light: glow_light((top[0], top[1], top[2] - r * 0.3), STRAIN[k][1], light, 0.05)
 
 SHROOM_SCALE = 1.3   # sienet hieman liioiteltuja, jotta siluetti erottuu
-def sieni_heltta(stage):
-    """Siniheltta: leveälakkinen, hehkuvat heltat. Ryhmä yksi iso + pienempiä."""
-    k = SHROOM_SCALE
-    def sh(x, y, z, h, r, *a, **kw): shroom(x * k, y * k, z, h * k, r * k, *a, **kw)
-    if stage == 'itu':
-        for i, (x, y, h) in enumerate([(0, 0, 0.08), (0.07, -0.05, 0.06), (-0.06, 0.04, 0.05)]):
-            sh(x, y, 0, h, 0.035, 'heltta', ring=False)
-    elif stage == 'nuori':
-        sh(0, 0, 0, 0.2, 0.09, 'heltta', light=2)
-        sh(0.1, -0.08, 0, 0.11, 0.05, 'heltta', (0.15, -0.1))
-        sh(-0.09, 0.06, 0, 0.07, 0.035, 'heltta')
-    else:
-        sh(0, 0.02, 0, 0.36, 0.16, 'heltta', (0.04, 0.03), light=4)
-        sh(0.14, -0.12, 0, 0.2, 0.09, 'heltta', (0.22, -0.15), light=1)
-        sh(-0.13, 0.1, 0, 0.14, 0.065, 'heltta', (-0.2, 0.1))
-        sh(0.03, -0.17, 0, 0.08, 0.04, 'heltta')
-    _, gillm, _ = strain_mats('heltta')
-    rnd = random.Random(3)
-    for i in range(6 if stage == 'kypsa' else 3):     # rihmaa maassa
-        a = rnd.random() * 6.28; l = (0.1 + rnd.random() * 0.1) * k
+K = SHROOM_SCALE
+def sh(x, y, z, h, r, *a, **kw): shroom(x * K, y * K, z, h * K, r * K, *a, **kw)
+
+def threads(k, n, l0=0.1, seed=3):
+    """Rihmaa maassa tyven ympärillä."""
+    _, gillm, _ = strain_mats(k); rnd = random.Random(seed)
+    for i in range(n):
+        a = rnd.random() * 6.28; l = (l0 + rnd.random() * l0) * K
         rod((0, 0, 0.004), (math.cos(a) * l, math.sin(a) * l, 0.004), 0.006, gillm, 4)
+
+def muoto_heltta(stage, k):
+    """Leveälakkinen, hehkuvat heltat. Ryhmä yksi iso + pienempiä (siniheltta)."""
+    if stage == 'itu':
+        for (x, y, h) in [(0, 0, 0.08), (0.07, -0.05, 0.06), (-0.06, 0.04, 0.05)]:
+            sh(x, y, 0, h, 0.035, k, ring=False)
+    elif stage == 'nuori':
+        sh(0, 0, 0, 0.2, 0.09, k, light=2)
+        sh(0.1, -0.08, 0, 0.11, 0.05, k, (0.15, -0.1))
+        sh(-0.09, 0.06, 0, 0.07, 0.035, k)
+    else:
+        sh(0, 0.02, 0, 0.36, 0.16, k, (0.04, 0.03), light=4)
+        sh(0.14, -0.12, 0, 0.2, 0.09, k, (0.22, -0.15), light=1)
+        sh(-0.13, 0.1, 0, 0.14, 0.065, k, (-0.2, 0.1))
+        sh(0.03, -0.17, 0, 0.08, 0.04, k)
+    threads(k, {'itu': 3, 'nuori': 3, 'kypsa': 6}[stage])
+
+def bell(x, y, z, h, r, k, tilt=(0, 0), light=0.0):
+    """Kellolakkinen sieni: korkea, alas taipuva lakki (ruususieni)."""
+    capm, gillm, _ = strain_mats(k); m = M()
+    top = (x + tilt[0] * h, y + tilt[1] * h, z + h)
+    rod((x, y, z), top, max(0.01, r * 0.14), m['stem'], 8)
+    cyl((top[0], top[1], top[2] - r * 0.5), r * 0.75, r * 0.05, gillm, 14)
+    cap((top[0], top[1], top[2] - r * 0.45), r, r * 1.1, capm, droop=0.6)
+    sphere((top[0], top[1], top[2] + r * 0.62), r * 0.18, gillm, seg=6)             # vaalea nuppi lakin huipulla
+    if light: glow_light((top[0], top[1], top[2] - r * 0.6), STRAIN[k][1], light, 0.05)
+
+def muoto_ruusu(stage, k):
+    """Kimppu kapeita kellolakkeja, jotka kaartuvat ulospäin (ruususieni)."""
+    f = {'itu': 0.35, 'nuori': 0.65, 'kypsa': 1.0}[stage]
+    n = {'itu': 3, 'nuori': 4, 'kypsa': 6}[stage]
+    rnd = random.Random(8)
+    for i in range(n):
+        a = i / n * 6.28 + 0.4; d = 0.0 if i == 0 else 0.07
+        h = (0.34 if i == 0 else rnd.uniform(0.18, 0.28)) * f
+        bell(math.cos(a) * d * K, math.sin(a) * d * K, 0, h * K, (0.07 if i == 0 else 0.05) * f * K, k,
+             (math.cos(a) * 0.35 * (i > 0), math.sin(a) * 0.35 * (i > 0)), light=3 * f if i == 0 else 0)
+    threads(k, n, 0.08, 5)
+
+def muoto_nuppi(stage, k):
+    """Pyöreitä hehkuvia nuppeja paksuilla jaloilla (hämäränuppi)."""
+    capm, gillm, darkm = strain_mats(k); m = M()
+    f = {'itu': 0.35, 'nuori': 0.65, 'kypsa': 1.0}[stage]
+    items = [(0, 0, 0.22, 0.1), (0.1, -0.06, 0.12, 0.06), (-0.08, 0.08, 0.1, 0.05), (0.02, 0.12, 0.06, 0.035), (-0.1, -0.08, 0.07, 0.04)]
+    for i, (x, y, h, r) in enumerate(items[:{'itu': 3, 'nuori': 3, 'kypsa': 5}[stage]]):
+        x, y, h, r = x * K * (0.6 + 0.4 * f), y * K * (0.6 + 0.4 * f), h * K * f, r * K * f
+        cyl((x, y, h / 2), r * 0.38, h, m['stemD'], 8, r2=r * 0.28)
+        sphere((x, y, h + r * 0.75), r, capm, (1, 1, 0.9), 12)
+        sphere((x - r * 0.3, y - r * 0.3, h + r * 1.2), r * 0.32, gillm, seg=6)          # kirkas kohta
+        for j in range(3):                                                             # pienet syylät
+            a = j * 2.1 + i
+            sphere((x + math.cos(a) * r * 0.8, y + math.sin(a) * r * 0.8, h + r * 0.85), r * 0.14, darkm, seg=4)
+        if i == 0: glow_light((x, y - r * 1.5, h + r), STRAIN[k][1], 4 * f, 0.05)
+    threads(k, 4, 0.08, 6)
+
+def muoto_kalvo(stage, k):
+    """Lakin alta roikkuu verkkomainen kalvohame (kalvoheltta): tiivis, verkkomainen rihmasto."""
+    capm, gillm, _ = strain_mats(k); m = M()
+    f = {'itu': 0.35, 'nuori': 0.65, 'kypsa': 1.0}[stage]
+    def one(x, y, h, r, light=0.0):
+        top = (x, y, h)
+        rod((x, y, 0), top, max(0.01, r * 0.15), m['stem'], 8)
+        cap(top, r, r * 0.7, capm, droop=0.3)
+        if r > 0.04:                     # verkkohame: pystysäikeet ja renkaat
+            n = 12; zb = h * 0.3
+            for i in range(n):
+                a = i / n * 6.28
+                rod((x + math.cos(a) * r * 0.55, y + math.sin(a) * r * 0.55, h - r * 0.05),
+                    (x + math.cos(a) * r * 0.85, y + math.sin(a) * r * 0.85, zb), 0.005, gillm, 4)
+            for t in (0.3, 0.6, 0.9):
+                rr = r * (0.55 + 0.3 * t); zz = h - r * 0.05 - (h - r * 0.05 - zb) * t
+                bpy.ops.mesh.primitive_torus_add(major_radius=rr, minor_radius=0.005, major_segments=16, minor_segments=4, location=(x, y, zz))
+                o = bpy.context.object; o.data.materials.append(gillm); link(o)
+        if light: glow_light((x, y - r, h - r * 0.5), STRAIN[k][1], light, 0.05)
+    one(0, 0, 0.34 * K * f, 0.13 * K * f, 3 * f)
+    if stage != 'itu':
+        one(0.13 * K, -0.08 * K, 0.18 * K * f, 0.07 * K * f)
+    one(-0.1 * K, 0.1 * K, 0.1 * K * f, 0.045 * K * f)
+    threads(k, 5, 0.1, 7)
+
+def muoto_hoitaja(stage, k):
+    """Pitkä ja ohut, rihmat kurottavat sivuille ja niiden päissä on sumupisarat (hoitajasieni)."""
+    capm, gillm, _ = strain_mats(k); m = M()
+    f = {'itu': 0.35, 'nuori': 0.65, 'kypsa': 1.0}[stage]
+    H = 0.44 * K * f; r = 0.07 * K * f
+    rod((0, 0, 0), (0, 0, H), max(0.01, r * 0.18), m['stem'], 8)
+    cap((0, 0, H), r, r * 0.9, capm, droop=0.2)
+    sphere((0, 0, H + r * 0.85), r * 0.25, gillm, seg=6)
+    if stage != 'itu':
+        n = 4 if stage == 'kypsa' else 2
+        for i in range(n):
+            a = i / n * 6.28 + 0.3; z0 = H * (0.45 + 0.12 * (i % 2)); L = 0.22 * K * f
+            p0 = (0, 0, z0); p1 = (math.cos(a) * L * 0.6, math.sin(a) * L * 0.6, z0 + 0.05 * K * f)
+            p2 = (math.cos(a) * L, math.sin(a) * L, z0 - 0.02 * K * f)
+            rod(p0, p1, 0.007, capm, 4); rod(p1, p2, 0.006, capm, 4)
+            sphere(p2, 0.022 * K * f, gillm, seg=6)                                       # sumupisara
+    glow_light((0, -r * 2, H), STRAIN[k][1], 2 * f, 0.05)
+    threads(k, 4, 0.08, 9)
+
+# Kantataulukko: avain -> (nimi, muoto). Uusi kanta = värit STRAIN-taulukkoon + rivi tähän (muodon voi lainata).
+KANNAT = {
+    'heltta':  ('SINIHELTTA', muoto_heltta),
+    'ruusu':   ('RUUSUSIENI', muoto_ruusu),
+    'hamara':  ('HÄMÄRÄNUPPI', muoto_nuppi),
+    'kalvo':   ('KALVOHELTTA', muoto_kalvo),
+    'hoitaja': ('HOITAJASIENI', muoto_hoitaja),
+}
+STAGES = ('itu', 'nuori', 'kypsa')
 
 # =================== ASTIAT ===================
 BASE_H = 0.26                           # terraarion jalustan korkeus
@@ -264,7 +373,39 @@ def astia_terraario(part='taka'):
         box((w / 2, -d / 2, z0 + h / 2), (t, t, h), m['steel'])
         for z in (z0, z0 + h):
             box((w / 2, 0, z), (t, d + t, t), m['steel']); box((0, -d / 2, z), (w + t, t, t), m['steel'])
-PLANT = {'astia_terraario': SOIL_TOP + 0.01}
+J_R, J_H, J_BASE = 0.3, 0.8, 0.2
+def astia_lasipurkki(part='taka'):
+    """Lasipurkki: lieriö teräsjalustalla ja -kannella, kansi kostutusletkulla (pieni bioreaktori).
+    'taka' = jalusta, multa, takapuolen lasi ja kansi; 'etu' = etupuolen reunarenkaat ja heijastusjuova."""
+    m = M(); z0 = J_BASE
+    if part == 'taka':
+        cyl((0, 0, z0 / 2), J_R + 0.04, z0, m['steelD'], 20)
+        cyl((0, 0, z0 - 0.015), J_R + 0.06, 0.03, m['steel'], 20)
+        box((0.0, -J_R * 0.72 - 0.02, z0 / 2), (0.18, 0.012, 0.07), m['screen'], rot=(0, 0, math.radians(45)))
+        sphere((J_R * 0.55, -J_R * 0.95, z0 / 2 + 0.01), 0.02, m['ledG'])
+        cyl((0, 0, z0 + 0.06), J_R - 0.01, 0.12, m['soil'], 20)
+        cyl((0, 0, z0 + 0.125), J_R - 0.02, 0.012, m['moss'], 20)
+        rnd = random.Random(12)
+        for i in range(6):
+            a = rnd.random() * 6.28; d = rnd.uniform(0, J_R * 0.7)
+            box((math.cos(a) * d, math.sin(a) * d, z0 + 0.135), (0.05, 0.05, 0.015 + rnd.random() * 0.02), m['moss'])
+        g = cyl((0, 0, z0 + J_H / 2), J_R, J_H, m['glassB'], 24); half(g, 'back')
+        for z in (z0, z0 + J_H):
+            bpy.ops.mesh.primitive_torus_add(major_radius=J_R, minor_radius=0.02, major_segments=24, minor_segments=6, location=(0, 0, z))
+            o = bpy.context.object; o.data.materials.append(m['steel']); link(o); half(o, 'back')
+        # kansi: rengas ja takaosan kehys, kostutusletku
+        box((0, J_R * 0.55, z0 + J_H + 0.03), (J_R * 1.4, J_R * 0.5, 0.05), m['steelD'], rot=(0, 0, math.radians(45)))
+        cyl((-0.06, J_R * 0.55, z0 + J_H + 0.08), 0.03, 0.06, m['steel'], 10)
+        rod((-0.06, J_R * 0.55, z0 + J_H + 0.11), (-0.06, J_R + 0.15, z0 + J_H + 0.11), 0.018, m['tube'], 8)
+    else:
+        for z in (z0, z0 + J_H):
+            bpy.ops.mesh.primitive_torus_add(major_radius=J_R, minor_radius=0.02, major_segments=24, minor_segments=6, location=(0, 0, z))
+            o = bpy.context.object; o.data.materials.append(m['steel']); link(o); half(o, 'front')
+        a = math.radians(-70)
+        rod((math.cos(a) * J_R, math.sin(a) * J_R, z0 + 0.15), (math.cos(a) * J_R, math.sin(a) * J_R, z0 + J_H - 0.1), 0.008,
+            mat('heijastus', '#9fd3d6', 0.3, emit='#9fd3d6', estr=0.6), 4)
+
+PLANT = {'astia_terraario': SOIL_TOP + 0.01, 'astia_lasipurkki': J_BASE + 0.13}
 
 # =================== LAITTEET ===================
 def laite_hautomo(state='kaynnissa'):
@@ -322,6 +463,78 @@ def laite_hautomo(state='kaynnissa'):
     cyl((0.12, 0.1, z0 + h + 0.05), 0.035, 0.08, m['steel'], 10)
     rod((0.12, 0.1, z0 + h + 0.09), (0.12, d / 2 + 0.12, z0 + h + 0.09), 0.018, m['tube'], 8)
 
+TUOTTEET = {   # kehikon tuotteet: avain -> (nimi, kanta, väri, hehku)
+    'valokalvo':  ('VALOKALVO', 'heltta', '#5fc7d0', '#a8fbee'),
+    'lamporihma': ('LÄMPÖRIHMA', 'ruusu', '#c4428f', '#ffc46a'),
+    'suodatin':   ('ITIÖSUODATIN', 'kalvo', '#9fd3d6', '#ffa6d6'),
+}
+def membrane(prod, frac, x0, x1, z0, z1, y=0.0):
+    """Kehikkoon kasvava elävä kasvusto. frac = kasvun osuus alhaalta ylös (0..1)."""
+    nimi, k, col, glow = TUOTTEET[prod]
+    zt = z0 + (z1 - z0) * frac; w = x1 - x0; cx = (x0 + x1) / 2
+    rnd = random.Random(len(prod))
+    if prod == 'valokalvo':      # hehkuva ohut kalvo, tummemmat suonet
+        box((cx, y, (z0 + zt) / 2), (w, 0.012, zt - z0), mat('valokalvo', col, 0.4, emit=glow, estr=1.2))
+        for i in range(5):
+            xx = x0 + w * (i + 0.5) / 5
+            rod((xx, y - 0.01, z0), (xx + rnd.uniform(-0.05, 0.05), y - 0.01, zt), 0.006, mat('suoni', '#1d6a78', 0.6), 4)
+    elif prod == 'lamporihma':   # punottu verkko lämpimästi hehkuvia rihmoja
+        rm = mat('lamporihma', col, 0.6, emit=glow, estr=1.0)
+        n = 9
+        for i in range(n + 1):
+            xx = x0 + w * i / n
+            rod((xx, y, z0), (xx, y, zt), 0.01, rm, 4)
+        zz = z0
+        while zz <= zt:
+            rod((x0, y - 0.005, zz), (x1, y - 0.005, zz), 0.01, rm, 4); zz += 0.06
+        box((cx, y + 0.01, (z0 + zt) / 2), (w, 0.006, zt - z0), mat('lamporihmaP', '#5a1f4a', 0.8))
+    else:                        # itiösuodatin: tiivis vaalea kalvo ja verkkokuvio
+        box((cx, y, (z0 + zt) / 2), (w, 0.014, zt - z0), mat('suodatinK', col, 0.6, emit='#4f7d86', estr=0.5))
+        nm = mat('suodatinV', glow, 0.5, emit=glow, estr=1.2)
+        for i in range(-6, 7):
+            a = (x0 + w / 2 + i * 0.08, z0); b = (a[0] + 0.5, z0 + 0.5); c = (a[0] - 0.5, z0 + 0.5)
+            for (p, q) in ((a, b), (a, c)):
+                # leikkaa viiva kasvualueeseen
+                pts = []
+                for t in [j / 40 for j in range(41)]:
+                    px = p[0] + (q[0] - p[0]) * t; pz = p[1] + (q[1] - p[1]) * t
+                    if x0 <= px <= x1 and z0 <= pz <= zt: pts.append((px, pz))
+                if len(pts) > 1:
+                    rod((pts[0][0], y - 0.01, pts[0][1]), (pts[-1][0], y - 0.01, pts[-1][1]), 0.005, nm, 4)
+    if frac < 1:                 # kasvureuna: rihmat kurottavat ylös
+        _, gillm, _ = strain_mats(k)
+        for i in range(8):
+            xx = x0 + w * rnd.random()
+            rod((xx, y - 0.012, zt), (xx + rnd.uniform(-0.04, 0.04), y - 0.012, zt + rnd.uniform(0.03, 0.1)), 0.005, gillm, 4)
+
+def laite_kehikko(prod=None, stage='tyhja'):
+    """Kehikko: pystykehys teräsjalustalla, johon elävä kasvusto ohjataan kasvamaan (muottikasvatus).
+    stage: tyhja, kasvaa_1, kasvaa_2, valmis (meripihkainen merkkivalo)."""
+    m = M(); z0 = 0.18; W, Hh = 0.72, 0.92; t = 0.04
+    box((0, 0, z0 / 2 + 0.02), (0.8, 0.36, z0 - 0.04), m['steelD'])
+    box((0, 0, z0 - 0.015), (0.84, 0.4, 0.03), m['steel'])
+    box((0, 0, 0.02), (0.74, 0.3, 0.04), m['rubber'])
+    box((-0.18, -0.181, z0 / 2), (0.24, 0.012, 0.07), m['screen'])
+    led = {'tyhja': m['ledOff'], 'kasvaa_1': m['ledG'], 'kasvaa_2': m['ledG'], 'valmis': m['ledA']}[stage]
+    sphere((0.25, -0.19, z0 / 2), 0.025, led)
+    if stage == 'valmis': glow_light((0.25, -0.3, z0 / 2), '#ffcf7a', 0.8, 0.05)
+    x0, x1, zb, zt = -W / 2, W / 2, z0 + 0.04, z0 + Hh
+    for x in (x0 - t / 2, x1 + t / 2):
+        box((x, 0, (zb + zt) / 2 + 0.02), (t, t * 1.4, zt - zb + t + 0.04), m['steel'])
+    for z in (zb - t / 2, zt + t / 2):
+        box((0, 0, z), (W + 2 * t, t * 1.4, t), m['steel'])
+    for x in (x0 + 0.06, x1 - 0.06):                                                  # kiinnikkeet
+        for z in (zb + 0.02, zt - 0.02): box((x, -0.03, z), (0.05, 0.02, 0.04), m['steelD'])
+    # ravinneletku kehyksen yläreunassa
+    rod((x0, 0.03, zt + 0.07), (x1, 0.03, zt + 0.07), 0.016, m['tube'], 8)
+    rod((x1 + 0.03, 0.03, zt + 0.07), (x1 + 0.03, 0.03, z0), 0.016, m['tube'], 8)
+    frac = {'tyhja': 0, 'kasvaa_1': 0.3, 'kasvaa_2': 0.65, 'valmis': 1.0}[stage]
+    if prod and frac > 0:
+        membrane(prod, frac, x0, x1, zb, zt)
+        if stage == 'valmis':
+            nimi, k, col, glow = TUOTTEET[prod]
+            glow_light((0, -0.35, (zb + zt) / 2), glow, 4, 0.3)
+
 # =================== TILAT ===================
 ROOM_N = (4, 4)
 WALL_H = 2.1
@@ -339,7 +552,7 @@ def vine(x, y, z0, length, face, seed, m):
         z -= s * 1.3
 
 def tila_huone():
-    """4×4-laboratorio: laattalattia, paneeliseinät, valolista, ravinneputket, tuuletin, liukuovi kellariin,
+    """4×4-laboratorio: laattalattia, paneeliseinät, valolista, ravinneputket, tuuletin, liukuovi (rihmaretki),
     syvä ikkuna hämärään, köynnöksiä ja nurkan lattialle levinnyt rihmasto."""
     m = M(); nx, ny = ROOM_N; hx, hy = nx / 2, ny / 2
     for c in range(nx):
@@ -380,7 +593,7 @@ def tila_huone():
     for xx in (wx0 + ww / 3, wx0 + 2 * ww / 3):                                                # välipuitteet lasin pinnassa
         box((xx, hy - 0.03, wz), (0.04, 0.05, wh), m['steelD'], shadow=False)
     box((wx, hy - 0.03, wz0 + wh * 0.4), (ww, 0.05, 0.035), m['steelD'], shadow=False)
-    # liukuovi kellariin vasemmassa seinässä
+    # liukuovi vasemmassa seinässä: tästä symbiontin rihma kurottaa ulos villiin (rihmaretki)
     dy, dw, dh = 0.2, 0.95, 1.85
     box((-hx + 0.04, dy, dh / 2 + 0.05), (0.08, dw + 0.18, dh + 0.1), m['steelD'], shadow=False)
     box((-hx + 0.07, dy, dh / 2), (0.06, dw, dh), m['panelR'], shadow=False)
@@ -391,8 +604,13 @@ def tila_huone():
         box((-hx + 0.105, dy, z), (0.02, dw - 0.1, 0.04), mat('varoitus', '#e8a02a', 0.6), shadow=False)
     box((-hx + 0.06, dy + dw / 2 + 0.2, 1.05), (0.05, 0.12, 0.2), m['panelD'], shadow=False)  # ovipaneeli
     box((-hx + 0.09, dy + dw / 2 + 0.2, 1.08), (0.02, 0.07, 0.07), m['screenL'], shadow=False)
-    box((-hx + 0.06, dy, dh + 0.2), (0.03, 0.5, 0.13), m['panelD'], shadow=False)           # KELLARI-kyltti
+    box((-hx + 0.06, dy, dh + 0.2), (0.03, 0.5, 0.13), m['panelD'], shadow=False)           # kyltti
     box((-hx + 0.08, dy, dh + 0.2), (0.02, 0.42, 0.06), mat('kyltti', '#5fc7d0', 0.5, emit='#1d6a78', estr=1.5), shadow=False)
+    # symbiontin rihma: muutama hehkuva säie lattialla oven raosta huoneeseen
+    rnd = random.Random(31)
+    for i in range(6):
+        y0 = dy + rnd.uniform(-0.35, 0.35); l = rnd.uniform(0.25, 0.6); a = rnd.uniform(-0.5, 0.5)
+        rod((-hx + 0.1, y0, 0.006), (-hx + 0.1 + math.cos(a) * l, y0 + math.sin(a) * l, 0.006), 0.008, m['myc'], 4)
     # tuuletin vasemman seinän yläosassa
     fy, fz = -1.25, 1.45
     box((-hx + 0.08, fy, fz), (0.16, 0.55, 0.55), m['steelD'], shadow=False)
@@ -431,6 +649,123 @@ def tila_huone():
     lo = bpy.data.objects.new('katto', L); lo.location = (0, 0, WALL_H + 0.3); link(lo)
     L = bpy.data.lights.new('ikkuna', 'AREA'); L.energy = 50; L.size = 1.8; L.color = hexc('#7a6cc0')[:3]
     lo = bpy.data.objects.new('ikkuna', L); lo.location = (wx, hy - 0.25, wz); lo.rotation_euler = (math.radians(-90), 0, 0); link(lo)
+
+def tila_kellari():
+    """4×3-kellari: betonilattia lattiakaivolla, kosteat betoniseinät, putket ja tippuva vesi, sammalta nurkissa,
+    kattoluukku ja tikkaat ylös huoneeseen, viileämpi valo."""
+    m = M(); nx, ny = 4, 3; hx, hy = nx / 2, ny / 2
+    conc = wmat('betoniL', '#3c4239', '#2e322e', 2.5, 0.9, cut=0.5)
+    wallL = wmat('betoniV', '#2e322e', '#23272a', 1.8, 0.95, cut=0.45, stretch=(1, 1, 0.5))
+    wallR = wmat('betoniO', '#3c4239', '#2e322e', 1.8, 0.95, cut=0.45, stretch=(1, 1, 0.5))
+    for c in range(nx):
+        for r in range(ny):
+            box((-hx + 0.5 + c, hy - 0.5 - r, -0.04), (0.985, 0.985, 0.08), conc)
+    box((0, 0, -0.1), (nx, ny, 0.04), m['dark'])
+    T = 0.16
+    box((-hx - T / 2, -T / 4, WALL_H / 2 - 0.08), (T, ny + T / 2, WALL_H + 0.16), wallL, shadow=False)
+    box((-T / 2, hy + T / 2, WALL_H / 2 - 0.08), (nx + T, T, WALL_H + 0.16), wallR, shadow=False)
+    # kosteusraidat seinissä
+    damp = mat('kostea', '#16262e', 0.3, 0.1)
+    rnd = random.Random(41)
+    for i in range(7):
+        y = rnd.uniform(-hy + 0.2, hy - 0.2); hh = rnd.uniform(0.4, 1.4)
+        box((-hx + 0.004, y, WALL_H - 0.25 - hh / 2), (0.01, rnd.uniform(0.05, 0.15), hh), damp, shadow=False)
+    for i in range(8):
+        x = rnd.uniform(-hx + 0.2, hx - 0.2); hh = rnd.uniform(0.4, 1.4)
+        box((x, hy - 0.004, WALL_H - 0.25 - hh / 2), (rnd.uniform(0.05, 0.15), 0.01, hh), damp, shadow=False)
+    # betonipilarit ja palkki
+    box((-hx + 0.1, hy - 0.1, WALL_H / 2), (0.2, 0.2, WALL_H), wallR, shadow=False)
+    box((0.4, hy - 0.08, WALL_H / 2), (0.25, 0.16, WALL_H), wallR, shadow=False)
+    # putkisto: kaksi paksua putkea seinää pitkin, venttiili ja tippuva vesi
+    for (z, rr, mm) in ((WALL_H - 0.3, 0.07, m['copper']), (WALL_H - 0.5, 0.05, m['steelD'])):
+        rod((-hx + 0.12, -hy, z), (-hx + 0.12, hy - 0.12, z), rr, mm, 12)
+        rod((-hx + 0.12, hy - 0.12, z), (hx, hy - 0.12, z), rr, mm, 12)
+    rod((1.3, hy - 0.12, WALL_H - 0.3), (1.3, hy - 0.12, 0.25), 0.05, m['copper'], 10)
+    cyl((1.3, hy - 0.12, 0.6), 0.09, 0.12, m['patina'], 10)
+    cyl((1.3, hy - 0.2, 0.6), 0.07, 0.03, mat('venttiili', '#e0504a', 0.6), 10, rot=(math.pi / 2, 0, 0))
+    for z in (0.95, 0.7, 0.4):
+        sphere((-hx + 0.12, 0.3, z), 0.018, m['tube'], (1, 1, 1.6), 6)                       # pisarat
+    puddle = mat('lammikko', '#16262e', 0.05, 0.3)
+    box((-hx + 0.45, 0.25, 0.003), (0.5, 0.7, 0.006), puddle)
+    # lattiakaivo
+    cyl((0.5, -0.5, 0.003), 0.16, 0.008, m['steelD'], 16)
+    for i in range(4): box((0.5, -0.5 - 0.09 + i * 0.06, 0.008), (0.24, 0.02, 0.006), m['rubber'])
+    # tikkaat ja kattoluukku vasemman seinän edessä
+    ly = -hy + 0.45
+    for dyy in (-0.2, 0.2): rod((-hx + 0.12, ly + dyy, 0), (-hx + 0.12, ly + dyy, WALL_H + 0.1), 0.02, m['steel'], 6)
+    for i in range(7): rod((-hx + 0.12, ly - 0.2, 0.25 + i * 0.27), (-hx + 0.12, ly + 0.2, 0.25 + i * 0.27), 0.014, m['steel'], 6)
+    # häkkivalaisin oikealla seinällä (lämmin, himmeä) ja viileä kattovalo
+    lx = -0.6
+    box((lx, hy - 0.05, 1.6), (0.18, 0.1, 0.12), m['steelD'], shadow=False)
+    sphere((lx, hy - 0.12, 1.6), 0.06, mat('hakkilamppu', '#ffcf7a', 0.5, emit='#ffcf7a', estr=4))
+    for dz in (-0.05, 0.05): rod((lx - 0.08, hy - 0.17, 1.6 + dz), (lx + 0.08, hy - 0.17, 1.6 + dz), 0.006, m['steel'], 4)
+    # sammal ja kasvit nurkissa
+    for i in range(40):
+        a = rnd.random()
+        box((-hx + 0.1 + rnd.random() * 0.8 * a, hy - 0.1 - rnd.random() * 0.9, 0.008), (0.07, 0.07, 0.016 + rnd.random() * 0.025), m['moss'])
+    for i in range(14):
+        box((hx - 0.1 - rnd.random() * 0.6, hy - 0.1 - rnd.random() * 0.3, 0.008), (0.07, 0.07, 0.016 + rnd.random() * 0.02), m['moss'])
+    for i in range(10):
+        box((-hx + 0.006, hy - 0.2 - rnd.random() * 0.5, rnd.random() * 0.4), (0.02, 0.08, 0.07), m['moss'], shadow=False)
+    vine(-hx, -0.2, WALL_H - 0.05, 0.6, (1, 0), 42, m); vine(1.7, hy, WALL_H - 0.05, 0.8, (0, -1), 43, m)
+    L = bpy.data.lights.new('katto', 'AREA'); L.energy = 55; L.size = 2.5; L.color = hexc('#9fd3d6')[:3]
+    lo = bpy.data.objects.new('katto', L); lo.location = (0, 0, WALL_H + 0.3); link(lo)
+    L = bpy.data.lights.new('lamppu', 'POINT'); L.energy = 12; L.color = hexc('#ffcf7a')[:3]
+    lo = bpy.data.objects.new('lamppu', L); lo.location = (lx, hy - 0.3, 1.55); link(lo)
+
+# =================== KUVAKKEET ===================
+def ikoni_hopea():
+    """Hopea: pino kolikoita."""
+    sil = mat('hopea', '#c9bc9c', 0.35, 0.2, emit='#8a7d68', estr=0.6); sil2 = mat('hopeaV', '#efe6cc', 0.35, 0.2, emit='#c9bc9c', estr=0.6)
+    for i in range(4): cyl((0.01 * (i % 2), 0, 0.012 + i * 0.024), 0.07, 0.022, sil if i % 2 else sil2, 16)
+    cyl((0.1, 0.06, 0.012), 0.07, 0.022, sil, 16)
+    cyl((0.1, 0.06, 0.036), 0.07, 0.022, sil2, 16)
+
+def ikoni_itio(k):
+    """Itiöpussi: suljettu itiöampulli, sisällä kannan värisiä itiöitä."""
+    capm, gillm, darkm = strain_mats(k); m = M()
+    g = cyl((0, 0, 0.1), 0.045, 0.14, m['glassB'], 14); half(g, 'back')
+    cyl((0, 0, 0.075), 0.04, 0.11, capm, 14)
+    for i in range(5): sphere((0.025 * math.cos(i * 2.4), 0.025 * math.sin(i * 2.4) - 0.02, 0.05 + i * 0.022), 0.012, gillm, seg=6)
+    cyl((0, 0, 0.18), 0.05, 0.03, m['steel'], 14)
+    cyl((0, 0, 0.015), 0.05, 0.03, m['steel'], 14)
+
+def ikoni_agar():
+    """Agar-malja."""
+    m = M()
+    cyl((0, 0, 0.01), 0.1, 0.02, m['glassB'], 20)
+    cyl((0, 0, 0.022), 0.09, 0.012, m['agar'], 20)
+    cyl((0, 0, 0.032), 0.1, 0.006, mat('kansi', '#9fd3d6', 0.1, alpha=0.4), 20)
+
+def ikoni_sato(k):
+    """Raaka sato: yksi kannan kypsä sieni."""
+    nimi, fn = KANNAT[k]
+    if k == 'hamara':
+        capm, gillm, _ = strain_mats(k); m = M()
+        cyl((0, 0, 0.05), 0.03, 0.1, m['stemD'], 8); sphere((0, 0, 0.14), 0.07, capm, seg=12)
+        sphere((-0.02, -0.02, 0.18), 0.02, gillm, seg=6)
+    elif k == 'ruusu':
+        bell(0, 0, 0, 0.2, 0.08, k)
+    else:
+        shroom(0, 0, 0, 0.18, 0.09, k, ring=True)
+
+def ikoni_tuote(prod):
+    """Kehikon tuote: pieni kehyksellinen kasvustolevy."""
+    m = M(); W = 0.22
+    membrane(prod, 1.0, -W / 2, W / 2, 0.02, 0.02 + W)
+    for x in (-W / 2 - 0.01, W / 2 + 0.01): box((x, 0, 0.02 + W / 2), (0.02, 0.03, W + 0.04), m['steel'])
+    for z in (0.01, 0.03 + W): box((0, 0, z), (W + 0.04, 0.03, 0.02), m['steel'])
+
+def ikoni_villi():
+    """Villi näyte: kontaminoitunut malja, jossa kylmän violettia villiä rihmastoa."""
+    m = M(); w = M()['wild']
+    cyl((0, 0, 0.01), 0.1, 0.02, m['glassB'], 20)
+    cyl((0, 0, 0.022), 0.09, 0.012, mat('villiAgar', '#3a3a5e', 0.5), 20)
+    rnd = random.Random(51)
+    for i in range(9):
+        a = rnd.random() * 6.28; l = rnd.uniform(0.03, 0.08)
+        rod((0, 0, 0.03), (math.cos(a) * l, math.sin(a) * l, 0.03), 0.006, w, 4)
+    sphere((0, 0, 0.035), 0.025, w, seg=8)
 
 # =================== KOHTAUS JA RENDERÖINTI ===================
 def setup_scene():
@@ -478,29 +813,72 @@ def render_pair(sc, path, samples=96):
     for o in lights: o.hide_render = False
     bg.default_value = old; sc.cycles.max_bounces = mb
 
-# nimi: (rakentaja, kangas W, H, ankkuri ax, ay)
+def frame_fit(sc, co, W, H, pad=2):
+    """Kuvakkeet: sovita kaikki kappaleet W×H-kankaan keskelle (oma mittakaava)."""
+    bpy.context.view_layer.update()
+    R = co.rotation_euler.to_matrix(); Rt = R.transposed(); xs, ys = [], []
+    for o in sc.objects:
+        if o.type != 'MESH': continue
+        for c in o.bound_box:
+            q = Rt @ (o.matrix_world @ Vector(c)); xs.append(q.x); ys.append(q.y)
+    w, h = max(xs) - min(xs), max(ys) - min(ys)
+    ppm = min((W - 2 * pad) / w, (H - 2 * pad) / h)
+    cx, cy = (max(xs) + min(xs)) / 2, (max(ys) + min(ys)) / 2
+    co.location = R @ Vector((cx, cy, 200))
+    sc.render.resolution_x, sc.render.resolution_y = W, H; sc.render.resolution_percentage = 100
+    co.data.ortho_scale = max(W, H) / ppm
+
+# Huoneet: nimi -> (ruudut nx, ny). Ruudun (c, r) keskipiste maailmassa (-nx/2 + 0.5 + c, ny/2 - 0.5 - r).
+ROOMS = {'tila_huone': (4, 4), 'tila_kellari': (4, 3)}
+
+# nimi: (rakentaja, kangas W, H, ankkuri ax, ay); ankkuri None = kuvake, sovitetaan kankaaseen
 SPRITES = {
-    'tila_huone':               (tila_huone, 384, 320, 192, 226),
-    'astia_terraario':          (lambda: astia_terraario('taka'), 96, 160, 48, 136),
-    'astia_terraario_etu':      (lambda: astia_terraario('etu'), 96, 160, 48, 136),
-    'sieni_heltta_itu':         (lambda: sieni_heltta('itu'), 48, 48, 24, 36),
-    'sieni_heltta_nuori':       (lambda: sieni_heltta('nuori'), 64, 64, 32, 48),
-    'sieni_heltta_kypsa':       (lambda: sieni_heltta('kypsa'), 80, 88, 40, 68),
-    'laite_hautomo_tyhja':      (lambda: laite_hautomo('tyhja'), 96, 144, 48, 120),
-    'laite_hautomo_kaynnissa':  (lambda: laite_hautomo('kaynnissa'), 96, 144, 48, 120),
-    'laite_hautomo_valmis':     (lambda: laite_hautomo('valmis'), 96, 144, 48, 120),
+    'tila_huone':          (tila_huone, 384, 320, 192, 226),
+    'tila_kellari':        (tila_kellari, 384, 296, 192, 206),
+    'astia_terraario':     (lambda: astia_terraario('taka'), 96, 160, 48, 136),
+    'astia_terraario_etu': (lambda: astia_terraario('etu'), 96, 160, 48, 136),
+    'astia_lasipurkki':    (lambda: astia_lasipurkki('taka'), 96, 160, 48, 136),
+    'astia_lasipurkki_etu':(lambda: astia_lasipurkki('etu'), 96, 160, 48, 136),
 }
+for k, (nimi, fn) in KANNAT.items():
+    for st in STAGES:
+        SPRITES['sieni_%s_%s' % (k, st)] = ((lambda fn=fn, st=st, k=k: fn(st, k)), 80, 88, 40, 68)
+for st in ('tyhja', 'kaynnissa', 'valmis'):
+    SPRITES['laite_hautomo_' + st] = ((lambda st=st: laite_hautomo(st)), 96, 144, 48, 120)
+SPRITES['laite_kehikko_tyhja'] = ((lambda: laite_kehikko(None, 'tyhja')), 96, 144, 48, 120)
+for p in TUOTTEET:
+    for st in ('kasvaa_1', 'kasvaa_2', 'valmis'):
+        SPRITES['laite_kehikko_%s_%s' % (p, st)] = ((lambda p=p, st=st: laite_kehikko(p, st)), 96, 144, 48, 120)
+IC = 32
+SPRITES['ikoni_hopea'] = (ikoni_hopea, IC, IC, None, None)
+SPRITES['ikoni_agar'] = (ikoni_agar, IC, IC, None, None)
+SPRITES['ikoni_villi'] = (ikoni_villi, IC, IC, None, None)
+for k in KANNAT:
+    SPRITES['ikoni_itio_' + k] = ((lambda k=k: ikoni_itio(k)), IC, IC, None, None)
+    SPRITES['ikoni_sato_' + k] = ((lambda k=k: ikoni_sato(k)), IC, IC, None, None)
+for p in TUOTTEET:
+    SPRITES['ikoni_' + p] = ((lambda p=p: ikoni_tuote(p)), IC, IC, None, None)
+
+def meta():
+    rooms = {}
+    for n, (nx, ny) in ROOMS.items():
+        hx, hy = nx / 2, ny / 2; HW = TILE_W // 2; HH = TILE_W // 4
+        wx, wy = -hx + 0.5, hy - 0.5           # ruutu (0, 0)
+        rooms[n] = {'n': [nx, ny], 'tile0': [round(HW * (wx + wy)), round(HH * (wx - wy))],
+                    'dc': [HW, HH], 'dr': [-HW, HH]}
+    return {'tile': [TILE_W, TILE_W // 2], 'ppm': PPM, 'rooms': rooms,
+            'plant_dy': {k: round(z * math.sin(math.radians(60)) * PPM) for k, z in PLANT.items()},
+            'kannat': {k: v[0] for k, v in KANNAT.items()}, 'tuotteet': {k: v[0] for k, v in TUOTTEET.items()},
+            'sprites': {n: {'w': W, 'h': H, 'ax': ax, 'ay': ay} for n, (_, W, H, ax, ay) in SPRITES.items()}}
 
 if __name__ == '__main__' or argv:
-    import json
+    import json, fnmatch
     os.makedirs(OUTDIR, exist_ok=True)
-    meta = {'tile': [TILE_W, TILE_W // 2], 'ppm': PPM,
-            'plant_dy': {k: round(z * math.sin(math.radians(60)) * PPM) for k, z in PLANT.items()},
-            'sprites': {n: {'w': W, 'h': H, 'ax': ax, 'ay': ay} for n, (_, W, H, ax, ay) in SPRITES.items()}}
-    json.dump(meta, open(os.path.join(OUTDIR, 'koti.json'), 'w'), indent=1)
+    json.dump(meta(), open(os.path.join(OUTDIR, 'koti.json'), 'w'), indent=1, ensure_ascii=False)
     for name, (fn, W, H, ax, ay) in SPRITES.items():
-        if ONLY and name not in ONLY: continue
+        if ONLY and not any(fnmatch.fnmatch(name, p) for p in ONLY): continue
         sc, co = setup_scene(); fn()
-        frame_anchor(sc, co, W, H, ax, ay)
-        render_pair(sc, os.path.join(OUTDIR, name), 192 if name.startswith('tila') else 96)
+        if ax is None: frame_fit(sc, co, W, H)
+        else: frame_anchor(sc, co, W, H, ax, ay)
+        render_pair(sc, os.path.join(OUTDIR, name), 192 if name.startswith('tila') else 64)
         print('VALMIS', name, W, H)
