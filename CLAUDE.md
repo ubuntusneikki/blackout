@@ -44,6 +44,7 @@ Kun koti kasvaa, sen saa pilkkoa ES-moduuleiksi (`koti/js/*.js`), mutta pidä pe
 ## Visuaaliset säännöt
 
 - **Pikselitaide 192 px leveänä** (iso-kokeilu 256 px), skaalaus kokonaisluvulla, `image-rendering: pixelated`.
+  - Poikkeus: kodin isometrinen huone on 384 px leveä (ruutu 88×44 px, ks. docs/grafiikka-koti.md), Juuson hyväksymä 2026-11-12. 192 px:n raja oli ulkopelin yhtenäistä tarkkuutta varten; ulkopelin tarkkuus päätetään myöhemmin.
 - **3×5 pikselifontti** (F-taulukko koodissa), Ä/Ö pisteillä glyfin yläpuolella.
 - **Paletti** (pix.py `PAL` ja iso/index.html `PAL` ovat sama lista): tumma viileä pohja, lämmin sisävalo, kantojen omat värit:
   - siniheltta `#1d5c58 #34b8ac #a8fbee`, ruususieni `#5a1f4a #c4428f #ffa6d6`, tulikääpä `#6b2e12 #d9702a #ffc46a`, hämäränuppi `#3a1f5a #8a4ad0 #d6b0ff`, hoitajasieni `#2f5a3a #8fd0a0 #e8fff0`, meripihka `#7a4a14 #e8a02a #ffe08a`.
