@@ -41,4 +41,7 @@ Huom: protot tehtiin ennen ydinvision v2:ta. Kartan parantaminen (HERÄTÄ, `pla
 ## Blender
 
 - Huonetesti (room.py) ja katupakkaus 1 (kit.py): penkki, katulamppu, bussikatos, kioski, auto, vesisäiliö, aita, sähkökaappi, pyöräteline, sienirengas + lamellitalo, pistetalo, kivitalo.
-- Heikoimmat: penkki (pieni, tumma), pyöräteline (epäselvä), lampun hehku.
+- Katupakkaus 2 (12.11.): penkki (vaaleat laudat, käsinojat, laatta-alusta), pyöräteline (pyörä oli renderöitynyt väärin päin; nyt keltainen pyörä sivuprofiilissa, U-kaaret), katulamppu (siniheltta kuvun päällä + valokehä maassa). Laatan väri vaihdettu paletin harmaisiin (ennen kvantisoitui vaaleanpunaiseksi).
+- Värikielikokeilu `--violetti`: sammal, köynnökset ja rihmat kylmänä violettina + haarautuvat hehkuvat rihmastoverkot kadun pinnassa. Paletin uusi rivi `1e1a30 2e2648 4a3f78 7a6cc0 c0b4f4` (pix.py ja iso/index.html; samalla iso-listaan lisätty puuttunut tiilirivi).
+- Kuvat: `docs/kuvat/` (katupakkaus_1_ennen, katupakkaus_2, katupakkaus_2_violetti, katukulma_vihrea, katukulma_violetti, heikoimmat_ennen_jalkeen).
+- Ajo: `cd blender && python kit.py -- sheet <kansio> [--violetti]` ja `python sheet.py <kansio> <ulos.png> [otsikko]`.

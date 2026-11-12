@@ -2,11 +2,14 @@
 Ajo:  python kit.py -- sheet <kansio>      (jokainen palikka erikseen)
       python kit.py -- scene <kansio>      (katukulman dioraama)
       python kit.py -- blend <kansio>      (kaikki palikat .blend- ja .glb-tiedostoiksi)
+Lisälippu --violetti: villi rihmasto kylmän violettina (värikielikokeilu), muuten vihreä sammal.
 Blenderin Scripting-välilehdellä ajettuna rakentaa katukulman muokattavaksi."""
 import bpy, math, sys, os, random
 from mathutils import Vector, Matrix
 
 argv = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else ['gui', os.path.expanduser('~')]
+VIOLET = '--violetti' in argv
+argv = [a for a in argv if not a.startswith('--')]
 MODE, OUTDIR = argv[0], argv[1]
 os.makedirs(OUTDIR, exist_ok=True)
 
@@ -40,13 +43,23 @@ def wmat(name, c1, c2, scale=3.0, rough=0.85, metal=0.0, cut=0.5):
     nt.links.new(cr.outputs['Color'], b.inputs['Base Color'])
     MATS[name] = m; return m
 
+def glowing(m, col, estr):
+    """Lisää materiaaliin himmeän oman hehkun (villi rihmasto)."""
+    b = m.node_tree.nodes['Principled BSDF']
+    b.inputs['Emission Color'].default_value = hexc(col); b.inputs['Emission Strength'].default_value = estr
+    return m
+
+# Villin rihmaston värit (kokeilu): kylmä, sinertävä violetti. Erotettu hämäränupin lämpimämmästä purppurasta.
+WILD_V = {'d': '#1e1a30', '1': '#2e2648', '2': '#4a3f78', '3': '#7a6cc0', 'l': '#c0b4f4'}
+
 def M():
-    return {
+    d = {
       'rust':    wmat('ruoste', '#5e321e', '#a8602f', 4.0, 0.9, 0.3),
       'iron':    wmat('valurauta', '#3a4a5c', '#4a3330', 6.0, 0.7, 0.3),
       'patina':  wmat('patina', '#a8602f', '#4f9a86', 3.0, 0.5, 0.6, 0.45),
       'copper':  mat('kupari', '#c87a3e', 0.35, 1.0),
       'wood':    wmat('puu', '#6a4a30', '#45301f', 8.0, 0.9),
+      'woodL':   wmat('puuV', '#b88a58', '#8f6a44', 8.0, 0.85),
       'woodG':   wmat('puuH', '#77705f', '#55524a', 6.0, 0.95),
       'concrete':wmat('betoni', '#8a8576', '#6b675c', 2.5, 0.95),
       'concD':   wmat('betoniT', '#55524a', '#3b3a33', 3.0, 0.95),
@@ -54,16 +67,18 @@ def M():
       'brick':   wmat('tiiliT', '#7a4438', '#5a3028', 5.0, 0.95),
       'metal':   wmat('peltiH', '#7a8490', '#5a6878', 4.0, 0.6, 0.3),
       'paint':   wmat('maaliV', '#4f7d86', '#2d4a55', 3.0, 0.7, 0.2),
+      'paintY':  wmat('maaliK', '#f3d08a', '#d99a5b', 3.0, 0.6, 0.2, 0.62),
       'carP':    wmat('autoP', '#8a3a2a', '#5e321e', 3.5, 0.6, 0.3, 0.55),
       'tire':    mat('rengas', '#141414', 0.95),
       'asphalt': wmat('asfaltti', '#3b3a33', '#2e2d28', 1.5, 0.95),
-      'pave':    wmat('laatta', '#6b675c', '#55524a', 1.2, 0.95),
+      'pave':    wmat('laatta', '#646a5c', '#4e5448', 1.2, 0.95),
       'glass':   mat('lasi', '#cfeff2', 0.05, trans=1.0),
       'glassD':  mat('lasiT', '#16262e', 0.15, 0.4),
       'winD':    mat('ikkunaT', '#141c28', 0.2, 0.3),
       'winL':    mat('ikkunaV', '#ffcf7a', 0.5, emit='#ffb860', estr=4.0),
       'winC':    mat('ikkunaS', '#a8fbee', 0.5, emit='#5fc7d0', estr=2.0),
       'moss':    wmat('sammal', '#3f6a26', '#79a83a', 9.0, 1.0),
+      'leaf':    wmat('lehvasto', '#3f6a26', '#79a83a', 9.0, 1.0),
       'mossD':   mat('sammalT', '#24391c', 1.0),
       'grass':   wmat('nurmi', '#4f7a2c', '#3f6a26', 5.0, 1.0),
       'vine':    wmat('kounos', '#2f5a24', '#4f7a2c', 7.0, 1.0),
@@ -77,8 +92,20 @@ def M():
       'thread':  mat('rihma', '#a8fbee', 0.5, emit='#5fc7d0', estr=5.0),
       'water':   mat('vesi', '#1d6a78', 0.1, emit='#1d6a78', estr=0.8),
       'amber':   mat('meripihka', '#e8a02a', 0.5, emit='#ffcf7a', estr=4.0),
+      'pool1':   mat('valolampi1', '#103540', 1.0, emit='#103540', estr=0.5),   # lampun valokehä maassa
+      'pool2':   mat('valolampi2', '#1d6a78', 1.0, emit='#1d6a78', estr=0.5),
+      'poolW':   mat('valolampiL', '#8f6a44', 1.0, emit='#ffb860', estr=0.25),  # lämmin ikkunavalo maassa
     }
-GLOW = {'cyan': '#a8fbee', 'pink': '#ffa6d6', 'orange': '#ffc46a', 'violet': '#d6b0ff'}
+    if VIOLET:   # villi rihmasto: sammal, köynnökset ja rihmat kylmänä violettina
+        W = WILD_V
+        d.update({
+          'moss':   glowing(wmat('rihmasto', W['1'], W['2'], 9.0, 1.0, cut=0.5), W['1'], 0.5),
+          'mossD':  mat('rihmastoT', W['d'], 1.0),
+          'vine':   glowing(wmat('rihmaKoynnos', W['1'], W['3'], 7.0, 1.0, cut=0.55), W['2'], 0.6),
+          'thread': mat('rihmaV', W['l'], 0.5, emit=W['3'], estr=4.0),
+        })
+    return d
+GLOW = {'cyan': '#a8fbee', 'pink': '#ffa6d6', 'orange': '#ffc46a', 'violet': '#d6b0ff', 'wild': '#c0b4f4'}
 
 # =================== RAKENNUSAPURIT ===================
 ROOT = None
@@ -163,6 +190,30 @@ def grass_tufts(x, y, w, d, seed, n=14):
         h = 0.12 + rnd.random() * 0.25
         box((x + (rnd.random() - 0.5) * w, y + (rnd.random() - 0.5) * d, h / 2), (0.08, 0.08, h), mm['grass'])
 
+def glow_pool(x, y, z, r, inner='pool2', outer='pool1'):
+    """Valokehä maassa: kaksi porrastettua kiekkoa, jotka pikselöityvät selviksi valorenkaiksi."""
+    mm = M()
+    cyl((x, y, z + 0.005), r, 0.01, mm[outer], 24)
+    cyl((x, y, z + 0.012), r * 0.55, 0.01, mm[inner], 20)
+
+def hyphae(x, y, z, seed, n=5, steps=9, step=0.35, w=0.09, spread=math.pi * 2, a0=0.0):
+    """Villi rihmasto (vain --violetti): haarautuvia, himmeästi hehkuvia säikeitä maassa + solmukohtia."""
+    if not VIOLET: return
+    W = WILD_V
+    sm = mat('saie', W['2'], 0.9, emit=W['3'], estr=1.3)
+    nm = mat('solmu', W['l'], 0.6, emit=W['l'], estr=2.5)
+    rnd = random.Random(seed)
+    stack = [(x, y, a0 + (k / n - 0.5) * spread + rnd.random() * 0.4, steps) for k in range(n)]
+    while stack:
+        px, py, a, left = stack.pop()
+        for i in range(left):
+            a += (rnd.random() - 0.5) * 0.9
+            nx, ny = px + math.cos(a) * step, py + math.sin(a) * step
+            o = box(((px + nx) / 2, (py + ny) / 2, z + 0.01), (step * 1.05, w * (0.4 + 0.6 * (left - i) / max(1, left)), 0.02), sm, rot=(0, 0, a))
+            px, py = nx, ny
+            if rnd.random() < 0.18 and left - i > 2: stack.append((px, py, a + rnd.choice((-1, 1)) * (0.6 + rnd.random() * 0.5), (left - i) // 2))
+            if rnd.random() < 0.12: sphere((px, py, z + 0.03), w * 0.9, nm, seg=6)
+
 def new_root(name, loc=(0, 0, 0), rotz=0.0):
     global ROOT
     e = bpy.data.objects.new(name, None); bpy.context.scene.collection.objects.link(e)
@@ -173,35 +224,51 @@ def place(root, loc, rotz=0.0):
 
 # =================== PALIKAT ===================
 def kpl01_penkki():
+    """Puistonpenkki: vaaleat laudat erottuvat tummasta valuraudasta, yksi istuinlauta puuttuu."""
     m = M()
-    for sx in (-0.75, 0.75):           # valurautaiset sivukehykset
-        box((sx, 0, 0.22), (0.1, 0.5, 0.44), m['iron'])
-        box((sx, 0.22, 0.65), (0.06, 0.08, 0.5), m['iron'], rot=(math.radians(-12), 0, 0))
-        box((sx, -0.2, 0.3), (0.06, 0.08, 0.06), m['iron'])
-    for i, yy in enumerate((-0.18, -0.06, 0.06, 0.18)):   # istuinlaudat, yksi puuttuu
+    box((0, 0, 0.03), (2.5, 1.3, 0.06), m['pave'])                                 # laatoitettu alusta lukee paremmin
+    for sx in (-0.9, 0.9):                                                         # valurautaiset sivukehykset
+        box((sx, 0, 0.24), (0.12, 0.62, 0.1), m['iron'])
+        box((sx, -0.24, 0.22), (0.12, 0.1, 0.44), m['iron']); box((sx, 0.22, 0.22), (0.12, 0.1, 0.44), m['iron'])
+        box((sx, 0.3, 0.72), (0.1, 0.1, 0.62), m['iron'], rot=(math.radians(-14), 0, 0))
+        box((sx, -0.02, 0.66), (0.1, 0.6, 0.08), m['iron'])                       # käsinoja
+    for i, yy in enumerate((-0.2, -0.07, 0.06, 0.19)):                              # istuinlaudat, yksi puuttuu
         if i == 2: continue
-        box((0, yy, 0.46), (1.72, 0.11, 0.07), m['woodG'] if i % 2 else m['wood'])
-    box((0.35, 0.27, 0.62), (1.0, 0.04, 0.1), m['wood'], rot=(math.radians(-12), 0, 0))   # selkänoja, osa katkennut
-    box((-0.45, 0.29, 0.72), (0.8, 0.04, 0.1), m['woodG'], rot=(math.radians(-12), math.radians(6), 0))
-    moss_patch(-0.3, -0.05, 0.48, 0.9, 0.4, 11, 6, 0.03)
-    cluster(0.1, 0.06, 0.44, 3, 0.09, 'cyan', 12, light=4)
-    grass_tufts(0, 0, 2.0, 0.9, 13, 10)
+        box((0, yy, 0.49), (2.0, 0.12, 0.07), m['woodL'])
+    box((0, 0.33, 0.68), (2.0, 0.05, 0.13), m['woodL'], rot=(math.radians(-14), 0, 0))          # selkänoja
+    box((0.45, 0.37, 0.86), (1.1, 0.05, 0.13), m['woodL'], rot=(math.radians(-14), 0, 0))      # ylälauta, osa katkennut
+    box((-0.55, 0.4, 0.83), (0.85, 0.05, 0.12), m['wood'], rot=(math.radians(-14), math.radians(8), 0))
+    box((0.1, -0.85, 0.07), (0.85, 0.12, 0.06), m['wood'], rot=(0, 0, math.radians(20)))      # irronnut lauta maassa
+    moss_patch(-0.5, -0.05, 0.52, 0.8, 0.35, 11, 5, 0.03)
+    cluster(0.25, 0.06, 0.47, 3, 0.11, 'cyan', 12, light=5)
+    grass_tufts(0, 0.75, 2.4, 0.3, 13, 6)
+    hyphae(-0.9, 0.1, 0.06, 14, 4, 6, 0.3, a0=math.pi)
 
 def kpl02_katulamppu():
+    """Katulamppu, jonka kuvun alle on kasvanut hehkuva siniheltta. Valokehä maassa näyttää hehkun."""
     m = M(); t = math.radians(5)
-    box((0, 0, 0.15), (0.35, 0.35, 0.3), m['iron'])
+    box((0, 0, 0.15), (0.4, 0.4, 0.3), m['iron'])
     top = Vector((math.sin(t) * 5.0, 0, 0.3 + math.cos(t) * 5.0))
-    rod((0, 0, 0.3), top, 0.12, m['iron'])
-    arm = top + Vector((1.1, 0, 0.25)); rod(top, arm, 0.08, m['iron'])
-    rod(arm, arm + Vector((0.25, 0, -0.15)), 0.08, m['iron'])
+    rod((0, 0, 0.3), top, 0.13, m['iron'])
+    arm = top + Vector((1.1, 0, 0.25)); rod(top, arm, 0.09, m['iron'])
+    rod(arm, arm + Vector((0.25, 0, -0.15)), 0.09, m['iron'])
     hp = arm + Vector((0.35, 0, -0.25))
-    cyl(hp + Vector((0, 0, 0.1)), 0.42, 0.18, m['metal'], 10, r2=0.14)        # kupu
-    for i, (dx, dy, s) in enumerate([(0, 0, 0.13), (0.12, 0.05, 0.08), (-0.1, -0.06, 0.09), (0.03, -0.12, 0.06)]):
-        sphere(hp + Vector((dx, dy, -0.08 - s)), s, m['cyan'], seg=8)           # hehkuva sienirypäle lampun paikalla
-    rod(hp + Vector((0.05, 0, -0.2)), hp + Vector((0.08, 0.02, -0.75)), 0.012, m['thread'])
-    glow_light(hp + Vector((0, 0, -0.35)), GLOW['cyan'], 60)
+    cyl(hp + Vector((0, 0, 0.12)), 0.5, 0.2, m['metal'], 12, r2=0.16)              # kupu
+    # siniheltta on vallannut kuvun: lakit päällä ja reunoilla, rypäle roikkuu alla
+    rnd = random.Random(24)
+    for k in range(7):
+        a = k / 7 * 6.28 + rnd.random() * 0.5; r = 0.3 + rnd.random() * 0.15; s_ = 0.1 + rnd.random() * 0.07
+        cap(hp + Vector((math.cos(a) * r, math.sin(a) * r, 0.16 + (0.45 - r) * 0.4)), s_, s_ * 0.6, m['cyan'])
+    cap(hp + Vector((0.02, 0.0, 0.24)), 0.17, 0.12, m['cyan'])
+    for i, (dx, dy, s_) in enumerate([(0, 0, 0.16), (0.18, 0.08, 0.1), (-0.16, -0.08, 0.11), (0.05, -0.18, 0.09)]):
+        sphere(hp + Vector((dx, dy, -0.02 - s_)), s_, m['cyan'], scale=(1, 1, 0.7), seg=8)
+    for dx, dy, l in ((0.3, 0.1, 0.9), (-0.25, -0.2, 0.6), (0.1, 0.32, 1.3), (-0.3, 0.2, 1.0)):   # roikkuvat rihmat reunoilta
+        rod(hp + Vector((dx, dy, 0.05)), hp + Vector((dx * 1.2, dy * 1.2, 0.05 - l)), 0.025, m['thread'])
+    glow_light(hp + Vector((0, 0, -0.4)), GLOW['cyan'], 90)
+    glow_pool(hp.x, 0, 0.0, 1.2)
     vines(0.08, 0, 0.3, 2.6, (1, 0), 21, 0.15)
-    moss_patch(0, 0, 0.3, 0.4, 0.4, 22, 5, 0.03)
+    moss_patch(0, 0, 0.3, 0.45, 0.45, 22, 5, 0.03)
+    hyphae(0, 0, 0.0, 23, 5, 7, 0.32)
 
 def kpl03_bussikatos():
     m = M()
@@ -296,25 +363,33 @@ def kpl08_sahkokaappi():
     cluster(0.6, -1.3, 0, 3, 0.08, 'cyan', 82)
 
 def kpl09_pyorateline():
+    """Kaarityyppinen pyöräteline ja sen kylkeen nojaava hylätty, keltainen pyörä köynnösten sotkemana."""
     m = M()
-    for k in range(4):
+    box((0, 0, 0.03), (3.4, 1.6, 0.06), m['pave'])
+    for k in range(4):                                                             # paksut U-kaaret
         x = -1.2 + k * 0.8
-        rod((x, -0.3, 0), (x, -0.3, 0.7), 0.06, m['metal']); rod((x, 0.3, 0), (x, 0.3, 0.7), 0.06, m['metal'])
-        rod((x, -0.3, 0.7), (x, 0.3, 0.7), 0.06, m['metal'])
-    # hylätty pyörä nojaa telineeseen
-    bx = -0.4
-    for y in (-0.55, 0.55): torus((bx, y, 0.34), 0.33, 0.06, m['tire'], rot=(math.radians(90), 0, 0))
-    pts = {'r': (bx, -0.55, 0.34), 'f': (bx, 0.55, 0.34), 's': (bx, -0.2, 0.75), 'h': (bx, 0.42, 0.82), 'b': (bx, 0.0, 0.34)}
-    for a, b in (('r', 's'), ('s', 'h'), ('b', 's'), ('b', 'h'), ('r', 'b'), ('h', 'f')): rod(pts[a], pts[b], 0.05, m['rust'])
-    rod((bx - 0.25, 0.42, 0.85), (bx + 0.25, 0.42, 0.85), 0.02, m['rust'])
-    box((bx, -0.2, 0.79), (0.08, 0.2, 0.04), m['tire'])
+        for y in (-0.32, 0.32): rod((x, y, 0.06), (x, y, 0.65), 0.05, m['metal'])
+        rod((x, -0.32, 0.65), (x, 0.32, 0.65), 0.05, m['metal'])
+    R = 0.34; ux, uy = math.cos(math.radians(40)), math.sin(math.radians(40))   # pyörän suunta, lähes kameran tasossa
+    bx, by = 0.1, -0.05
+    P = lambda u, z: (bx + ux * u, by + uy * u, z)
+    for u in (-0.62, 0.62):
+        torus(P(u, R + 0.06), R, 0.065, m['tire'], rot=(0, math.radians(90), math.radians(130)))
+        rod(P(u, 0.1), P(u, 2 * R + 0.02), 0.02, m['metal'])                          # pinnat ristiin
+        rod(P(u - R + 0.06, R + 0.06), P(u + R - 0.06, R + 0.06), 0.02, m['metal'])
+    pts = {'r': P(-0.62, R + 0.06), 'f': P(0.62, R + 0.06), 's': P(-0.22, 0.86), 'h': P(0.45, 0.95), 'b': P(-0.05, R + 0.06)}
+    for a, b in (('r', 's'), ('s', 'h'), ('b', 's'), ('b', 'h'), ('r', 'b'), ('h', 'f')): rod(pts[a], pts[b], 0.055, m['paintY'])
+    rod((pts['h'][0] - uy * 0.28, pts['h'][1] + ux * 0.28, 0.98), (pts['h'][0] + uy * 0.28, pts['h'][1] - ux * 0.28, 0.98), 0.03, m['iron'])   # ohjaustanko
+    box(P(-0.24, 0.9), (0.24, 0.12, 0.05), m['tire'], rot=(0, 0, math.radians(40)))     # satula
+    box(P(0.62, 0.95), (0.25, 0.3, 0.18), m['rust'], rot=(0, 0, math.radians(40)))      # tavarakori
     rnd = random.Random(91)
-    for k in range(14):                                                            # köynnökset kietoutuvat
+    for k in range(10):                                                            # köynnökset kietoutuvat
         t = rnd.random(); a, b = rnd.choice([('r', 's'), ('s', 'h'), ('b', 's')])
         p = Vector(pts[a]).lerp(Vector(pts[b]), t)
-        box(p + Vector((rnd.random() * 0.06, 0, 0)), (0.16, 0.16, 0.16), m['vine'])
-    grass_tufts(0, 0, 3.0, 1.2, 92, 18)
-    cluster(0.8, 0.4, 0, 3, 0.09, 'pink', 93, light=4)
+        box(p + Vector((0.06, 0, 0)), (0.14, 0.14, 0.14), m['vine'])
+    cluster(*P(0.62, 1.04), 3, 0.08, 'pink', 93, light=4)                    # ruususieni korissa
+    grass_tufts(0, 0, 3.2, 1.4, 92, 12)
+    hyphae(-1.4, 0.3, 0.06, 94, 4, 6, 0.3, a0=math.pi)
 
 def kpl10_sienirengas():
     m = M()
@@ -497,9 +572,12 @@ def build_scene():
     box((0, -12.45, 0.1), (52, 0.12, 0.2), m['concrete'])
     box((10, -17.3, 0.05), (32, 5.4, 0.1), m['grass'])                               # viherkaista
     grass_tufts(10, -17.3, 31, 5, 300, 50)
+    if VIOLET:                                                                          # rihmasto nousee katujen alta
+        for k, (x, y, a0) in enumerate([(10, -17.3, 0), (-14, -8.0, 0.3), (4, -9.5, 2.5), (-20, -3.3, 0), (16, -13.2, 3.1), (-4, -14, 1.2)]):
+            hyphae(x, y, 0.2 if abs(y + 3.4) < 1.2 or abs(y + 13.6) < 1.2 else 0.05, 500 + k, 6, 14, 0.5, 0.11)
     for k, (x, y) in enumerate([(-2, -17.5), (20, -18.2), (24.5, -16.5)]):             # puut
         rod((x, y, 0), (x, y, 2.6), 0.2, m['wood'])
-        for j in range(4): sphere((x + (j % 2 - 0.5) * 1.1, y + (j // 2 - 0.5) * 1.1, 3.4 + j * 0.3), 1.3, m['moss'], seg=8)
+        for j in range(4): sphere((x + (j % 2 - 0.5) * 1.1, y + (j // 2 - 0.5) * 1.1, 3.4 + j * 0.3), 1.3, m['leaf'], seg=8)
     for name, fn, loc in [('A', talo_a_lamelli, (-12.5, 6.5, 0)), ('C', talo_c_kivitalo, (14.5, 7.0, 0))]:
         r = new_root(name); fn(); place(r, loc, 0)
     props = [(kpl02_katulamppu, (-19, -4.2, 0.2), 0), (kpl02_katulamppu, (3, -4.2, 0.2), 0), (kpl02_katulamppu, (21, -4.2, 0.2), 0),
