@@ -1,5 +1,5 @@
 // KOTI v1: sisältö ja luvut (ks. docs/kotipeli-v1.md). Luvut ovat lähtöarvoja.
-export const VERSION = 'KOTI-01 V1.0';
+export const VERSION = 'KOTI-01 V1.1';
 
 export const P = {
   bg0:'#0b1018', bg1:'#141c28', bg2:'#1f2a38', bg3:'#2c3a4a', bg4:'#46566a',
@@ -29,7 +29,6 @@ export const VESSELS = {
 // laitteet: elävää kasvatusta, ei koneita
 export const DEVICES = {
   hautomo: {name:'HAUTOMO',       time:28800, txt:'LÄMMIN KUPU. KYPSYTTÄÄ AGAR-MALJAN.'},
-  kuivain: {name:'KUIVAUSTELINE', time:1800,  txt:'SATO KUIVUU ARVOKKAAMMAKSI.', batch:5},
   kehikko: {name:'KEHIKKO',       time:7200,  txt:'KALVOHELTTA KASVAA KEHIKKOON SUODATTIMEKSI.', need:3}
 };
 // kannat
@@ -54,7 +53,7 @@ export const CELLAR = {dry:0.5, wetGrow:1.2};
 
 // markkina
 export const CUR = 'HOPEA';
-export const SELL_BASE = { raw:2, dry:5, suodatin:45, villi:25, itio:4 };
+export const SELL_BASE = { raw:2, suodatin:45, villi:25, itio:4 };
 export const PRICE_DROP = 0.96;       // jokainen myyty kappale −4 %
 export const SAT_HALF = 7200;         // palautuminen: puoliintumisaika 2 h (×1)
 export const SPIKE_EVERY = 86400, SPIKE_FIRST = 7200, SPIKE_LEN = 10800, SPIKE_MULT = 2;
@@ -62,22 +61,22 @@ export const SHOP = {
   purkki:   {name:'LASIPURKKI',    kind:'vessel', price:s=>10+5*s.bought.purkki,    sub:'KUIVA / VIILEÄ'},
   terraario:{name:'TERRAARIO',     kind:'vessel', price:s=>30+10*s.bought.terraario, sub:'KOSTEA / VIILEÄ'},
   agar:     {name:'AGAR-MALJA',    kind:'item',   price:()=>3,   sub:'RISTEYTYKSEEN', need:s=>s.flags.lab},
-  kuivain:  {name:'KUIVAUSTELINE', kind:'device', price:()=>40,  sub:'SATO > KUIVATTU SIENI', need:s=>s.flags.lab},
   hautomo:  {name:'HAUTOMO',       kind:'device', price:()=>60,  sub:'KYPSYTTÄÄ MALJAN 8 H', need:s=>s.flags.lab},
   kehikko:  {name:'KEHIKKO',       kind:'device', price:()=>120, sub:'KALVOHELTTA > SUODATIN', need:s=>!!s.known.kalvo},
   kellari:  {name:'KELLARI',       kind:'room',   price:()=>300, sub:'4×3, KOSTEA JA VIILEÄ', need:s=>!!s.known.kalvo&&!s.rooms.kellari.owned}
 };
 export const LAB_UNLOCK_SOLD = 10;
 export const ORDER = {need:5, reward:300, txt:'5 ITIÖSUODATINTA TORIN VÄELLE, JOTTA HE VOIVAT LÄHTEÄ ULOS.'};
+// poistettujen tuotteiden hyvitys vanhoissa tallennuksissa (kuivausteline ja kuivatut sienet poistettiin TP0:ssa)
+export const LEGACY = {dry:5, kuivain:40};
 export const ROOMS = { huone:{name:'HUONE', w:4, h:4}, kellari:{name:'KELLARI', w:4, h:3} };
 
-// symbiontin lyhyet kommentit
-export const SAY = {
-  firstHarvest:'ENSIMMÄINEN SATO. TUNNEN SEN MAUN. VIE SE TORILLE.',
-  lab:'MUISTAN LABORATORIOT. KAKSI KANTAA YHDELLÄ MALJALLA, JA JOSKUS SYNTYY JOTAIN UUTTA. HAUTOMO ON NYT TORILLA.',
-  firstCross:'UUSI KANTA. ME EMME KORJAA MAAILMAA, ME OPIMME SEN KANSSA.',
-  mutation:'KULTAINEN HOHDE. RIHMASTO VALITSI ITSE. PIDÄ SIITÄ HUOLTA.',
-  order:'TORIN VÄKI HALUAA ULOS. NE TARVITSEVAT HENGITYSKALVON.',
-  done:'HE LÄHTIVÄT. ENSIMMÄISTÄ KERTAA PITKÄÄN AIKAAN JOKU KÄVELEE VILLIN LÄPI.',
-  pocket:'LÖYSIN TASKUSTA YHDEN SINIHELTAN ITIÖN. ÄLÄ MYY KAIKKEA.'
+// symbiontin lyhyet vihjeet (ei tarinaa: muistot poistettiin TP0:ssa)
+export const HINT = {
+  firstHarvest:'ENSIMMÄINEN SATO! MYY SE MARKKINALLA.',
+  lab:'HAUTOMO JA AGAR-MALJAT OVAT NYT MARKKINALLA. RISTEYTÄ KAKSI KANTAA.',
+  firstCross:'UUSI KANTA! KATSO KANTAKIRJAA.',
+  mutation:'MUTAATIO! KANTA SAI PARANNUKSEN.',
+  order:'TILAUS: 5 ITIÖSUODATINTA. KASVATA NE KEHIKOSSA KALVOHELTASTA.',
+  pocket:'SAIT YHDEN SINIHELTAN ITIÖN. ÄLÄ MYY KAIKKIA ITIÖITÄ.'
 };

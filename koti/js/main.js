@@ -7,7 +7,7 @@ import {STRAINS} from './data.js';
 
 // offline-kasvu (enintään 8 h)
 function catchUp(){ const away=Math.min(8*3600,(Date.now()-(S.kotiLast||Date.now()))/1000)*S.speed; if (away>1) sim.simulate(away); }
-// ulkosivu voi tuoda itiöitä: kanta on silloin tunnettu
+// itiöt voivat tulla myös testilöydöistä tai vanhasta tallennuksesta: kanta on silloin tunnettu
 function syncKnown(){ for (const k in S.spores){ const b=k.split('~')[0]; if (STRAINS[b]) S.known[b]=1; } }
 // aamupaljastus: valmistunut malja avautuu heti, kun peli avataan
 function morningReveal(){ for (const r in S.rooms) for (const c of S.rooms[r].cells) if (c&&c.type==='hautomo'&&c.done){ openHautomo(c); return; } }

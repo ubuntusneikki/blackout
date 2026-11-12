@@ -112,13 +112,6 @@ function drawDevice(d,x,y,t){
     for(let k=0;k<5;k++) px(x+12+k,y+12+k,P.gl3);
     if (d.busy && !d.done) progress(x,y,d.t,'#c4428f');
     if (d.done) doneGlow(x,y,t);
-  } else if (d.type==='kuivain'){
-    rect(x+5,y+4,2,CELL-6,P.cu1); rect(x+CELL-7,y+4,2,CELL-6,P.cu1);
-    for(let k=0;k<3;k++){ const yy=y+9+k*11; rect(x+5,yy,CELL-10,1,P.cu2);
-      if (d.busy){ const T=STRAINS[d.job], v=1-0.6*d.t;
-        for(let j=0;j<5;j++){ const xx=x+9+j*6; rect(xx,yy+1,3,2+((j+k)&1), v>0.6?T.col[1]:T.col[0]); px(xx+1,yy+1,T.col[2]); } } }
-    if (d.busy && !d.done) progress(x,y,d.t,AMB[0]);
-    if (d.done) doneGlow(x,y,t);
   } else if (d.type==='kehikko'){
     const X=x+6,Y=y+5,S2=CELL-12;
     rect(X,Y,S2,2,P.cu1); rect(X,Y+S2-2,S2,2,P.cu1); rect(X,Y,2,S2,P.cu1); rect(X+S2-2,Y,2,S2,P.cu1); rect(X,Y,S2,1,P.cu3);

@@ -20,11 +20,9 @@ module.exports = function(){
         const opts = pref.length?pref:Object.keys(S.spores).filter(k=>!(S.flags.lab&&has(k)<=1&&k!=='heltta'&&!k.startsWith('kalvo')));
         const k = opts.sort((a,b)=>G.matchOf(c,b)-G.matchOf(c,a))[0]; if(k) G.plant(c,k); }
     }
-    // myynti: kaikki paitsi kalvo ja kuivaamaton jos kuivain vapaana
-    const kuiv=cells().find(o=>o.c.type==='kuivain'&&!o.c.busy);
+    // myynti: kaikki paitsi kehikon kalvoheltta ja tilauksen suodattimet
     for(const id of G.sellables()){ if(id.startsWith('itio:')) { const k=id.slice(5); if (has(k)>3 && !k.startsWith('kalvo')) G.sell(id,has(k)-3); continue; }
       if(id==='raw:kalvo'&&S.rooms && cells().some(o=>o.c.type==='kehikko')) continue;
-      if(id.startsWith('raw:') && kuiv && id!=='raw:kalvo'){ G.startDry(kuiv.c,id.slice(4)); continue; }
       if(id==='suodatin' && S.order && !S.flags.done) continue;
       G.sell(id,G.owned(id)); }
     if(S.order && S.inv.suodatin) G.deliver();
@@ -33,7 +31,6 @@ module.exports = function(){
     if(S.flags.lab){
       if(!flags.hautomo) flags.hautomo=buyIf('hautomo',true);
       if(flags.hautomo && (S.inv.agar||0)<1) buyIf('agar',true);
-      if(flags.hautomo && !flags.kuiv) flags.kuiv=buyIf('kuivain',true);
     }
     if(S.known.kalvo && !flags.keh) flags.keh=buyIf('kehikko',true);
     if(flags.keh && !flags.kel) flags.kel=buyIf('kellari',S.hopea>360);
