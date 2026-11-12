@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>ISO-TESTI – isometrinen ulkokartta</title>
+<style>
+  html,body{margin:0;height:100%;background:#0b1018;overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none;font-family:ui-monospace,Menlo,Consolas,monospace}
+  #c{position:fixed;inset:0;width:100vw;height:100vh;image-rendering:pixelated;image-rendering:crisp-edges}
+  #ui{position:fixed;left:0;right:0;bottom:0;padding:10px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+  #ui button{background:#1c2735;color:#d8e2ea;border:0;border-top:2px solid #3a4b60;padding:10px 12px;font:inherit;font-size:13px;letter-spacing:1px}
+  #ui button.a{background:#e8a02a;color:#101722;border-top-color:#ffe08a}
+  #top{position:fixed;top:0;left:0;right:0;padding:8px 10px;color:#6a7a8c;font-size:12px;background:linear-gradient(#0b1018ee,#0b101800)}
+  #top b{color:#a8fbee}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="top"><b>ISO-TESTI</b> · <span id="st">ladataan…</span></div>
+<div id="ui">
+  <button id="bHeal" class="a">HERÄTÄ TÄSSÄ</button>
+  <button id="bRot">KIERRÄ 90°</button>
+  <button id="bRes">TARKKUUS: 256</button>
+  <button id="bPx">TYYLI: PIKSELI</button>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/BufferGeometryUtils.js"></script>
+<script>
+(() => {
+'use strict';
+const $=id=>document.getElementById(id);
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+function hashStr(s){ let h=2166136261; for(const c of s){ h^=c.charCodeAt(0); h=Math.imul(h,16777619); } return h>>>0; }
+function seeded(s){ let a=hashStr(String(s))||1; return ()=>{ a=(a+0x6D2B79F5)>>>0; let t=a; t=Math.imul(t^(t>>>15),t|1); t^=t+Math.imul(t^(t>>>7),t|61); return ((t^(t>>>14))>>>0)/4294967296; }; }
+
+// ================= RENDERÖIJÄ (pieni resoluutio, skaalataan isoksi) =================
+let LOW_W=256, pixelMode=true;
+const cv=$('c');
+const renderer=new THREE.WebGLRenderer({canvas:cv, antialias:false});
+renderer.setPixelRatio(1);
+const scene=new THREE.Scene(); scene.background=new THREE.Color('#0b1018');
+let rt, postScene, postCam, postMat;
+const cam=new THREE.OrthographicCamera(-1,1,1,-1,-2000,4000);
+let VIEW=260;                 // näkyvä leveys metreinä
+let azim=Math.PI/4, azimT=azim; // kameran kierto
+const ELEV=Math.atan(1/Math.SQRT2);   // klassinen isometrinen kallistus (~35°)
+
+function resize(){
+  const aspect=innerHeight/innerWidth;
+  const W=pixelMode?LOW_W:Math.min(innerWidth,1200), H=Math.round(W*aspect);
+  renderer.setSize(W,H,false);
+  if(rt) rt.dispose();
+  rt=new THREE.WebGLRenderTarget(W,H,{minFilter:THREE.NearestFilter,magFilter:THREE.NearestFilter,depthBuffer:true});
+  if(postMat) postMat.uniforms.res.value.set(W,H);
+  const vw=VIEW, vh=VIEW*aspect;
+  cam.left=-vw/2; cam.right=vw/2; cam.top=vh/2; cam.bottom=-vh/2; cam.updateProjectionMatrix();
+}
+
+// ================= JÄLKIKÄSITTELY: paletti + järjestetty pistekuviointi =================
+const PAL=('0b1018 141c28 1f2a38 2c3a4a 46566a 22191c 33242a 4a3330 6a4440 2a1d16 45301f 6a4a30 8f6a44 b88a58 '+
+ '5e321e a8602f d99a5b f3d08a 16262e 2d4a55 4f7d86 9fd3d6 24391c 3f6a26 79a83a c2df6a 8a7d68 c9bc9c efe6cc '+
+ '103540 1d6a78 5fc7d0 ffcf7a fff0c0 1d5c58 34b8ac a8fbee 5a1f4a c4428f ffa6d6 6b2e12 d9702a ffc46a '+
+ '3a1f5a 8a4ad0 d6b0ff 1b2a4a 3a3a5e 7a4a5a d9845a 6ae07a 3b3a33 55524a 77705f 23272a 2e322e 3c4239 4e5448 646a5c').split(' ');
+const palVec=PAL.map(h=>new THREE.Vector3(parseInt(h.slice(0,2),16)/255,parseInt(h.slice(2,4),16)/255,parseInt(h.slice(4,6),16)/255));
+function makePost(){
+  postMat=new THREE.ShaderMaterial({
+    uniforms:{ tex:{value:null}, res:{value:new THREE.Vector2(1,1)}, pal:{value:palVec}, on:{value:1} },
+    vertexShader:'varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.,1.); }',
+    fragmentShader:`
+      uniform sampler2D tex; uniform vec2 res; uniform vec3 pal[${PAL.length}]; uniform float on; varying vec2 vUv;
+      float bayer(vec2 p){ int x=int(mod(p.x,4.)), y=int(mod(p.y,4.)); int i=x+y*4;
+        float m[16]; m[0]=0.;m[1]=8.;m[2]=2.;m[3]=10.;m[4]=12.;m[5]=4.;m[6]=14.;m[7]=6.;m[8]=3.;m[9]=11.;m[10]=1.;m[11]=9.;m[12]=15.;m[13]=7.;m[14]=13.;m[15]=5.;
+        for(int k=0;k<16;k++){ if(k==i) return m[k]/16.-0.47; } return 0.; }
+      void main(){
+        vec3 c=texture2D(tex,vUv).rgb;
+        if(on<0.5){ gl_FragColor=vec4(c,1.); return; }
+        vec2 p=floor(vUv*res);
+        // ääriviiva: kirkkausero naapuriin -> tummennus (antaa käsin piirretyn reunan)
+        vec3 cu=texture2D(tex,(p+vec2(0.5,1.5))/res).rgb, cl=texture2D(tex,(p+vec2(-0.5,0.5))/res).rgb;
+        float l=dot(c,vec3(.3,.59,.11)), lu=dot(cu,vec3(.3,.59,.11)), ll=dot(cl,vec3(.3,.59,.11));
+        if(max(lu-l, ll-l)>0.16) c*=0.6;
+        c+=bayer(p)*0.045;
+        float best=1e9; vec3 bc=c;
+        for(int k=0;k<${PAL.length};k++){ vec3 d=c-pal[k]; float e=d.r*d.r*.35+d.g*d.g*.5+d.b*d.b*.25; if(e<best){best=e;bc=pal[k];} }
+        gl_FragColor=vec4(bc,1.);
+      }`,
+    depthTest:false, depthWrite:false
+  });
+  postScene=new THREE.Scene(); postCam=new THREE.Camera();
+  postScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2,2),postMat));
+}
+makePost(); resize(); addEventListener('resize',resize);
+
+// ================= ELINVOIMA materiaaleihin (maailmankoordinaattien mukaan) =================
+const MAXP=16;
+const VIT={ places:{value:Array.from({length:MAXP},()=>new THREE.Vector4(0,0,0,0))}, base:{value:0.1}, wave:{value:new THREE.Vector4(0,0,0,0)} };
+function vitalize(mat){
+  mat.onBeforeCompile=sh=>{
+    sh.uniforms.vPlaces=VIT.places; sh.uniforms.vBase=VIT.base; sh.uniforms.vWave=VIT.wave;
+    sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vWP;')
+      .replace('#include <project_vertex>','#include <project_vertex>\n#ifdef USE_INSTANCING\n vWP=(modelMatrix*instanceMatrix*vec4(transformed,1.)).xyz;\n#else\n vWP=(modelMatrix*vec4(transformed,1.)).xyz;\n#endif');
+    sh.fragmentShader=sh.fragmentShader.replace('#include <common>',`#include <common>
+      varying vec3 vWP; uniform vec4 vPlaces[${MAXP}]; uniform float vBase; uniform vec4 vWave;`)
+      .replace('#include <dithering_fragment>',`#include <dithering_fragment>
+      float v=vBase;
+      for(int i=0;i<${MAXP};i++){ vec4 p=vPlaces[i]; if(p.w<=0.) continue; float d=distance(vWP.xz,p.xy);
+        v=max(v, d<p.z*0.6?1.:1.-(d-p.z*0.6)/(p.z*0.4)); }
+      if(vWave.w>0.){ float d=distance(vWP.xz,vWave.xy); if(d<vWave.z) v=max(v,1.); }
+      v=clamp(v,0.,1.);
+      vec3 c=gl_FragColor.rgb; float L=dot(c,vec3(.3,.59,.11)); vec3 g=L*vec3(.9,1.,.84);
+      gl_FragColor.rgb=(g+(c-g)*(0.1+0.9*v))*(0.6+0.4*v);`);
+  };
+  return mat;
+}
+const lam=(col,opts)=>vitalize(new THREE.MeshLambertMaterial(Object.assign({color:col},opts||{})));
+
+// ================= VALOT =================
+scene.add(new THREE.HemisphereLight(0x8fb0d0,0x3a2a20,0.75));
+const sun=new THREE.DirectionalLight(0xffd8a8,0.9); sun.position.set(-120,220,80); scene.add(sun);
+
+// ================= KARTTADATA =================
+const START={lat:60.4518,lon:22.2666}; let origin={...START};
+const kx=()=>Math.cos(origin.lat*Math.PI/180)*111320;
+const toXY=(lat,lon)=>[(lon-origin.lon)*kx(), -(lat-origin.lat)*110540];
+function classify(t){ if(!t) return null;
+  if(t.natural==='water'||t.waterway==='riverbank') return 'vesi';
+  if(t.landuse==='forest'||t.landuse==='meadow'||t.landuse==='grass'||t.natural==='wood'||t.natural==='scrub'||t.leisure==='park'||t.leisure==='garden'||t.landuse==='cemetery') return 'puisto';
+  return null; }
+const SERVERS=['https://overpass-api.de/api/interpreter','https://overpass.private.coffee/api/interpreter','https://maps.mail.ru/osm/tools/overpass/api/interpreter'];
+async function overpass(q){ for(const url of SERVERS){ try{ const ctrl=new AbortController(); const to=setTimeout(()=>ctrl.abort(),25000);
+  const r=await fetch(url,{method:'POST',body:'data='+encodeURIComponent(q),headers:{'Content-Type':'application/x-www-form-urlencoded'},signal:ctrl.signal}); clearTimeout(to); if(r.ok) return await r.json(); }catch(e){} } throw new Error('ei yhteyttä'); }
+async function loadOSM(lat,lon){
+  const d=0.0045, bb=`${lat-d*0.55},${lon-d},${lat+d*0.55},${lon+d}`;
+  const ck='iso_'+lat.toFixed(4)+'_'+lon.toFixed(4);
+  try{ const c=JSON.parse(localStorage.getItem(ck)); if(c) return c; }catch(e){}
+  const q=`[out:json][timeout:25][bbox:${bb}];(way["building"];way["highway"~"^(primary|secondary|tertiary|residential|unclassified|living_street|pedestrian|service|footway|cycleway|path)$"];way["landuse"~"^(forest|meadow|grass|cemetery)$"];way["natural"~"^(wood|water|scrub)$"];way["leisure"~"^(park|garden)$"];way["waterway"~"^(river|canal)$"];);out geom qt;`;
+  const js=await overpass(q); try{ localStorage.setItem(ck,JSON.stringify(js)); }catch(e){} return js;
+}
+function parse(js){ const F=[];
+  for(const el of js.elements){ const t=el.tags||{}, g=el.geometry; if(!g||g.length<2) continue;
+    const pts=g.map(p=>toXY(p.lat,p.lon));
+    if(t.building){ const lv=parseFloat(t['building:levels']); F.push({k:'bld',pts,h:isNaN(lv)?null:lv*3.2,id:el.id}); }
+    else if(t.highway) F.push({k:'road',pts,w:/primary|secondary|trunk/.test(t.highway)?11:/tertiary|residential|unclassified|living/.test(t.highway)?7:/pedestrian/.test(t.highway)?5:2.5});
+    else if(t.waterway) F.push({k:'water',pts,w:30});
+    else { const z=classify(t); if(z) F.push({k:z,pts}); } }
+  return F; }
+function demoData(){ const F=[]; const r=seeded('demo'); const step=70;
+  for(let gx=-300;gx<300;gx+=step) for(let gy=-300;gy<300;gy+=step){
+    if(Math.abs(gy-gx*0.3-40)<45){ continue; }
+    if(r()<0.15){ F.push({k:'puisto',pts:[[gx+8,gy+8],[gx+step-8,gy+8],[gx+step-8,gy+step-8],[gx+8,gy+step-8],[gx+8,gy+8]]}); continue; }
+    for(let b=0;b<3;b++){ const w=12+r()*16, d=10+r()*14, x=gx+8+r()*(step-16-w), y=gy+8+r()*(step-16-d);
+      F.push({k:'bld',pts:[[x,y],[x+w,y],[x+w,y+d],[x,y+d],[x,y]],h:null,id:gx*1000+gy*10+b}); } }
+  for(let g=-300;g<=300;g+=step){ F.push({k:'road',pts:[[g,-300],[g,300]],w:7}); F.push({k:'road',pts:[[-300,g],[300,g]],w:g%140===0?11:7}); }
+  F.push({k:'water',pts:[[-300,-50],[300,130]],w:50});
+  return F; }
+
+// ================= GEOMETRIA =================
+const world=new THREE.Group(); scene.add(world);
+const ROOF=['#4a3330','#5e321e','#3b3a33','#2c3a4a','#55524a','#3f6a26'], WALL=['#6a4440','#77705f','#55524a','#8a7d68','#6a4a30','#4a3330'];
+const ground=new THREE.Mesh(new THREE.PlaneGeometry(4000,4000), lam('#3b3a33')); ground.rotation.x=-Math.PI/2; ground.position.y=-0.05; world.add(ground);
+function ribbon(pts,w,y){ const pos=[];
+  for(let i=1;i<pts.length;i++){ const [ax,az]=pts[i-1],[bx,bz]=pts[i]; const dx=bx-ax,dz=bz-az,L=Math.hypot(dx,dz)||1, nx=-dz/L*w/2, nz=dx/L*w/2;
+    pos.push(ax+nx,y,az+nz, bx+nx,y,bz+nz, bx-nx,y,bz-nz, ax+nx,y,az+nz, bx-nx,y,bz-nz, ax-nx,y,az-nz); }
+  const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); g.computeVertexNormals(); return g; }
+function flatShape(pts,y){ const s=new THREE.Shape(pts.map(([x,z])=>new THREE.Vector2(x,-z))); const g=new THREE.ShapeGeometry(s); g.rotateX(-Math.PI/2); g.translate(0,y,0); return g; }
+function inPoly(x,y,pts){ let c=false; for(let i=0,j=pts.length-1;i<pts.length;j=i++){ const [xi,yi]=pts[i],[xj,yj]=pts[j]; if(((yi>y)!==(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi)+xi)) c=!c; } return c; }
+
+function build(F){
+  while(world.children.length>1) world.remove(world.children[1]);
+  const bG=[], eG=[], rG={major:[],minor:[],path:[]}, pG=[], wG=[], trees=[], props=[];
+  const col=new THREE.Color();
+  for(const f of F){
+    if(f.k==='bld'){
+      const pts=f.pts; if(pts.length<4) continue;
+      const r=seeded('b'+f.id);
+      let h=f.h||(6+Math.floor(r()*4)*3.2); h*= (0.85+r()*0.3);
+      const shape=new THREE.Shape(pts.map(([x,z])=>new THREE.Vector2(x,-z)));
+      let g; try{ g=new THREE.ExtrudeGeometry(shape,{depth:h,bevelEnabled:false}); }catch(e){ continue; }
+      g.rotateX(-Math.PI/2); g=g.toNonIndexed(); g.computeVertexNormals();
+      const n=g.attributes.normal, cols=new Float32Array(n.count*3);
+      const roof=new THREE.Color(ROOF[(r()*ROOF.length)|0]), wall=new THREE.Color(WALL[(r()*WALL.length)|0]);
+      const mossy=r()<0.35;
+      for(let i=0;i<n.count;i++){ const top=n.getY(i)>0.5; (top?(mossy?new THREE.Color('#3f6a26'):roof):wall).toArray(cols,i*3); }
+      g.setAttribute('color',new THREE.BufferAttribute(cols,3)); bG.push(g);
+      eG.push(new THREE.EdgesGeometry(g,40));
+      // kattokoristeet: antenni, vesisäiliö tai sammalkasa
+      if(r()<0.3){ let cx=0,cz=0; pts.forEach(p=>{cx+=p[0];cz+=p[1];}); cx/=pts.length; cz/=pts.length; props.push([cx,h,cz,(r()*3)|0]); }
+    } else if(f.k==='road'){ const key=f.w>=10?'major':f.w>=5?'minor':'path'; rG[key].push(ribbon(f.pts,f.w,0.02+(key==='major'?0.02:0))); }
+    else if(f.k==='water'){ wG.push(ribbon(f.pts,f.w,0.01)); }
+    else if(f.k==='vesi'){ try{ wG.push(flatShape(f.pts,0.01)); }catch(e){} }
+    else if(f.k==='puisto'){ try{ pG.push(flatShape(f.pts,0.015)); }catch(e){}
+      let minx=1e9,maxx=-1e9,minz=1e9,maxz=-1e9; f.pts.forEach(([x,z])=>{minx=Math.min(minx,x);maxx=Math.max(maxx,x);minz=Math.min(minz,z);maxz=Math.max(maxz,z);});
+      const r=seeded('p'+minx.toFixed(0)+minz.toFixed(0)), n=Math.min(150,((maxx-minx)*(maxz-minz))/160);
+      for(let i=0;i<n;i++){ const x=minx+r()*(maxx-minx), z=minz+r()*(maxz-minz); if(inPoly(x,z,f.pts)) trees.push([x,z,0.8+r()*0.8]); } }
+  }
+  const M=THREE.BufferGeometryUtils;
+  if(bG.length){ world.add(new THREE.Mesh(M.mergeBufferGeometries(bG),vitalize(new THREE.MeshLambertMaterial({vertexColors:true}))));
+    const lines=new THREE.LineSegments(M.mergeBufferGeometries(eG),new THREE.LineBasicMaterial({color:'#141c28'})); world.add(lines); }
+  const rc={major:'#77705f',minor:'#5a5650',path:'#4a4436'};
+  for(const k in rG) if(rG[k].length) world.add(new THREE.Mesh(M.mergeBufferGeometries(rG[k]),lam(rc[k])));
+  if(pG.length) world.add(new THREE.Mesh(M.mergeBufferGeometries(pG),lam('#3f6a26')));
+  if(wG.length){ waterMesh=new THREE.Mesh(M.mergeBufferGeometries(wG),lam('#1d6a78',{emissive:'#0b2a30'})); world.add(waterMesh); }
+  if(trees.length){
+    const tg=new THREE.IcosahedronGeometry(4.5,0); tg.translate(0,6.5,0);
+    const tm=new THREE.InstancedMesh(tg,lam('#4f7a2c'),trees.length); const tr=new THREE.InstancedMesh(new THREE.CylinderGeometry(0.4,0.5,3,5).translate(0,1.5,0),lam('#45301f'),trees.length);
+    const mm=new THREE.Matrix4(), q=new THREE.Quaternion(), s=new THREE.Vector3();
+    trees.forEach(([x,z,sc],i)=>{ s.set(sc,sc,sc); q.setFromAxisAngle(new THREE.Vector3(0,1,0),i); mm.compose(new THREE.Vector3(x,0,z),q,s); tm.setMatrixAt(i,mm); tr.setMatrixAt(i,mm); });
+    world.add(tm); world.add(tr); }
+  if(props.length){ const ant=[], tank=[];
+    props.forEach(([x,y,z,k])=>{ if(k===0){ const g=new THREE.BoxGeometry(0.4,5,0.4); g.translate(x,y+2.5,z); ant.push(g); }
+      else { const g=new THREE.CylinderGeometry(1.6,1.6,2.6,8); g.translate(x,y+1.3,z); tank.push(g); } });
+    if(ant.length) world.add(new THREE.Mesh(M.mergeBufferGeometries(ant),lam('#2c3a4a')));
+    if(tank.length) world.add(new THREE.Mesh(M.mergeBufferGeometries(tank),lam('#a8602f'))); }
+  $('st').textContent=`${bG.length} rakennusta · ${trees.length} puuta · ${mapSrc}`;
+}
+let waterMesh=null, mapSrc='';
+
+// ================= PELAAJA, LÖYDÖT, HERÄTETYT PAIKAT =================
+const P={x:0,z:0,tx:null,tz:null};
+const player=new THREE.Group();
+{ const m=new THREE.Mesh(new THREE.ConeGeometry(1.6,4.5,4),new THREE.MeshBasicMaterial({color:'#ffe08a',depthTest:false})); m.position.y=2.2; m.rotation.x=Math.PI; m.renderOrder=10; player.add(m);
+  const ring=new THREE.Mesh(new THREE.RingGeometry(24.5,25.5,48),new THREE.MeshBasicMaterial({color:'#ffcf7a',transparent:true,opacity:0.6,depthTest:false})); ring.rotation.x=-Math.PI/2; ring.position.y=0.1; ring.renderOrder=9; player.add(ring); }
+scene.add(player);
+const FIND_COL=['#a8fbee','#ffa6d6','#ffc46a','#d6b0ff'];
+const finds=[];
+function makeFinds(){ finds.forEach(f=>scene.remove(f)); finds.length=0; const r=seeded('finds');
+  for(let i=0;i<10;i++){ const a=r()*6.28, d=50+r()*220; const c=FIND_COL[i%4];
+    const g=new THREE.Group(); g.position.set(Math.cos(a)*d,0,Math.sin(a)*d);
+    const beam=new THREE.Mesh(new THREE.CylinderGeometry(0.6,0.6,40,6,1,true),new THREE.MeshBasicMaterial({color:c,transparent:true,opacity:0.35,depthTest:false})); beam.position.y=20; beam.renderOrder=7; g.add(beam);
+    const core=new THREE.Mesh(new THREE.OctahedronGeometry(3.2,0),new THREE.MeshBasicMaterial({color:c,depthTest:false})); core.position.y=6; core.renderOrder=11; g.add(core);
+    const halo=new THREE.Mesh(new THREE.CircleGeometry(6,16),new THREE.MeshBasicMaterial({color:c,transparent:true,opacity:0.25,depthTest:false})); halo.rotation.x=-Math.PI/2; halo.position.y=0.2; halo.renderOrder=8; g.add(halo);
+    g.userData.core=core; g.userData.halo=halo; scene.add(g); finds.push(g); } }
+const places=[]; let wave=null;
+function heal(){ if(places.length>=MAXP) places.shift(); places.push([P.x,P.z]); wave={x:P.x,z:P.z,t:performance.now()}; }
+function syncVit(){ VIT.places.value.forEach((v,i)=>{ const p=places[i]; if(p) v.set(p[0],p[1],55,1); else v.set(0,0,0,0); });
+  if(wave){ const a=(performance.now()-wave.t)/2000; if(a<1) VIT.wave.value.set(wave.x,wave.z,a*a*(3-2*a)*55,1); else { VIT.wave.value.set(0,0,0,0); wave=null; } } }
+
+// ================= SYÖTE =================
+const ray=new THREE.Raycaster(), ndc=new THREE.Vector2();
+let down=null, pinch=null;
+cv.addEventListener('pointerdown',e=>{ down={x:e.clientX,y:e.clientY,az:azimT,moved:false}; });
+cv.addEventListener('pointermove',e=>{ if(!down||pinch) return; const dx=e.clientX-down.x; if(Math.abs(dx)>8){ down.moved=true; azimT=down.az-dx*0.008; } });
+cv.addEventListener('pointerup',e=>{ if(down&&!down.moved&&!pinch){ ndc.set(e.clientX/innerWidth*2-1,-(e.clientY/innerHeight)*2+1); ray.setFromCamera(ndc,cam);
+    const hit=ray.intersectObject(ground); if(hit[0]){ P.tx=hit[0].point.x; P.tz=hit[0].point.z; } } down=null; });
+cv.addEventListener('wheel',e=>{ e.preventDefault(); VIEW=clamp(VIEW*(e.deltaY<0?0.9:1.11),80,700); resize(); },{passive:false});
+cv.addEventListener('touchstart',e=>{ if(e.touches.length===2){ const [a,b]=e.touches; pinch={d:Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY),v:VIEW}; } },{passive:true});
+cv.addEventListener('touchmove',e=>{ if(pinch&&e.touches.length===2){ const [a,b]=e.touches; VIEW=clamp(pinch.v*pinch.d/Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY),80,700); resize(); } },{passive:true});
+cv.addEventListener('touchend',e=>{ if(e.touches.length<2) setTimeout(()=>pinch=null,60); },{passive:true});
+$('bHeal').onclick=heal;
+$('bRot').onclick=()=>{ azimT+=Math.PI/2; };
+$('bRes').onclick=()=>{ LOW_W = LOW_W===256?192:LOW_W===192?360:256; $('bRes').textContent='TARKKUUS: '+LOW_W; resize(); };
+$('bPx').onclick=()=>{ pixelMode=!pixelMode; postMat.uniforms.on.value=pixelMode?1:0; $('bPx').textContent='TYYLI: '+(pixelMode?'PIKSELI':'SILEÄ'); resize(); };
+
+// ================= SILMUKKA =================
+let last=performance.now();
+function loop(t){
+  const dt=Math.min(0.1,(t-last)/1000); last=t;
+  if(P.tx!==null){ const dx=P.tx-P.x,dz=P.tz-P.z,d=Math.hypot(dx,dz),s=14*dt; if(d<=s){P.x=P.tx;P.z=P.tz;P.tx=null;} else {P.x+=dx/d*s;P.z+=dz/d*s;} }
+  azim+=(azimT-azim)*Math.min(1,dt*5);
+  player.position.set(P.x,0,P.z);
+  const R=600; cam.position.set(P.x+Math.sin(azim)*Math.cos(ELEV)*R, Math.sin(ELEV)*R, P.z+Math.cos(azim)*Math.cos(ELEV)*R); cam.lookAt(P.x,0,P.z);
+  finds.forEach((f,i)=>{ f.userData.core.rotation.y=t/600+i; f.userData.core.position.y=6+Math.sin(t/400+i)*0.8; f.userData.halo.material.opacity=0.18+0.12*Math.sin(t/300+i); });
+  syncVit();
+  renderer.setRenderTarget(rt); renderer.render(scene,cam);
+  renderer.setRenderTarget(null); postMat.uniforms.tex.value=rt.texture; renderer.render(postScene,postCam);
+  requestAnimationFrame(loop);
+}
+
+(async()=>{
+  const qs=new URLSearchParams(location.search);
+  let F;
+  if(qs.has('demo')){ F=demoData(); mapSrc='DEMO'; }
+  else { try{ $('st').textContent='haetaan Turun keskustaa (OSM)…'; F=parse(await loadOSM(START.lat,START.lon)); mapSrc='OSM TURKU'; if(F.length<20) throw 0; }
+    catch(e){ F=demoData(); mapSrc='DEMO (OSM EI VASTANNUT)'; } }
+  build(F); makeFinds(); heal(); wave=null;
+  requestAnimationFrame(loop);
+})();
+window.DBG={P,places,heal,get azim(){return azimT}, set azim(v){azimT=v;}};
+})();
+</script>
+</body>
+</html>
