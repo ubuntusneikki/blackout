@@ -13,6 +13,10 @@ Sijaintipohjainen mobiilipeli (Turku ensin), jota Juuso kehittää yksin. Kommun
 
 Kartan parantaminen ja värin palauttaminen kaupunkiin **on poistettu** suunnasta ja koodista (tehtävä 1).
 
+## Suunta: sienet ovat eläviä, eivät tavaroita
+
+Pelaaja ei valmista esineitä vaan kasvattaa elävää rihmastoa: kantoja risteytetään ja ohjataan kasvamaan haluttuun muotoon. "Tuote" on aina elävä kasvusto (esim. itiösuodatin on kehikkoon kasvatettu elävä kalvo). Nimeämisessä, teksteissä ja grafiikassa: ei tehtaita eikä koneita, vaan laboratorio, kasvatus ja elävät materiaalit. Pitkän aikavälin suunta on kantojen geneettinen muokkaus.
+
 ## Rakenne
 
 ```
@@ -66,9 +70,6 @@ Kun koti kasvaa, sen saa pilkkoa ES-moduuleiksi (`koti/js/*.js`), mutta pidä pe
 ## Tehtävät järjestyksessä
 
 1. ~~**Ulko:** poista HERÄTÄ-toiminto, `places`-piirto ja parantamisen palkinnot. Jätä löydöt, syke ja muistot.~~ Tehty (ULKO-01 V0.2).
-2. ~~**Koti – markkina ja talous:** simuloitu markkina, joka ostaa tuotteet (perussato, jalosteet, harvinaiset kannat). Hinnat laskevat, kun samaa myydään paljon, ja palautuvat ajan myötä; satunnaiset kysyntäpiikit. Uute korvataan jalosteilla, joilla on markkinahinta. Valuutta on vielä auki (työnimi riittää).~~ Tehty (KOTI-01 V0.3), ks. docs/prototyypin-tila.md.
-3. **Koti – risteytys:** vierekkäin kasvavat kannat voivat tuottaa uuden kannan itiöinä. Kantakirja, jossa on ???-paikat.
-4. **Koti – muokattava huone:** astioiden, hyllyjen ja sisustuksen vapaa sijoittelu (ensin ruudukko), myöhemmin isometrinen huone Blender-renderöinneistä.
-5. **Koti – lisätilat:** ostettavat tilat (kellari, ullakko, kasvihuone, palvelinsali), joilla on oma ilmasto.
+2. **Kotipeli v1:** koko määrittely on tiedostossa **docs/kotipeli-v1.md** (suodatinputki: kasvatus, laboratorio ja risteytys, muottikasvatus, kuivaus, hoitajasieni, 4×4-huone ja kellari, HOPEA-markkina, tilaus). Se korvaa aiemmat tehtävät 2–5. KOTI-01 V0.3:n markkina (MK, jalosteet) sovitetaan tähän määrittelyyn.
 
 Ennen isoja suunnittelumuutoksia kysy Juusolta. Pienissä toteutusvalinnoissa valitse yksinkertaisin toimiva ratkaisu ja kerro se.
