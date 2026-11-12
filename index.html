@@ -3,36 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Solmu – prototyypit</title>
-<style>
-  html,body{margin:0;min-height:100%;background:#0b1018;color:#d8e2ea;font-family:ui-monospace,Menlo,Consolas,monospace}
-  main{max-width:420px;margin:0 auto;padding:40px 20px;display:flex;flex-direction:column;gap:16px}
-  h1{font-size:20px;letter-spacing:3px;color:#a8fbee;margin:0 0 4px}
-  p{color:#6a7a8c;font-size:13px;line-height:1.5;margin:0}
-  a.btn{display:block;padding:18px 16px;text-decoration:none;color:#d8e2ea;background:#1c2735;border-top:2px solid #3a4b60;letter-spacing:2px}
-  a.btn b{display:block;font-size:16px;margin-bottom:4px}
-  a.btn span{font-size:12px;color:#6a7a8c;letter-spacing:0}
-  a.ulko b{color:#a8fbee} a.koti b{color:#ffe08a}
-  #st{font-size:12px;color:#6a7a8c;border-top:1px solid #1c2735;padding-top:12px}
-</style>
+<title>Solmu</title>
+<!-- Aloitussivu vie suoraan kotipeliin. Ulkopeli (ulko/, iso/) ei kuulu tähän protoon. -->
+<meta http-equiv="refresh" content="0; url=koti/">
+<link rel="icon" type="image/png" href="koti/ikonit/ikoni-192.png">
+<script>location.replace('koti/' + location.search + location.hash);</script>
+<style>html,body{margin:0;background:#0b1018;color:#d8e2ea;font-family:ui-monospace,Menlo,Consolas,monospace}
+a{display:block;max-width:420px;margin:40px auto;padding:18px 16px;color:#ffe08a;background:#1c2735;border-top:2px solid #3a4b60;letter-spacing:2px;text-decoration:none}</style>
 </head>
 <body>
-<main>
-  <h1>SOLMU</h1>
-  <p>Rihmasto villiintyi, ja kaupunki jäi sen alle. Löydä vanhoja kantoja kaduilta, kasvata ja jalosta niitä kotona ja myy markkinalla.</p>
-  <a class="btn ulko" href="ulko/"><b>ULOS &gt;</b><span>Kävele, seuraa sykettä ja löydä kantoja, astioita ja muistoja.</span></a>
-  <a class="btn koti" href="koti/"><b>KOTI &gt;</b><span>Kasvata löytöjäsi astioissa, jalosta satoa, myy markkinalla ja osta lisää tilaa.</span></a>
-  <a class="btn" href="iso/"><b style="color:#d6b0ff">ISO-TESTI &gt;</b><span>Kokeilu: isometrinen 3D-ulkokartta pikselityylillä. Napauta kulkeaksesi, vedä sivulle kiertääksesi.</span></a>
-  <div id="st"></div>
-</main>
-<script>
-try {
-  const s = JSON.parse(localStorage.getItem('solmu_yhteinen_v1'));
-  if (s){ const sp = Object.values(s.spores||{}).reduce((a,b)=>a+b,0);
-    const sato = Object.values(s.goods||{}).reduce((a,b)=>a+b,0);
-    document.getElementById('st').textContent = `Itiöitä ${sp} · satoa ${sato} · rahaa ${s.mk||0} MK · muistoja ${(s.memories||[]).length}/10`; }
-  else document.getElementById('st').textContent = 'Uusi peli. Aloita kotoa: terraariossa odottaa siniheltan itiöitä.';
-} catch(e){}
-</script>
+<a href="koti/">SOLMU &gt; KOTI</a>
 </body>
 </html>
