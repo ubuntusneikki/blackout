@@ -25,7 +25,7 @@ function loop(ms){
 }
 // näyttö on 384×672 (huonekerros 1:1, käyttöliittymäpuskuri ×2); kerroin K laitepikseleinä
 let K=1;
-function draw(ms){ render(ms); composite(sctx, buf, K, U.view==='room' || zoomActive()); }
+function draw(ms){ render(ms); composite(sctx, buf, K, U.view); }
 function fit(){
   const dpr=window.devicePixelRatio||1, s=Math.min(innerWidth*dpr/(2*W), innerHeight*dpr/(2*H)), n=Math.floor(s);
   // kokonaislukukerroin laitepikseleinä, jos se täyttää näytön melkein; muuten venytys (pikselöity)

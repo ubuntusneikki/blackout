@@ -7,7 +7,7 @@ import {on} from './events.js';
 import {vesselV} from './room.js';
 import {drawIso, pickAt, toLayer, cellBoxUi, startTransition, startZoom, zoomActive, ZOOM} from './iso.js';
 import {emit} from './events.js';
-import {staticFor, drawContents, drawWater, INNER, SOIL, TY0, ORIGIN} from './xsec.js';
+import {drawXsec} from './xsec.js';
 
 export const U = {doorGlow:false, view:'room', sel:null, modal:null, build:false, pick:null, msg:'', msgT:-1e9, msgCol:P.ui3, rev:null, burst:null};
 const now=()=>performance.now();
@@ -103,18 +103,9 @@ function tapCell(r,i){
 // ---------- astia ----------
 function drawVessel(t){
   const vs=U.sel&&U.sel.c; if(!vs||S.rooms[U.sel.r].cells[U.sel.i]!==vs){ U.view='room'; return; }
-  const V=VESSELS[vs.type], T=strain(vs.strain), [x0,x1]=INNER[vs.type];
-  g.drawImage(staticFor(vs.type),0,0);
-  rect(40,14,1,22,P.st0); rect(35,36,11,4,P.cu1); rect(35,36,11,1,P.cu3); rect(38,40,5,2,T?P.lamp:P.lampD);
-  if (vs.type==='akvaario') drawWater(t,x0,x1);
-  const mr=rng(5);
-  for(let x=x0+1;x<=x1;x++){ const h=(mr()<0.5)?1+(mr()*(T?4:2)|0):0; for(let k=0;k<h;k++) px(x,SOIL-1-k,k===h-1?P.mo3:P.mo1); }
-  let topY=SOIL;
-  if (T) topY=drawContents(vs,t);
-  if (vs.ready){ const by=topY-12+(Math.sin(t*4)>0?0:1); rect(ORIGIN[0],by,1,4,AMB[2]); px(ORIGIN[0],by+5,AMB[2]); }
-  if (U.burst && now()-U.burst<700){ const a=(now()-U.burst)/700;
-    for(let k=0;k<20;k++){ const ang=k*0.314, r=a*60; px(ORIGIN[0]+Math.cos(ang)*r, topY+20+Math.sin(ang)*r*0.7, AMB[2]); } }
-  vitalRect(0,14,W,258,vesselV(vs));
+  const V=VESSELS[vs.type], T=strain(vs.strain);
+  // poikkileikkaus piirretään omaan kerrokseen (xsec.js), puskurin keskiosa jää läpinäkyväksi
+  drawXsec(vs, t, vesselV(vs), {ready:vs.ready||vs.waves>0, burst: U.burst ? (now()-U.burst)/700 : -1});
   panel(()=>{
     text(V.name+'  '+(V.wet?'KOSTEA':'KUIVA')+' / '+(V.warm?'LÄMMIN':'VIILEÄ')+(U.sel.r==='kellari'?'  KELLARI':''),5,278,P.uiD);
     text(T?T.name:'TYHJÄ',5,287,T?(T.mutant?AMB[2]:T.col[2]):P.ui3);

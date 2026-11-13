@@ -5,6 +5,7 @@
 import {P, AMB, STRAINS, ROOMS, CUR, WILD, SYM} from './data.js';
 import {vital, rng, BAYER, clamp, ease, W, H, tw} from './gfx.js';
 import {S, strain, neighbors} from './state.js';
+import {XL, XSEC_BOX_UI} from './xsec.js';
 
 export const IW = 384, IH = 516, IY = 28;          // kerros alkaa käyttöliittymän y=14 kohdalta
 export const layer = document.createElement('canvas'); layer.width = IW; layer.height = IH;
@@ -340,34 +341,33 @@ export function cellBoxUi(r, i){
 }
 // efektien lokaattori (TP6, fx.js setLocator): kaikki käyttöliittymän koordinaateissa
 export const isoLocator = {
-  cell: (r, i) => cellBoxUi(r, i),
+  cell: (r, i) => (window.__U && __U.view === 'vessel') ? ((__U.sel && __U.sel.r === r && __U.sel.i === i) ? {...XSEC_BOX_UI, xsec:true} : null) : cellBoxUi(r, i),
   window: () => { if (S.cur !== 'huone' || !DRAWN.length) return null; const b = spotBox('huone', 'ikkuna', 0, 0); return b ? boxUi(b) : null; },
   counter: () => { const s = Math.floor(S.hopea) + ' ' + CUR; return {x: W - 4 - tw(s)/2, y: 6}; }
 };
 
 // ---------- kokoaminen näytölle ----------
-// Poikkileikkauksen zoomaus: ZOOM = {dir:+1 sisään / -1 ulos, box (UI), t0, snap}
+// Poikkileikkauksen zoomaus: ZOOM = {dir:+1 sisään / -1 ulos, box (UI), t0, snap = poikkileikkauskerroksen kopio}
 export const ZOOM = {dir:0, box:null, t0:0, dur:260, snap:null};
 export function zoomActive(){ return ZOOM.dir !== 0 && performance.now() - ZOOM.t0 < ZOOM.dur; }
-export function startZoom(dir, box, buf){
+export function startZoom(dir, box){
   ZOOM.dir = dir; ZOOM.box = box || {x:W/2 - 20, y:120, w:40, h:40}; ZOOM.t0 = performance.now();
-  if (dir < 0 && buf){ ZOOM.snap = mk(W, H); ZOOM.snap.getContext('2d').drawImage(buf, 0, 0); }
+  if (dir < 0){ ZOOM.snap = mk(IW, IH); ZOOM.snap.getContext('2d').drawImage(XL, 0, 0); }
 }
-// sctx: näytön konteksti, k: kokonaislukukerroin 384-leveydelle; showIso: piirretäänkö kerros
-export function composite(sctx, buf, k, showIso){
+// sctx: näytön konteksti, k: kerroin 384-leveydelle, view: 'room' | 'vessel' | muu (vain puskuri)
+export function composite(sctx, buf, k, view){
   sctx.imageSmoothingEnabled = false;
   sctx.fillStyle = P.bg0; sctx.fillRect(0, 0, 2*W*k, 2*H*k);
-  if (showIso) sctx.drawImage(layer, 0, 0, IW, IH, 0, IY*k, IW*k, IH*k);
   const z = zoomActive();
-  if (!z){ sctx.drawImage(buf, 0, 0, W, H, 0, 0, 2*W*k, 2*H*k); return; }
-  // keskiosa (y 14…272) skaalautuu ruudun laatikosta koko näkymään; yläpalkki ja paneeli pysyvät
-  let a = ease((performance.now() - ZOOM.t0)/ZOOM.dur); if (ZOOM.dir < 0) a = 1 - a;
-  const b = ZOOM.box, lerp = (p, q) => p + (q - p)*a, X = lerp(b.x, 0), Y = lerp(b.y, 14), Wd = lerp(b.w, W), Hd = lerp(b.h, 258);
-  const src = ZOOM.dir < 0 ? ZOOM.snap : buf;
-  if (ZOOM.dir > 0) sctx.drawImage(buf, 0, 0, W, 14, 0, 0, 2*W*k, 28*k);
-  else sctx.drawImage(buf, 0, 0, W, H, 0, 0, 2*W*k, 2*H*k);
-  sctx.globalAlpha = Math.min(1, 0.3 + a);
-  sctx.drawImage(src, 0, 14, W, 258, Math.round(X*2*k), Math.round(Y*2*k), Math.round(Wd*2*k), Math.round(Hd*2*k));
-  sctx.globalAlpha = 1;
-  if (ZOOM.dir > 0) sctx.drawImage(buf, 0, 272, W, 64, 0, 272*2*k, 2*W*k, 64*2*k);
+  if (view === 'room' || z) sctx.drawImage(layer, 0, 0, IW, IH, 0, IY*k, IW*k, IH*k);
+  if (view === 'vessel' || z){
+    // poikkileikkaus kasvaa ruudun laatikosta koko näkymään (tai kutistuu takaisin)
+    let a = 1; if (z){ a = ease((performance.now() - ZOOM.t0)/ZOOM.dur); if (ZOOM.dir < 0) a = 1 - a; }
+    const b = ZOOM.box || {x:0, y:14, w:W, h:258}, lerp = (p, q) => p + (q - p)*a;
+    const x = lerp(b.x, 0), y = lerp(b.y, 14), w = lerp(b.w, W), h = lerp(b.h, 258);
+    if (z) sctx.globalAlpha = Math.min(1, 0.3 + a);
+    sctx.drawImage(z && ZOOM.dir < 0 ? ZOOM.snap : XL, 0, 0, IW, IH, Math.round(x*2*k), Math.round(y*2*k), Math.round(w*2*k), Math.round(h*2*k));
+    sctx.globalAlpha = 1;
+  }
+  sctx.drawImage(buf, 0, 0, W, H, 0, 0, 2*W*k, 2*H*k);
 }
