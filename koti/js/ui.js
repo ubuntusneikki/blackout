@@ -1,5 +1,5 @@
 // näkymät, modaalit ja paljastus
-import {P, AMB, WILD, SYM, VESSELS, DEVICES, STRAINS, STRAIN_ORDER, ORIGIN_TXT, RECIPES, SHOP, CUR, ORDER, ROOMS, VERSION, SELL_BASE, FRAME, FRAME_ORDER, PRODUCTS, WAVES, TENDER} from './data.js';
+import {P, AMB, WILD, SYM, VESSELS, DEVICES, STRAINS, STRAIN_ORDER, ORIGIN_TXT, RECIPES, SHOP, CUR, ORDER, ROOMS, VERSION, SELL_BASE, LAB_UNLOCK_SOLD, FRAME, FRAME_ORDER, PRODUCTS, WAVES, TENDER} from './data.js';
 import {W, H, g, px, rect, rng, BAYER, clamp, ease, text, textC, tw, wrap, wrapLines, fmt, button, hit, bar, vitalRect, HIT, resetHit} from './gfx.js';
 import {S, save, strain, replaceState, newGame} from './state.js';
 import * as sim from './sim.js';
@@ -59,7 +59,7 @@ function hint(){
   if (Object.keys(S.inv).some(k=>k.startsWith('raw:'))) return 'SATO ODOTTAA VARASTOSSA. MYY SE MARKKINALLA.';
   if (S.board.some(o=>!o.given && sim.boardHave(o)>=o.n)) return 'VOIT TÄYTTÄÄ TILAUKSEN TORIN TAULULTA. AVAA MARKKINA.';
   const st=sim.chainStep();
-  if (st && st.id==='myy') return 'TAVOITE: MYY 10 SATOA TORILLE ('+Math.min(S.sold,10)+' / 10).';
+  if (st && st.id==='myy') return 'TAVOITE: '+st.txt+' ('+Math.min(S.sold,LAB_UNLOCK_SOLD)+' / '+LAB_UNLOCK_SOLD+').';
   if (st && st.id!=='tilaus') return 'TAVOITE: '+st.txt+'.';
   return 'RISTEYTÄ KANTOJA HAUTOMOSSA. KANTAKIRJA KERTOO, MITÄ PUUTTUU.';
 }

@@ -47,13 +47,13 @@ export const PRODUCTS = {
 // kannat: grow = yhden satoaallon kasvuaika (pelisekunteja), price = sadon perushinta.
 // Arvo ruutua kohden tunnissa oikeassa astiassa on suunnilleen sama (price*yield/grow); muottikannat elävät kehikosta.
 export const STRAINS = {
-  heltta: {name:'SINIHELTTA',   wet:true,  warm:false, grow:600,  yield:3, price:2,   col:['#1d5c58','#34b8ac','#a8fbee'], style:'cap',     txt:'NOPEA JA HALPA'},
-  ruusu:  {name:'RUUSUSIENI',   wet:false, warm:true,  grow:1500, yield:4, price:3.8, col:['#5a1f4a','#c4428f','#ffa6d6'], style:'cluster', txt:'HIDAS JA ARVOKAS'},
-  hamara: {name:'HÄMÄRÄNUPPI',  wet:false, warm:false, grow:1200, yield:2, price:6,   col:['#3a1f5a','#8a4ad0','#d6b0ff'], style:'nubs',    txt:'HARVINAINEN'},
-  kalvo:  {name:'KALVOHELTTA',  wet:true,  warm:true,  grow:1200, yield:3, price:3,   col:['#6b2e2a','#e07a64','#ffd2bf'], style:'web',     txt:'MUOTTIKANTA'},
+  heltta: {name:'SINIHELTTA',   wet:true,  warm:false, grow:3600,  yield:3, price:2,   col:['#1d5c58','#34b8ac','#a8fbee'], style:'cap',     txt:'NOPEA JA HALPA'},
+  ruusu:  {name:'RUUSUSIENI',   wet:false, warm:true,  grow:10800, yield:4, price:3.8, col:['#5a1f4a','#c4428f','#ffa6d6'], style:'cluster', txt:'HIDAS JA ARVOKAS'},
+  hamara: {name:'HÄMÄRÄNUPPI',  wet:false, warm:false, grow:10800, yield:2, price:6,   col:['#3a1f5a','#8a4ad0','#d6b0ff'], style:'nubs',    txt:'HARVINAINEN'},
+  kalvo:  {name:'KALVOHELTTA',  wet:true,  warm:true,  grow:7200, yield:3, price:3,   col:['#6b2e2a','#e07a64','#ffd2bf'], style:'web',     txt:'MUOTTIKANTA'},
   hoitaja:{name:'HOITAJASIENI', wet:true,  warm:false, grow:420,  yield:0, price:0,   col:['#2f5a3a','#8fd0a0','#e8fff0'], style:'tall', auto:true, txt:'HOITAA NAAPUREITA'},
-  yoruusu:{name:'YÖRUUSU',      wet:false, warm:true,  grow:2700, yield:4, price:8,   col:['#3a1a50','#9a46c0','#f2b4ff'], style:'cluster', txt:'HIDAS JA HYVIN ARVOKAS'},
-  verkko: {name:'VERKKOHELTTA', wet:true,  warm:true,  grow:600,  yield:2, price:3,   col:['#5a2a3a','#d0606e','#ffc8cc'], style:'web',     txt:'NOPEA MUOTTIKANTA'}
+  yoruusu:{name:'YÖRUUSU',      wet:false, warm:true,  grow:21600, yield:4, price:8,   col:['#3a1a50','#9a46c0','#f2b4ff'], style:'cluster', txt:'HIDAS JA HYVIN ARVOKAS'},
+  verkko: {name:'VERKKOHELTTA', wet:true,  warm:true,  grow:3600,  yield:2, price:3,   col:['#5a2a3a','#d0606e','#ffc8cc'], style:'web',     txt:'NOPEA MUOTTIKANTA'}
 };
 export const STRAIN_ORDER = ['heltta','ruusu','hamara','kalvo','hoitaja','yoruusu','verkko'];
 export const ORIGIN_TXT = { heltta:'ALUSSA', ruusu:'ALUSSA', hamara:'LÖYTYY ULKOA' };
@@ -74,7 +74,7 @@ export const CELLAR = {dry:0.5, wetGrow:1.2};
 
 // markkina
 export const CUR = 'HOPEA';
-export const SELL_BASE = { suodatin:45, valokalvo:10, lampo:20, villi:25, itio:4 };   // raw: STRAINS[k].price
+export const SELL_BASE = { suodatin:45, valokalvo:10, lampo:20, villi:25, itio:1.5 };   // raw: STRAINS[k].price
 export const PRICE_DROP = 0.96;       // jokainen myyty kappale −4 %
 export const SAT_HALF = 7200;         // palautuminen: puoliintumisaika 2 h (×1)
 export const SPIKE_EVERY = 86400, SPIKE_FIRST = 7200, SPIKE_LEN = 10800, SPIKE_MULT = 2;
@@ -86,14 +86,14 @@ export const SHOP = {
   kehikko:  {name:'KEHIKKO',       kind:'device', price:()=>60,  sub:'ELÄVÄ MUOTTI: SATO > TUOTE', need:s=>s.flags.lab},
   kellari:  {name:'KELLARI',       kind:'room',   price:()=>300, sub:'4×3, KOSTEA JA VIILEÄ', need:s=>!!s.known.kalvo&&!s.rooms.kellari.owned}
 };
-export const LAB_UNLOCK_SOLD = 10;
+export const LAB_UNLOCK_SOLD = 15;
 export const ORDER = {need:5, reward:300, txt:'5 ITIÖSUODATINTA TORIN VÄELLE, JOTTA HE VOIVAT LÄHTEÄ ULOS.'};
 // torin taulu: 3 tilausta, yksi uusiutuu joka aamu (pelivuorokausi). Palkkio = perushinta × määrä × BOARD.mult.
 export const BOARD = {slots:3, every:86400, mult:1.6, sizes:[3,4,5,6,8]};
 // virstanpylväsketju: opettaa järjestelmät yksi kerrallaan ja päättyy suodatintilaukseen
 export const CHAIN = [
   {id:'sato',   txt:'KORJAA ENSIMMÄINEN SATO',     reward:3,  done:s=>s.flags.firstHarvest},
-  {id:'myy',    txt:'MYY 10 SATOA TORILLE',        reward:5,  done:s=>s.sold>=10},
+  {id:'myy',    txt:'MYY '+LAB_UNLOCK_SOLD+' SATOA TORILLE', reward:5, done:s=>s.sold>=LAB_UNLOCK_SOLD},
   {id:'hautomo',txt:'ASETA HAUTOMO HUONEESEEN',   reward:5,  done:s=>!!s.flags.hasHautomo},
   {id:'risteys',txt:'RISTEYTÄ UUSI KANTA',         reward:10, done:s=>s.flags.firstCross},
   {id:'taulu',  txt:'TÄYTÄ TILAUS TORIN TAULULTA', reward:10, done:s=>(s.boardDone||0)>=1},

@@ -61,4 +61,5 @@ Toteutuneet luvut. Ajat ovat pelinopeudella ×1; testinopeus ×60 on oletus.
 - **Torin taulu:** 3 tilausta tunnetuista tuotteista, yksi vaihtuu joka pelivuorokausi. Virstanpylväsketju (sato → myynti → hautomo → risteytys → taulu → kehikko) päättyy suodatintilaukseen.
 - **Lupausnäkymä:** SEURAAVAKSI-rivi huoneessa ja yhteenveto palatessa (`paluu`-tapahtuma).
 - **Uudet kannat** (Juuso hyväksyi nimet 13.11.): YÖRUUSU = ruususieni × hämäränuppi, VERKKOHELTTA = kalvoheltta × hämäränuppi.
-- Luvut ovat lähtöarvoja; ne mitoitetaan TP2:n simulaattorilla.
+- **Mitoitus TP2:n simulaattorilla** (20 siementä, ×1): kasvuajat tunneissa (siniheltta ja verkkoheltta 1 h, kalvoheltta 2 h, ruususieni ja hämäränuppi 3 h, yöruusu 6 h), itiöpussi 1,5 H, laboratorio aukeaa 15 myydystä. Tilauksen mediaani: aktiivinen 2,0 vrk, 4 käyntiä/vrk 6,0 vrk (tavoite 6–8), 2 käyntiä/vrk 11,5 vrk.
+- Havainto: 4/vrk-profiililla laboratorio aukeaa vasta noin 2,6 vrk:n kohdalla, joten alkuvaihe on pitkä pelkillä kahdella kannalla.
