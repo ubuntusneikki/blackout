@@ -4,10 +4,12 @@ import {W, H, g, px, rect, rng, BAYER, clamp, ease, text, textC, tw, wrap, wrapL
 import {S, save, strain, replaceState, newGame} from './state.js';
 import * as sim from './sim.js';
 import {on} from './events.js';
-import {CELL, cellXY, cellAt, drawRoomBg, drawCells, vesselV} from './room.js';
+import {vesselV} from './room.js';
+import {drawIso, pickAt, toLayer, cellBoxUi, startTransition, startZoom, zoomActive, ZOOM} from './iso.js';
+import {emit} from './events.js';
 import {staticFor, drawContents, drawWater, INNER, SOIL, TY0, ORIGIN} from './xsec.js';
 
-export const U = {view:'room', sel:null, modal:null, build:false, pick:null, msg:'', msgT:-1e9, msgCol:P.ui3, rev:null, burst:null};
+export const U = {doorGlow:false, view:'room', sel:null, modal:null, build:false, pick:null, msg:'', msgT:-1e9, msgCol:P.ui3, rev:null, burst:null};
 const now=()=>performance.now();
 export function toast(m){ U.msg=m; U.msgT=now(); U.msgCol=P.ui3; }
 export function say(m){ U.msg=m; U.msgT=now()+4000; U.msgCol=SYM; }     // symbiontin vihje näkyy pidempään
@@ -65,10 +67,9 @@ function hint(){
 function anyPlaceable(){ return S.vesselInv.length+S.deviceInv.length>0; }
 function drawRoom(t){
   const r=S.cur;
-  drawRoomBg(r,t);
-  drawCells(r,t,{placeable: U.build ? !!U.pick : anyPlaceable(), pick:U.pick});
-  const n=ROOMS[r].w*ROOMS[r].h;
-  for(let i=0;i<n;i++){ const [x,y]=cellXY(r,i); hit(x,y,CELL,CELL,()=>tapCell(r,i)); }
+  drawIso(t,{placeable: U.build ? !!U.pick : anyPlaceable(), pick:U.pick, doorGlow:U.doorGlow});
+  hit(0,14,W,258,(x,y)=>{ const [lx,ly]=toLayer(x,y), p=pickAt(lx,ly); if(!p) return;
+    if (p.kind==='cell') tapCell(p.r,p.i); else tapSpot(p.id); });
   panel(()=>wrap(hint(),5,278,182,P.uiD));
   const cellar=S.rooms.kellari.owned, bw=cellar?45:60, gap=2;
   let bx=4;
@@ -79,7 +80,14 @@ function drawRoom(t){
   button(bx,318,bw,14,U.build?'VALMIS':'RAKENNA',()=>{ U.build=!U.build; U.pick=null; }, U.build?'g':'n'); bx+=bw+gap;
   if (cellar) button(bx,318,W-4-bx,14,r==='huone'?'KELLARI':'HUONE',()=>switchRoom());
 }
-export function switchRoom(){ if(!S.rooms.kellari.owned) return; S.cur = S.cur==='huone'?'kellari':'huone'; save(); }
+export function switchRoom(){ if(!S.rooms.kellari.owned) return; const from=S.cur; S.cur = S.cur==='huone'?'kellari':'huone'; startTransition(from,S.cur); save(); }
+// tilan erikoiskohteet: ovi (rihmaretki, TP5 kuuntelee tapahtumaa 'ovi') ja kellarin tikkaat
+function tapSpot(id){
+  if (U.build) return;
+  if (id==='tikkaat') switchRoom();
+  else if (id==='ovi') emit('ovi',{});
+}
+on('ovi',()=>{ if (!U.doorGlow) toast('OVI JOHTAA ULOS RIHMASTOON. RETKET AVAUTUVAT PIAN.'); });
 function tapCell(r,i){
   const c=S.rooms[r].cells[i];
   if (U.build){
@@ -87,7 +95,7 @@ function tapCell(r,i){
     if (c) U.pick={r,i}; return;
   }
   if (!c){ if (anyPlaceable()) U.modal={type:'place',r,i}; else toast('TYHJÄ RUUTU. OSTA ASTIOITA JA LAITTEITA MARKKINALTA.'); return; }
-  if (c.kind==='vessel'){ U.sel={c,r,i}; U.view='vessel'; return; }
+  if (c.kind==='vessel'){ startZoom(1,cellBoxUi(r,i)); U.sel={c,r,i}; U.view='vessel'; return; }
   if (c.done){ if (c.type==='hautomo') openHautomo(c); else sim.collectDevice(c); return; }
   U.modal={type:'device', c, r, i, pickA:null};
 }
@@ -115,7 +123,7 @@ function drawVessel(t){
   if (T && !T.auto){ text('KASVU',5,305,P.ui3); bar(46,305,vs.growth, vs.ready?AMB[1]:T.col[1]); }
   if (T){ const m=sim.matchOf(vs,vs.strain); text(['HUONO ASTIA','KELPO ASTIA','TÄYDELLINEN'][m],116,297, m===2?P.grn:m===1?P.ui3:P.red);
     if (vs.moist<0.1) text('HORROS',116,305,P.wa2); else if (T.auto) text('HOITAA 4 NAAPURIA',116,305,T.col[2]); }
-  button(4,318,24,14,'<',()=>{ U.view='room'; });
+  button(4,318,24,14,'<',()=>{ const s=U.sel; startZoom(-1,s?cellBoxUi(s.r,s.i):null,g.canvas); U.view='room'; });
   button(30,318,38,14,'SUMUTA',()=>sim.mist(vs), (vs.strain&&vs.moist<0.35&&V.dry>0)?'g':(V.dry>0?'n':'d'));
   if (!T) button(70,318,118,14,'ISTUTA',()=>{ U.modal={type:'plant',vs}; }, Object.keys(S.spores).length?'a':'d');
   else if (vs.ready){ button(70,318,60,14,'KORJAA SATO',()=>{ sim.harvest(vs); U.burst=now(); },'a'); button(132,318,56,14,'OTA ITIÖT',()=>{ sim.takeSpores(vs); U.burst=now(); },'n'); }
@@ -327,7 +335,9 @@ function drawModal(t){
 }
 
 export function render(ms){
-  const t=ms/1000; resetHit();
+  const t=ms/1000; resetHit(); g.clearRect(0,0,W,H);
+  // poikkileikkaukseen zoomatessa huone näkyy taustalla
+  if (U.view==='vessel' && zoomActive() && ZOOM.dir>0) drawIso(t,{});
   if (U.view==='reveal' && U.rev) drawReveal(t);
   else {
     if (U.view==='vessel') drawVessel(t); else if (U.view==='book') drawBook(t); else { U.view='room'; drawRoom(t); }

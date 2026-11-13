@@ -23,6 +23,7 @@ Pelaaja ei valmista esineitä vaan kasvattaa elävää rihmastoa: kantoja ristey
 index.html          aloitussivu (linkit protoihin)
 ulko/index.html     ULKO-01 (JÄÄDYTETTY: ulkopeli ei kuulu tähän protoon, saaliit simuloidaan kotona)
 koti/index.html     KOTI-01 v1: kotipeli ES-moduuleina koti/js/ (data, gfx, events, state, sim, room, xsec, ui, main)
+                    iso.js = isometrinen päänäkymä (atlas koti/gfx/, 384 px kerros UI-puskurin ×2 alla, osumat, siirtymät)
 iso/index.html      kokeilu (JÄÄDYTETTY): isometrinen 3D-kartta three.js r128:lla + pikselöintivarjostin
 blender/            Blender-skriptit (bpy): room.py (huone), kit.py (katupakkaus + talot), pix.py (pikselöinti), sheet.py
 docs/               ydinvisio.md, kotipeli-v1.md (+ suunnitelma), prototyypin-tila.md
