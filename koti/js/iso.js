@@ -247,6 +247,16 @@ function drawRoomAt(r, t, opt, ox, oy){
     neighbors(r, i).forEach(j => { if (!cells[j] || cells[j].kind !== 'vessel') return; const [x1, y1] = cellAnchor(r, j, ox, oy);
       for (let k = 6; k < 38; k++){ const f = k/44, ph = ((t*8 - k) % 8 + 8) % 8; if (k & 1) continue;
         px(x0 + (x1 - x0)*f, y0 + (y1 - y0)*f + 2, ph < 2 ? T.col[2] : T.col[0]); } }); });
+  // oven hehku, kun ovi on toiminnassa (TP5 asettaa opt.doorGlow)
+  // doorGlow: true = retki valittavissa (symbiontin syaani), 'amb' = retkeltä palattu (meripihka, tee tämä nyt)
+  if (r === 'huone' && opt.doorGlow){ const b = spotBox(r, 'ovi', ox, oy); if (b){ const col = opt.doorGlow === 'amb' ? AMB[2] : SYM;
+    // oven karmi hehkuu sykkien (ovi on vasemmassa seinässä: yläreuna nousee oikealle)
+    const pulse = 0.5 + 0.5*Math.sin(t*2.5), x0 = b.x + 4, x1 = b.x + b.w - 4, sl = 0.5;
+    const yTop = x => b.y + 26 - (x - x0)*sl, yBot = x => b.y + b.h - 4 - (x - x0)*sl;
+    for (const x of [x0, x1]) for (let y = yTop(x); y < yBot(x); y++) if (BAYER[(y|0)&3][x&3] < 6 + pulse*10) px(x, y, col);
+    for (let x = x0; x <= x1; x++) if (BAYER[(yTop(x)|0)&3][x&3] < 6 + pulse*10) px(x, yTop(x), col);
+    for (let k = 0; k < 10; k++){ const q = (t*18 + k*11) % (b.h - 30); px(x0 + 4 + ((k*7) % (x1 - x0 - 8)), yBot(x0 + 4 + ((k*7) % (x1 - x0 - 8))) - q, col); }
+    if (opt.doorGlow === 'amb') readyMarker((x0 + x1)/2, yTop((x0 + x1)/2) - 2, t); } }
   // syvyysjärjestys c + r
   for (let i = 0; i < n; i++) if (cells[i]){ const w = ROOMS[r].w; list.push({i, c:cells[i], d:(i % w) + ((i / w) | 0), col:i % w}); }
   list.sort((a, b) => a.d - b.d || a.col - b.col);
@@ -295,11 +305,7 @@ function drawRoomAt(r, t, opt, ox, oy){
   }
   over.forEach(f => f());
   for (const sp of SPOTS[r]) if (!sp.noTap){ const b = spotBox(r, sp.id, ox, oy); if (b) DRAWN.push({r, kind:'spot', id:sp.id, box:b}); }
-  // oven hehku, kun ovi on toiminnassa (TP5 asettaa opt.doorGlow)
-  // doorGlow: true = retki valittavissa (symbiontin syaani), 'amb' = retkeltä palattu (meripihka, tee tämä nyt)
-  if (r === 'huone' && opt.doorGlow){ const b = spotBox(r, 'ovi', ox, oy); if (b){ const col = opt.doorGlow === 'amb' ? AMB[2] : SYM;
-    for (let k = 0; k < 12; k++){ const q = (t*18 + k*11) % b.h; px(b.x + b.w*0.5 + Math.sin(q*0.15 + k)*6 - q*0.18, b.y + b.h - q, col); }
-    if (opt.doorGlow === 'amb') readyMarker(b.x + b.w/2, b.y + 6, t); } }
+
 }
 
 // tilan vaihdon siirtymä: kellariin mennään alas, huoneeseen ylös
@@ -369,5 +375,5 @@ export function composite(sctx, buf, k, view){
     sctx.drawImage(z && ZOOM.dir < 0 ? ZOOM.snap : XL, 0, 0, IW, IH, Math.round(x*2*k), Math.round(y*2*k), Math.round(w*2*k), Math.round(h*2*k));
     sctx.globalAlpha = 1;
   }
-  sctx.drawImage(buf, 0, 0, W, H, 0, 0, 2*W*k, 2*H*k);
+  sctx.drawImage(buf, 0, 0, buf.width, buf.height, 0, 0, 2*W*k, 2*H*k);
 }

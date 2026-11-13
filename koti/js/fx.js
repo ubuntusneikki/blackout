@@ -2,12 +2,13 @@
 // Kytkeytyy vain events.js:n tapahtumiin. Paikat kysytään lokaattorilta, jonka isometrinen näkymä (TP4)
 // voi vaihtaa: setLocator({cell(r,i)->{x,y,w,h}|null, window()->{x,y,w,h}|null, counter()->{x,y}}).
 import {P, AMB, WILD, CUR} from './data.js';
-import {W, H, g, px, rect, BAYER, clamp, text, tw, screen} from './gfx.js';
+import {W, H, RES, g, px, dot, bay, rect, BAYER, clamp, text, tw, screen} from './gfx.js';
 import {S, strain} from './state.js';
 import {on} from './events.js';
 import {U} from './ui.js';
 import {cellXY, CELL} from './room.js';
 import {play} from './audio.js';
+import {layer as ISO_LAYER, IY as ISO_Y} from './iso.js';
 
 const reduced = (()=>{ try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch(e){ return false; } })();
 
@@ -130,8 +131,8 @@ function ambient(t, dt){
     const T=strain(c.strain); if (!T) return; const dry=c.moist<0.1, life=0.3+0.7*c.growth;
     // valolammikko astian alle: kannan värinen pistekuvioitu hehku, hengittää ja sammuu kuivuessa
     if (!dry){ const k=breath(t,i)*life*(0.55+0.45*night), cx=b.x+b.w/2, cy=b.y+b.h+1, rx=b.w*0.48;
-      for (let yy=-1;yy<=2;yy++) for (let xx=-rx;xx<=rx;xx++){ const X=(cx+xx)|0, Y=cy+yy, d=Math.hypot(xx/rx,yy/2.5);
-        if (d<1 && BAYER[Y&3][X&3] < (1-d)*15*k) px(X,Y, d<0.4?T.col[2]:T.col[1]); } }
+      for (let yy=-1;yy<=2;yy+=.5) for (let xx=-rx;xx<=rx;xx+=.5){ const X=cx+xx, Y=cy+yy, d=Math.hypot(xx/rx,yy/2.5);
+        if (d<1 && bay(X,Y) < (1-d)*15*k) dot(X,Y, d<0.4?T.col[2]:T.col[1]); } }
     // itiöpöly nousee kasvavista astioista
     if (!reduced && !dry && Math.random() < dt*0.7*life) add({x:b.x+6+Math.random()*(b.w-12),y:b.y+b.h*0.5,vx:(Math.random()-0.5)*2,vy:-3-Math.random()*3,g:0,drag:0,life:2.5+Math.random()*2,col:T.mutant&&Math.random()<0.4?AMB[2]:T.col[Math.random()<0.3?2:1],mote:true});
   });
@@ -147,30 +148,40 @@ function dusk(h){ return Math.max(0, 1-Math.abs(h-7)/2.2, 1-Math.abs(h-19.5)/2.5
 function windowLight(t){
   const w=L.window(); if (!w) return;
   const h=window.__fxHour!=null?window.__fxHour:hourNow(), n=nightness(h), dk=dusk(h);
-  for (let y=w.y;y<w.y+w.h;y++){ const f=(y-w.y)/w.h;
-    for (let x=w.x;x<w.x+w.w;x++){ const b=BAYER[y&3][x&3];
-      if (n>0.05 && b < n*(f<0.5?9:4)) px(x,y,f<0.5?'#130f24':'#24203f');            // yö tummentaa taivaan
-      else if (n<0.95 && f<0.6 && b < (1-n)*1.5) px(x,y,'#5a4a6a');                    // päivän sumu
-      if (dk>0.05 && f>0.55 && b < dk*4*(f-0.55)/0.45) px(x,y, f>0.85?'#ffcf7a':'#d99a5b'); } }  // horisontti
+  // ikkuna on oikeassa seinässä: lasi on suunnikas (yläreuna laskee oikealle), efektit vain lasin päälle
+  const gx0=w.x+w.w*0.07, gx1=w.x+w.w*0.94, gh=w.h*0.48, SL=0.4, gTop=x=>w.y+w.h*0.145+(x-gx0)*SL;
+  for (let x=gx0;x<gx1;x+=.5){ const t0=gTop(x);
+    for (let y=t0;y<t0+gh;y+=.5){ const f=(y-t0)/gh, b=bay(x,y);
+      if (n>0.05 && b < n*(f<0.5?9:4)) dot(x,y,f<0.5?'#130f24':'#24203f');            // yö tummentaa taivaan
+      else if (n<0.95 && f<0.6 && b < (1-n)*1.5) dot(x,y,'#5a4a6a');                    // päivän sumu
+      if (dk>0.05 && f>0.55 && b < dk*4*(f-0.55)/0.45) dot(x,y, f>0.85?'#ffcf7a':'#d99a5b'); } }  // horisontti
   // yöllä villin rihmaston kärjet välkkyvät
-  if (n>0.3) for (let k=0;k<14;k++){ const x=w.x+((k*53+7)%w.w), y=w.y+w.h-3-((k*29)%Math.max(4,w.h/2));
-    if (Math.sin(t*1.7+k*2.3)>0.4) px(x,y,'#d6b0ff'); }
-  // päivällä vino valokaista ikkunasta huoneeseen (vain ruutujen väliin, ei esineiden päälle)
+  if (n>0.3) for (let k=0;k<14;k++){ const x=gx0+((k*53+7)%((gx1-gx0)|0)), y=gTop(x)+gh-2-((k*29)%Math.max(4,gh/2));
+    if (Math.sin(t*1.7+k*2.3)>0.4) dot(x,y,'#d6b0ff'); }
+  // päivällä vino valokaista ikkunasta lattialle (alas vasemmalle), vain huoneen pinnoille eikä esineiden päälle
   const bandK=(1-n)*0.9;
   if (bandK>0.05 && U.view==='room' && !U.modal){
     const cellsB=[]; for (let i=0;i<S.rooms[S.cur].cells.length;i++){ const b=L.cell(S.cur,i); if (b) cellsB.push(b); }
-    const y0=w.y+w.h+3, y1=272, img=g.getImageData(0,y0,W,y1-y0), D=img.data;
-    for (let y=y0;y<y1;y++){ const x0=w.x+30+(y-y0)*0.5, bw=40, fall=1-(y-y0)/(y1-y0)*0.7;
-      for (let x=Math.max(0,x0|0);x<Math.min(W,x0+bw);x++){
-        if (cellsB.some(b=>x>=b.x&&x<b.x+b.w&&y>=b.y&&y<b.y+b.h)) continue;
-        const e=Math.min(x-x0, x0+bw-x)/8; let k=bandK*fall*Math.min(1,e)*0.9;   // pehmeät reunat
-        if (BAYER[y&3][x&3] < 3) k*=1.6;                                           // pistekuvioitu kirkkaus
-        const i=((y-y0)*W+x)*4;
-        if (D[i+3]<250){ if (D[i+3]===0){ D[i]=255; D[i+1]=240; D[i+2]=192; D[i+3]=Math.min(110,k*90); } continue; }   // läpinäkyvä g (TP4:n huonekerros alla): puoliläpinäkyvä valo
-        D[i]=Math.min(255,D[i]*(1+k)+60*k); D[i+1]=Math.min(255,D[i+1]*(1+k*0.85)+44*k); D[i+2]=Math.min(255,D[i+2]*(1+k*0.4)+18*k); } }
-    g.putImageData(img,0,y0);
+    const LEN=70, DX=-0.75, N0=Math.round(gTop(gx0)+gh)*RES, N1=Math.min(272*RES, Math.round((gTop(gx1)+gh+LEN)*RES)), NW=W*RES;
+    if (N1>N0){
+      const img=g.getImageData(0,N0,NW,N1-N0), D=img.data;
+      const LA=ISO_LAYER.getContext('2d').getImageData(0,N0-ISO_Y,NW,N1-N0).data;     // huonekerroksen alfa samoilla riveillä
+      for (let ny=N0;ny<N1;ny++){ const y=ny/RES;
+        for (let nx=0;nx<NW;nx++){ const x=nx/RES;
+          // lähtöpiste lasin alareunalla: x0 = x - DX*s, missä s = etäisyys alareunasta pystysuunnassa
+          const s=(y-(gTop(gx0)+gh)-(x-gx0)*SL)/(1-DX*SL); if (s<0||s>LEN) continue;   // alareuna on vino
+          const xw=x-DX*s; if (xw<gx0||xw>gx1) continue;
+          const i=((ny-N0)*NW+nx)*4; if (LA[i+3]<200) continue;                         // ei tyhjän päälle
+          if (cellsB.some(b=>x>=b.x&&x<b.x+b.w&&y>=b.y&&y<b.y+b.h)) continue;
+          const e=Math.min(xw-gx0, gx1-xw)/6, fall=1-s/LEN; let k=bandK*fall*fall*Math.min(1,e)*0.8;
+          if (BAYER[ny&3][nx&3] < 3) k*=1.6;
+          if (D[i+3]===0){ D[i]=255; D[i+1]=240; D[i+2]=192; D[i+3]=Math.min(110,k*90); continue; }
+          if (D[i+3]<250) continue;
+          D[i]=Math.min(255,D[i]*(1+k)+60*k); D[i+1]=Math.min(255,D[i+1]*(1+k*0.85)+44*k); D[i+2]=Math.min(255,D[i+2]*(1+k*0.4)+18*k); } }
+      g.putImageData(img,0,N0);
+    }
     // pölyhiukkaset valokaistassa
-    if (!reduced && Math.random()<0.15) add({x:w.x+30+Math.random()*80,y:w.y+w.h+Math.random()*120,vx:(Math.random()-0.5)*2,vy:-1,g:0,drag:0,life:3,col:'#fff0c0',mote:true});
+    if (!reduced && Math.random()<0.15) add({x:gx0+Math.random()*(gx1-gx0)-Math.random()*40,y:gTop(gx0)+gh+Math.random()*50,vx:(Math.random()-0.5)*2,vy:-1,g:0,drag:0,life:3,col:'#fff0c0',mote:true});
   }
 }
 
@@ -185,21 +196,21 @@ export function draw(ms){
   // valmistumisen renkaat
   for (let k=RINGS.length-1;k>=0;k--){ const R=RINGS[k], a=(ms-R.t0)/700; if (a>1){ RINGS.splice(k,1); continue; } if (modal) continue;
     const b=R.b, cx=b.x+b.w/2, cy=b.y+b.h/2, r=6+a*b.w*0.6;
-    for (let q=0;q<28;q++){ const ang=q/28*6.283; if ((q+((a*8)|0))&1) continue; px(cx+Math.cos(ang)*r, cy+Math.sin(ang)*r*0.75, R.col); } }
+    for (let q=0;q<28;q++){ const ang=q/28*6.283; if ((q+((a*8)|0))&1) continue; rect(cx+Math.cos(ang)*r, cy+Math.sin(ang)*r*0.75, 1, .5, R.col); } }
   // hiukkaset
   for (let k=PS.length-1;k>=0;k--){ const p=PS[k]; p.age+=dt;
     if (p.age>p.life){ if (p.kind==='coin'){ if (p.toCounter){ counterFlash=ms; play('tick'); } } PS.splice(k,1); continue; }
-    if (p.kind==='coin'){ const a=clamp((p.age-p.delay)/(p.life-p.delay),0,1); if (a<=0) { if(!modal||p.layer==='ui') px(p.x0,p.y0,AMB[2]); continue; }
+    if (p.kind==='coin'){ const a=clamp((p.age-p.delay)/(p.life-p.delay),0,1); if (a<=0) { if(!modal||p.layer==='ui') rect(p.x0,p.y0,1,1,AMB[2]); continue; }
       const e=a*a*(3-2*a); p.x=p.x0+(p.x1-p.x0)*e; p.y=p.y0+(p.y1-p.y0)*e+p.arc*Math.sin(a*Math.PI); }
     else { p.vy+=p.g*dt; const dr=Math.max(0,1-p.drag*dt); p.vx*=dr; p.vy*=dr; p.x+=p.vx*dt; p.y+=p.vy*dt; }
     if (modal && p.layer!=='ui') continue;
     if (p.x<0||p.x>=W||p.y<0||p.y>=H) continue;
     const fade=1-p.age/p.life;
-    if (p.kind==='text'){ text(p.s,p.x+1,p.y+1,P.ui0); text(p.s,p.x,p.y,p.col); continue; }
-    if (p.kind==='coin'){ rect(p.x-1,p.y-1,3,3,AMB[0]); rect(p.x-1,p.y-1,2,2,AMB[2]); px(p.x,p.y,AMB[1]); continue; }
-    if (p.mote && BAYER[p.y&3][p.x&3] > fade*20) continue;     // häivytys pistekuvioina
+    if (p.kind==='text'){ text(p.s,p.x+.5,p.y+.5,P.ui0); text(p.s,p.x,p.y,p.col); continue; }
+    if (p.kind==='coin'){ rect(p.x-1,p.y-1,2.5,2.5,AMB[0]); rect(p.x-1,p.y-1,2,2,AMB[1]); rect(p.x-1,p.y-1,1,.5,AMB[2]); rect(p.x-1,p.y-1,.5,1,AMB[2]); continue; }
+    if (p.mote && bay(p.x,p.y) > fade*20) continue;     // häivytys pistekuvioina
     if (!p.mote && fade<0.3 && ((k+((p.age*10)|0))&1)) continue;
-    rect(p.x,p.y,p.size||1,p.size||1,p.col);
+    rect(p.x,p.y,(p.size||1)/RES*(p.mote?1:1.5),(p.size||1)/RES*(p.mote?1:1.5),p.col);
   }
   // laskurin välähdys kolikon osuessa
   const fa=(ms-counterFlash)/220;
