@@ -203,7 +203,7 @@ const MAP = {
   myynti:['coin',10], osto:['osto',[12,30,12]], toimitus:['coin',[10,30,10]], kysyntapiikki:['piikki',null],
   avaus:['avaus',[20,60,20,60,40]], 'tilaus-valmis':['avaus',[30,60,30,60,80]], 'tilaus-uusi':['valmis',null],
   testiloyto:['itiot',10], pelastus:['itiot',null], virhe:['virhe',[25,50,25]], kypsyi:['kypsyi',null], horros:['horros',null],
-  'retki-paluu':['reveal',[20,60,40]]
+  'retki-alku':['itiot',12], 'retki-palasi':['valmis',[15,40,15]], 'retki-loyto':['reveal',[20,60,40]]   // TP5 rihmaretki
 };
 on('*', (d, name) => {
   const m = MAP[name]; if (!m) return;
