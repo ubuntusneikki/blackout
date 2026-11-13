@@ -5,7 +5,8 @@ PAL = '''0b1018 141c28 1f2a38 2c3a4a 46566a 22191c 33242a 4a3330 6a4440 2a1d16 4
 5e321e a8602f d99a5b f3d08a 16262e 2d4a55 4f7d86 9fd3d6 24391c 3f6a26 79a83a c2df6a 8a7d68 c9bc9c efe6cc
 103540 1d6a78 5fc7d0 ffcf7a fff0c0 1d5c58 34b8ac a8fbee 5a1f4a c4428f ffa6d6 6b2e12 d9702a ffc46a
 3a1f5a 8a4ad0 d6b0ff 1b2a4a 3a3a5e 7a4a5a d9845a 6ae07a 3b3a33 55524a 77705f 23272a 2e322e 3c4239 4e5448 646a5c
-7a4438 5a3028 c9a46a a8865a e0504a'''.split()
+7a4438 5a3028 c9a46a a8865a e0504a
+2f5a3a 8fd0a0 e8fff0 3a1a50 9a46c0 f2b4ff 5a2a3a d0606e ffc8cc'''.split()   # rivi 6: hoitajasieni, yöruusu, verkkoheltta
 pal = np.array([[int(h[i:i+2], 16) for i in (0, 2, 4)] for h in PAL], np.float32)
 B = np.array([[0,8,2,10],[12,4,14,6],[3,11,1,9],[15,7,13,5]], np.float32) / 16 - 0.47
 
