@@ -1,22 +1,22 @@
 # Moodboard: biopunk-laboratorio (tyyliohje)
 
-Tiivistelmä Juuson Pinterest-moodboardista (50 kuvaa, kansio `pinterest-biopunk`, 2026-11-12). Ohje **täydentää** hyväksyttyä kodin tyyliä (tyylitesti 3, `docs/grafiikka-koti.md`), ei korvaa sitä. Lukija on grafiikan atlas-työpaketti: alla on konkreettiset suositukset ja lopussa kohdat, joissa moodboard on ristiriidassa hyväksytyn tyylin kanssa. Ne odottavat Juuson päätöstä.
+Tiivistelmä Juuson Pinterest-moodboardista (50 kuvaa, kansio `pinterest-biopunk`, 2026-11-12). Ohje **täydentää** hyväksyttyä kodin tyyliä (tyylitesti 3, `docs/grafiikka-koti.md`), ei korvaa sitä. Lukija on grafiikan atlas-työpaketti: alla on konkreettiset suositukset ja lopussa kohdat, joissa moodboard on ristiriidassa hyväksytyn tyylin kanssa, sekä Juuson päätökset niistä.
 
-Avainkuvat ovat pienennettyinä kansiossa `docs/kuvat/moodboard/` (numero = moodboardin tiedostonumero). Paletit: `docs/kuvat/moodboard/paletit.png`.
+Moodboardin kuvat ovat vain Juuson koneella (kansio `pinterest-biopunk`, tiedostot `01_…`–`50_…`); niitä ei pidetä repossa. Numerot tässä ohjeessa viittaavat niiden tiedostonumeroihin. Paletit: `docs/kuvat/moodboard/paletit.png`.
 
 | Kuva | Miksi se on mukana |
 |---|---|
-| `03_kasvihuone_dioraama` | Habbo-tyylinen isometrinen huone: tiheä, mutta luettava; lämmin vihreä hehku tummassa. |
-| `09_teal_huone_leikkaus` | Yksivärinen teal-huone, valokaista ylhäältä, kerros ja portaat alas (malli huone + kellari). |
-| `11_akvaario_poikkileikkaus` | Aukileikattu lasikuutio: lasin reunakorostus, vesi läpikuultava, pohja kerroksina. |
-| `08_biosailio_laite` | Pikselitaiteena tehty elävä säiliölaite: lasisylinteri, sisällä hehkuva neste, valuma lattialle. |
-| `27_kasvatussailiot` | Kasvatussäiliörivi: kuplat, kasvusto nesteessä, kupariputket tummalla teräksellä. |
-| `30_hehkuvat_akvaariot` | Pimeä huone, jonka ainoa valo tulee säiliöistä. Valolammikot lattialla. |
-| `37_labra_ylhaalta` | Sama aihe lämpimänä: hehkulamput, puupöytä, kolvi meripihkanesteellä. |
-| `45_violetti_biolabra` | Violetti/UV-valaistu kasvilabra, ritilälattia, hehkuvat kasvit. |
-| `47_villi_violetti_dioraama` | Kylmän violetti, villi kasvusto, joka valtaa rakenteen. Malli villille rihmastolle. |
-| `14_pikselisienet` | Pikselisienet: sävyramppi, kiiltopisteet, pisarat, siluetti pienessä koossa. |
-| `15_kantojen_hehkuvarit` | Jokaisella kasvilla oma värikoodi ja oma siluetti; hehku kärjissä. |
+| 03 | Habbo-tyylinen isometrinen huone: tiheä, mutta luettava; lämmin vihreä hehku tummassa. |
+| 09 | Yksivärinen teal-huone, valokaista ylhäältä, kerros ja portaat alas (malli huone + kellari). |
+| 11 | Aukileikattu lasikuutio: lasin reunakorostus, vesi läpikuultava, pohja kerroksina. |
+| 08 | Pikselitaiteena tehty elävä säiliölaite: lasisylinteri, sisällä hehkuva neste, valuma lattialle. |
+| 27 | Kasvatussäiliörivi: kuplat, kasvusto nesteessä, kupariputket tummalla teräksellä. |
+| 30 | Pimeä huone, jonka ainoa valo tulee säiliöistä. Valolammikot lattialla. |
+| 37 | Sama aihe lämpimänä: hehkulamput, puupöytä, kolvi meripihkanesteellä. |
+| 45 | Violetti/UV-valaistu kasvilabra, ritilälattia, hehkuvat kasvit. |
+| 47 | Kylmän violetti, villi kasvusto, joka valtaa rakenteen. Malli villille rihmastolle. |
+| 14 | Pikselisienet: sävyramppi, kiiltopisteet, pisarat, siluetti pienessä koossa. |
+| 15 | Jokaisella kasvilla oma värikoodi ja oma siluetti; hehku kärjissä. |
 
 ## 1. Moodboard lyhyesti
 
@@ -46,7 +46,7 @@ Ehdotetut paletit (`paletit.png`). Kaikki paitsi villin violetin ja myrkynvihre�
 | Kasvatusneste ja lasi | `#103540 #1d6a78 #31b293 #5fc7d0 #93d7a8 #e8fff0` | Lasin heijastus, kosteus, ravinneputkien neste, hautomon merkkivalo. |
 | Lämmin vastavalo | `#45301f #6a4a30 #a8602f #d99a5b #ffcf7a #fff0c0` | Valolista, lamppu, kupari, ovi. Meripihka on edelleen "tee tämä nyt". |
 | Villi rihmasto | `#130f24 #24203f #3a1f5a #4e628e #8a4ad0 #d6b0ff` | Villi rihmasto, ikkunan takainen yö, vieraat näytteet. |
-| Moodboardin myrkynvihreä | `#1f3a22 #318c59 #52d26f #bddb54 #e8f5a0` | **Ei käyttöön ilman päätöstä**, ks. ristiriita A. |
+| Moodboardin myrkynvihreä | `#1f3a22 #318c59 #52d26f #bddb54 #e8f5a0` | **Ei käytetä** (päätös A). Mukana vain vertailuna. |
 
 Sääntö, joka toistuu kaikissa hyvissä kuvissa: **yksi kylläinen hehkuväri esinettä kohden**, kaikki muu sammutettua. Kantojen värit (siniheltta, ruususieni, hämäränuppi, hoitajasieni) ovat nämä hehkuvärit, joten huoneen kalusteet pidetään sammutettuina.
 
@@ -104,7 +104,7 @@ Kasvuvaiheet (`itu`, `nuori`, `kypsa`) erottuvat koon lisäksi hehkun määräll
 **Laboratorio (huone ja kellari)**
 - Pidä hyväksytty perusta: tummat teräs- ja paneelipinnat, lämmin valolista ja ravinneputket.
 - Lisää moodboardista: ravinneputkiin näkyvä neste ja kuplat (27), yksi kupariputki ja venttiili lämpimäksi vastaväriksi, sekä valokaista ikkunasta lattialle (09).
-- Kellari on viileämpi ja tummempi, ja siinä on ritilälattia (27, 45). Villin rihmaston violetti saa näkyä vain kellarin nurkissa tai seinän raoista (47), jos ristiriita D ratkeaa niin.
+- Kellari on viileämpi ja tummempi, ja siinä on ritilälattia (27, 45). Villin rihmaston violetti näkyy pienenä määränä kellarin nurkissa tai seinän raoista (47, päätös D).
 
 **Astiat**
 - Kaikki astiat noudattavat kaavaa *tumma jalusta, lasi, tumma kansi tai kehys*. Lasin takaosa (`astia_x`) ja etukulma (`astia_x_etu`) saavat reunakorostuksen kohdan 3 mukaan.
@@ -119,23 +119,25 @@ Kasvuvaiheet (`itu`, `nuori`, `kypsa`) erottuvat koon lisäksi hehkun määräll
 **Käyttöliittymä**
 - Kuvakkeet 16–24 px: sama sävyramppi ja sävytetty ääriviiva kuin sienissä, yksi hehkuväri.
 
-## 8. Ristiriidat hyväksytyn tyylin kanssa (kysymykset Juusolle)
+## 8. Ristiriidat hyväksytyn tyylin kanssa ja päätökset
+
+Juuso päätti kaikki viisi kohtaa 2026-11-13.
 
 **A. Myrkynvihreä hehku.** Moodboardin säiliöt (08, 27) hehkuvat kirkkaan myrkynvihreinä. Hyväksytyssä tyylissä hehku on kannan väri ja meripihka tarkoittaa "tee tämä nyt", eikä myrkynvihreä ole kenenkään kannan väri. Lisäksi se sekoittuisi hoitajasienen vaaleanvihreään.
-*Kysymys:* Jätetäänkö myrkynvihreä pois ja käytetään säiliöissä ja putkissa hillittyä teal-nestettä? (Suositus: kyllä.)
+**Päätös:** myrkynvihreä jätetään pois. Säiliöissä ja putkissa käytetään hillittyä teal-nestettä.
 
 **B. Koristehehku ja "hehku = pelattavaa".** Moodboardissa hehkuvat näytöt, kyltit, LED-listat ja neonit. Sääntömme mukaan vain asiat, joihin voi tarttua, hehkuvat.
-*Kysymys:* Sallitaanko himmeä, ei-pelattava tunnelmahehku (esim. ravinneputken neste, valolista), kunhan se on selvästi himmeämpi kuin pelattavat asiat? (Suositus: kyllä, mutta korkeintaan keskisävy, ei koskaan kirkkain sävy.)
+**Päätös:** himmeä tunnelmahehku (ravinneputken neste, valolista) on sallittu. Se pysyy keskisävyssä eikä koskaan käytä kirkkainta sävyä, jotta pelattavat asiat erottuvat.
 
 **C. Näytöt, tekstikyltit ja konsolit.** Moodboardin laboratorioissa (27, 45, 06) on paljon tietokoneita, näyttöjä ja kylttejä ("TANK 03: ACTIVE"). Periaatteemme mukaan ei koneita eikä tehtaita, vaan elävää kasvatusta.
-*Kysymys:* Jätetäänkö näytöt ja kyltit kokonaan pois ja kerrotaan tila vain elävillä merkeillä (hehku, nesteen väri, kalvon kasvu)? (Suositus: kyllä. Korkeintaan yksi pieni käsinkirjoitettu lappu tai muistiinpano tunnelmaksi.)
+**Päätös:** näytöt, konsolit ja tekstikyltit jätetään pois. Tila kerrotaan elävillä merkeillä (hehku, nesteen väri, kalvon kasvu).
 
 **D. Rappio ja villi violetti kotona.** Puolet moodboardista on ruostetta, sammalta ja luonnon valtaamaa kaupunkia. Hyväksytty koti on siisti ja futuristinen, eikä tyylitesti 3:ssa ole rihmastoa seinillä. CLAUDE.md:n uusi värikieli sanoo, että villi rihmasto on kylmä violetti ja koti lämmin.
-*Kysymys:* Saako villi violetti rihmasto näkyä kotona edes kellarin nurkissa (uhka ja tunnelma), vai pidetäänkö koti täysin siistinä ja villi rihmasto vain ikkunan takana? (Suositus: kellarissa pieni määrä, huone siisti.)
+**Päätös:** villi violetti rihmasto näkyy pienenä määränä kellarin nurkissa. Huone pysyy siistinä.
 
 **E. Huone ja kellari samassa dioraamassa.** Moodboardin dioraamoissa (09, 11) kerrokset näkyvät päällekkäin leikkauksena. Nykyinen suunnitelma käsittelee huonetta ja kellaria erillisinä tiloina.
-*Kysymys:* Kokeillaanko näkymää, jossa kellari näkyy huoneen alla samassa aukileikatussa kuutiossa (portaat alas kuten 09)? Se näyttäisi upealta, mutta kangas kasvaa korkeammaksi. (Suositus: ei v1:ssä, erilliset tilat riittävät. Muistiin myöhemmäksi.)
+**Päätös:** ei v1:ssä. Huone ja kellari ovat erillisiä näkymiä. Yhdistetty leikkaus kaksinkertaistaisi kankaan korkeuden (puhelimessa huone pienenisi), ja v1:n atlas on jo tehty erillisille tiloille. Idea jää myöhemmäksi.
 
 ## Lähteet
 
-Kuvat ovat Juuson Pinterest-kokoelmasta ja muiden tekijöiden töitä (näkyvät signeeraukset mm. Molt (03), nashor_kim (08), JOSAQ (09, 31, 35), Rappenem (07), David Puerta (26), New World -konseptitaide (15), Redfall-konseptitaide (02), Paladins/Evil Mojo (32), pixpilgames (16), abueloretrowave (01)). Repoon on otettu vain pienennetyt viitekuvat tyylin dokumentointia varten. Niitä ei käytetä peligrafiikkana eikä niistä kopioida mitään sellaisenaan.
+Kuvat ovat Juuson Pinterest-kokoelmasta ja muiden tekijöiden töitä (näkyvät signeeraukset mm. Molt (03), nashor_kim (08), JOSAQ (09, 31, 35), Rappenem (07), David Puerta (26), New World -konseptitaide (15), Redfall-konseptitaide (02), Paladins/Evil Mojo (32), pixpilgames (16), abueloretrowave (01)). Kuvia ei pidetä repossa. Niitä käytetään vain tyylin viitteinä, ei peligrafiikkana, eikä niistä kopioida mitään sellaisenaan.
