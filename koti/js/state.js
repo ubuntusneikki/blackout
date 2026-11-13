@@ -19,8 +19,8 @@ export function newGame(){
     bought:{purkki:0, terraario:0}, sold:0,
     known:{heltta:1, ruusu:1}, tried:{},
     market:{sat:{}, spike:null, nextSpike:SPIKE_FIRST},
-    flags:{firstHarvest:false, lab:false, firstCross:false, mutation:false, done:false},
-    order:null, trips:0, retkiReady:0, kotiLast:Date.now()
+    flags:{firstHarvest:false, lab:false, firstCross:false, mutation:false, done:false, retki:false},
+    order:null, retki:{cur:null, n:0, deep:0}, kotiLast:Date.now()
   };
 }
 
@@ -41,7 +41,7 @@ function migrate(s){
   huone.cells.forEach(c=>{ if(c&&c.strain) known[c.strain]=1; });
   const out={...d, speed:s.speed||60, hopea:Math.max(hopea,d.hopea), rooms:{huone, kellari:d.rooms.kellari}, inv, spores, known,
     vesselInv:(s.vesselInv||[]).slice(), bought:{purkki:(s.bought||{}).purkki||0, terraario:(s.bought||{}).terraario||0},
-    kotiLast:s.kotiLast||Date.now(), trips:s.trips||0, retkiReady:0};
+    kotiLast:s.kotiLast||Date.now()};
   out.flags.firstHarvest=!!s.firstHarvest;
   return out;
 }
@@ -53,6 +53,11 @@ export function ensure(s){
   for (const k in d.flags) if (s.flags[k]===undefined) s.flags[k]=d.flags[k];
   for (const k in d.market) if (s.market[k]===undefined) s.market[k]=d.market[k];
   for (const r in d.rooms) if (!s.rooms[r]) s.rooms[r]=d.rooms[r];
+  // rihmaretki (TP5): ovi on auki, jos vanhassa tallennuksessa on jo myyty; asetusten testilöydön kentät pois
+  if (!s.retki || typeof s.retki!=='object') s.retki=d.retki;
+  for (const k in d.retki) if (s.retki[k]===undefined) s.retki[k]=d.retki[k];
+  if (!s.flags.retki && (s.sold||0)>=1) s.flags.retki=true;
+  delete s.retkiReady; delete s.trips;
   dropDrying(s);
   // ulkosivu voi tuoda vanhoja kenttiä; ne eivät haittaa
   return s;
@@ -66,7 +71,7 @@ export function replaceState(ns){ for (const k of Object.keys(S)) delete S[k]; O
 export function save(){ S.kotiLast=Date.now(); try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch(e){} }
 
 // koti omistaa nämä kentät: toisen välilehden tallennus ei ylikirjoita niitä
-export const KOTI_OWNS = ['rooms','cur','hopea','inv','deviceInv','bought','sold','known','tried','market','flags','order','kotiLast','speed'];
+export const KOTI_OWNS = ['rooms','cur','hopea','inv','deviceInv','bought','sold','known','tried','market','flags','order','retki','kotiLast','speed'];
 export function mergeIncoming(inc){ const keep={}; for (const k of KOTI_OWNS) keep[k]=S[k];
   const n=ensure(inc); for (const k of KOTI_OWNS) n[k]=keep[k]; replaceState(n); }
 

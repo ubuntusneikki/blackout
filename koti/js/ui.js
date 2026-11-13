@@ -6,6 +6,8 @@ import * as sim from './sim.js';
 import {on} from './events.js';
 import {CELL, cellXY, cellAt, drawRoomBg, drawCells, vesselV} from './room.js';
 import {staticFor, drawContents, drawWater, INNER, SOIL, TY0, ORIGIN} from './xsec.js';
+import * as retki from './retki.js';
+import {drawRetkiModal, drawRetkiReveal, timeLeft} from './retki-ui.js';
 
 export const U = {view:'room', sel:null, modal:null, build:false, pick:null, msg:'', msgT:-1e9, msgCol:P.ui3, rev:null, burst:null};
 const now=()=>performance.now();
@@ -50,6 +52,7 @@ function hint(){
   const vs=cells.filter(c=>c.kind==='vessel');
   if (U.build) return U.pick ? 'NAPAUTA RUUTUA, JOHON SIIRRÄT. VAIHDA TILAA, JOS HALUAT VIEDÄ SEN TOISEEN TILAAN.' : 'RAKENNUSTILA: NAPAUTA ESINETTÄ, JONKA HALUAT SIIRTÄÄ.';
   if (cells.some(c=>c.kind==='device'&&c.done)) return 'LAITE ON VALMIS. NAPAUTA HEHKUVAA RUUTUA.';
+  const rs=retki.status(); if (rs&&rs.back) return 'SYMBIONTTI PALASI RETKELTÄ. NAPAUTA OVEA.';
   if (vs.some(c=>c.ready)) return 'SATO ON VALMIS. NAPAUTA HEHKUVAA ASTIAA.';
   if (!vs.some(c=>c.strain)) return 'TERRAARIO ODOTTAA. NAPAUTA SITÄ JA ISTUTA SINIHELTTA.';
   if (vs.some(c=>c.strain&&c.moist<0.1)) return 'JOKU KANTA ON HORROKSESSA. SUMUTA SE, NIIN SE HERÄÄ.';
@@ -57,6 +60,7 @@ function hint(){
   const sp=S.market.spike; if (sp && sim.owned(sp.id)>0) return 'KYSYNTÄPIIKKI: '+sim.prodName(sp.id)+' ×2. AVAA MARKKINA.';
   if (S.order && !S.flags.done) return 'TILAUS: '+S.order.given+' / '+S.order.need+' ITIÖSUODATINTA TORIN VÄELLE.';
   if (Object.keys(S.inv).some(k=>k.startsWith('raw:'))) return 'SATO ODOTTAA VARASTOSSA. MYY SE MARKKINALLA.';
+  if (retki.retkiOpen() && !rs && !S.retki.n) return 'OVI ON AUKI. LÄHETÄ SYMBIONTTI RETKELLE: NAPAUTA OVEA.';
   if (!S.flags.lab) return 'MYY SATOA MARKKINALLA ('+S.sold+' / 10). SYMBIONTTI MUISTAA JOTAIN.';
   return 'RISTEYTÄ KANTOJA HAUTOMOSSA. KANTAKIRJA KERTOO, MITÄ PUUTTUU.';
 }
@@ -70,13 +74,16 @@ function drawRoom(t){
   const n=ROOMS[r].w*ROOMS[r].h;
   for(let i=0;i<n;i++){ const [x,y]=cellXY(r,i); hit(x,y,CELL,CELL,()=>tapCell(r,i)); }
   panel(()=>wrap(hint(),5,278,182,P.uiD));
-  const cellar=S.rooms.kellari.owned, bw=cellar?45:60, gap=2;
+  // OVI on väliaikainen nappi; TP4:n isometrisessä huoneessa ovi on napautuskohde (U.modal={type:'retki'})
+  const cellar=S.rooms.kellari.owned, nb=cellar?5:4, gap=2, bw=Math.floor((W-8-gap*(nb-1))/nb);
   let bx=4;
   const spikeOwned = S.market.spike && sim.owned(S.market.spike.id)>0;
   const orderReady = S.order && !S.flags.done && (S.inv.suodatin||0)>0;
   button(bx,318,bw,14,'MARKKINA',()=>{ U.modal={type:'market',tab:orderReady?'order':'sell',page:0}; }, (spikeOwned||orderReady)?'a':'n'); bx+=bw+gap;
   button(bx,318,bw,14,'KANNAT',()=>{ U.view='book'; }); bx+=bw+gap;
   button(bx,318,bw,14,U.build?'VALMIS':'RAKENNA',()=>{ U.build=!U.build; U.pick=null; }, U.build?'g':'n'); bx+=bw+gap;
+  const rs=retki.status();
+  button(bx,318,bw,14,'OVI',()=>{ U.modal={type:'retki'}; }, rs&&rs.back?'a':(rs?'g':(retki.retkiOpen()?'n':'d'))); bx+=bw+gap;
   if (cellar) button(bx,318,W-4-bx,14,r==='huone'?'KELLARI':'HUONE',()=>switchRoom());
 }
 export function switchRoom(){ if(!S.rooms.kellari.owned) return; S.cur = S.cur==='huone'?'kellari':'huone'; save(); }
@@ -155,6 +162,7 @@ function drawBook(t){
 // ---------- paljastus ----------
 function drawReveal(t){
   const R=U.rev, a=(now()-R.t0)/1000, res=R.res;
+  if (res.kind==='retki'){ drawRetkiReveal(R,a,{close:()=>{ U.view='room'; U.rev=null; }}); return; }
   rect(0,0,W,H,'#06080c');
   const cx=W/2, cy=130;
   if (res.kind==='done'){ // tilaus täytetty
@@ -311,10 +319,10 @@ function drawModal(t){
       row('KASVATA SUODATIN',have+' / '+D.need,'KULUTTAA '+D.need+' KALVOHELTTAA',()=>{ sim.startFrame(d); U.modal=null; }, have>=D.need, null, null, AMB[2]);
     }
   }
+  else if (m.type==='retki') drawRetkiModal(m,X,Y,WW,HH,t,{close:()=>{ U.modal=null; }, reveal:res=>startReveal({kind:'retki', ...res})});
   else if (m.type==='settings'){
     title('ASETUKSET');
     row('NOPEUS', S.speed===60?'×60 TESTI':'×1 OIKEA','KASVU OIKEASSA AJASSA TAI 60X',()=>{ S.speed = S.speed===60?1:60; save(); },true);
-    row('TESTILÖYTÖ', Date.now()>=S.retkiReady?'':'ODOTA','SIMULOI ULKOLÖYDÖN',()=>{ sim.retki(); U.modal=null; }, Date.now()>=S.retkiReady);
     if (window.SOLMU_PWA) row('TALLENNUS JA ASENNUS','','VIENTI, TUONTI JA ASENNUSOHJE',()=>{ U.modal=null; window.SOLMU_PWA.open(); },true);
     row('UUSI PELI','','POISTAA TALLENNUKSEN',()=>{ U.modal={type:'confirmReset'}; },true);
     y+=4; text(VERSION,X+10,y,P.uiD);

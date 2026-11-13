@@ -45,7 +45,9 @@ module.exports = function(){
     // kehikko
     const k=cells().find(o=>o.c.type==='kehikko'&&!o.c.busy); if(k) G.startFrame(k.c);
     // testilöytö (hämäränuppi) kerran laboratorion jälkeen
-    if(S.flags.lab && !flags.retki){ S.retkiReady=0; G.retki(); flags.retki=1; ev('testilöytö'); }
+    // rihmaretki: ota löydöt vastaan, lähetä lyhyelle retkelle aina kun ovi on vapaa
+    const R=__R; if(R.status()&&R.status().back){ const res=R.collect(); ev('retki: '+res.loot.map(R.lootName).join(', ')); }
+    if(R.canStart('lyhyt')) R.start('lyhyt');
     if(S.flags.lab && !flags.lab){ flags.lab=1; ev('labra auki'); }
     if(S.known.kalvo && !flags.kalvo){ flags.kalvo=1; ev('kalvoheltta tunnettu'); }
     if(S.order && !flags.order){ flags.order=1; ev('tilaus'); }

@@ -4,6 +4,7 @@ import {S, SAVE_KEY, save, mergeIncoming} from './state.js';
 import * as sim from './sim.js';
 import {U, render, audioInit, openHautomo, switchRoom} from './ui.js';
 import {STRAINS} from './data.js';
+import * as retki from './retki.js';
 
 // offline-kasvu (enintään 8 h)
 function catchUp(){ const away=Math.min(8*3600,(Date.now()-(S.kotiLast||Date.now()))/1000)*S.speed; if (away>1) sim.simulate(away); }
@@ -37,5 +38,5 @@ document.addEventListener('visibilitychange',()=>{ if(document.hidden){ save(); 
   try { const inc=JSON.parse(localStorage.getItem(SAVE_KEY)); if(inc) mergeIncoming(inc); } catch(e){}
   catchUp(); syncKnown(); morningReveal(); lastMs=performance.now(); });
 addEventListener('storage',e=>{ if(e.key!==SAVE_KEY||!e.newValue) return; try { mergeIncoming(JSON.parse(e.newValue)); syncKnown(); } catch(_){} });
-window.__S=()=>S; window.__sim=sim.simulate; window.__U=U; window.__G=sim;
+window.__S=()=>S; window.__sim=sim.simulate; window.__U=U; window.__G=sim; window.__R=retki;
 requestAnimationFrame(loop);
