@@ -69,7 +69,7 @@ function report(res){
     `- Tyhjiä käyntejä (ei yhtään tapahtumaa): ${Math.round(100 * empty.mean)} %`,
     `- Umpikujat: jumissa-käyntejä (mikään ei kasva eikä mitään voi tehdä) ${f1(idle.mean)}/ajo, pelastusitiöitä ${f1(C('rescue').mean)}/ajo, risteytyksen vanhempi menetetty ${runs.filter(r => r.lostVisits).length}/${N} ajossa (${[...new Set(runs.flatMap(r => r.lost))].join(', ') || '–'}; ka. ${f1(stat(runs.map(r => r.lostVisits)).mean)} käyntiä), tilaus jäi täyttämättä ${N - done}/${N}`,
     `- Risteytyksiä ${f1(C('cross').mean)}/ajo, joista mutaatioita ${f1(C('mutation').mean)}, kontaminaatioita ${f1(C('contamination').mean)}; retkiä/testilöytöjä ${f1(C('retki').mean)}; kysyntäpiikkejä ${f1(C('spike').mean)}`,
-    `- Korjuita ${f1(C('harvest').mean)}, itiöiden ottoja ${f1(C('sporeTake').mean)}, suodattimia ${f1(C('filter').mean)} per ajo`, '');
+    `- Korjuita ${f1(C('harvest').mean)}, itiöiden ottoja ${f1(C('sporeTake').mean)}, suodattimia ${f1(C('filter').mean)} (kehikon tuotteita yhteensä ${f1(C('frame').mean)}), taulun tilauksia ${f1(C('board').mean)}, ketjun askelia ${f1(C('chain').mean)} per ajo`, '');
   // hopeakäyrä: jokaisen päivän viimeinen käynti
   const maxDay = Math.ceil(Math.max(...runs.map(r => r.endH)) / 24);
   L.push('### Hopeakäyrä (hopeaa päivän viimeisen käynnin jälkeen)', '', '| Päivä | keskiarvo | min | max | ajoja käynnissä |', '|---|---|---|---|---|');

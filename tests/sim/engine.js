@@ -39,13 +39,14 @@ export const MILESTONES = [
   ['firstFilter', 'ENSIMMÄINEN SUODATIN'],
   ['hoitaja',     'HOITAJASIENI'],
   ['kellari',     'KELLARI'],
+  ['firstBoard',  'ENSIMMÄINEN TAULUN TILAUS'],
   ['orderDone',   'TILAUS TÄYTETTY']
 ];
 
 class Metrics {
   constructor(){
     this.t = 0; this.ms = {}; this.sales = {}; this.salesN = {}; this.purchases = []; this.byCell = {};
-    this.counts = { mutation: 0, contamination: 0, fail: 0, cross: 0, rescue: 0, spike: 0, retki: 0, harvest: 0, sporeTake: 0, filter: 0 };
+    this.counts = { mutation: 0, contamination: 0, fail: 0, cross: 0, rescue: 0, spike: 0, board: 0, chain: 0, frame: 0, retki: 0, harvest: 0, sporeTake: 0, filter: 0 };
     this.visits = []; this.events = []; this.log = [];
   }
   mark(k){ if (this.ms[k] === undefined){ this.ms[k] = this.t; this.log.push(h(this.t) + ' ' + k); } }
@@ -71,8 +72,12 @@ class Metrics {
         this.log.push(h(this.t) + ' malja ' + r.kind + (r.key ? ' ' + r.key : '')); break; }
       case 'korjuu': this.counts.harvest++; this.credit(d.astia, 'raw:' + d.kanta.split('~')[0], d.n); break;
       case 'itiot': this.counts.sporeTake++; this.credit(d.astia, 'itio:' + d.kanta, 1); break;
-      case 'laite-keruu': if (d.laite.type === 'kehikko'){ this.counts.filter++; this.mark('firstFilter'); this.credit(d.laite, 'suodatin', 1); } break;
-      case 'tilaus-valmis': this.mark('orderDone'); break;
+      case 'laite-keruu': if (d.laite.type === 'kehikko'){
+        const prod = d.tuote || (/SUODATIN/.test(d.viesti || '') ? 'suodatin' : 'muotti');
+        this.counts.frame++; if (prod === 'suodatin'){ this.counts.filter++; this.mark('firstFilter'); }
+        this.credit(d.laite, prod, 1); } break;
+      case 'tilaus-valmis': if (d.lahde === 'taulu'){ this.counts.board++; this.mark('firstBoard'); } else this.mark('orderDone'); break;
+      case 'virstanpylvas': this.counts.chain++; break;
       case 'pelastus': this.counts.rescue++; break;
       case 'kysyntapiikki': this.counts.spike++; break;
       case 'testiloyto': case 'retki-loyto': this.counts.retki++; break;
@@ -81,6 +86,7 @@ class Metrics {
   credit(obj, prod, n){
     const c = { t: this.t, prod, n };
     const p = this.byCell[obj.id]; if (p) p.credits.push(c);
+    if (!obj.id) return;
     const inCellar = ST.S.rooms.kellari.cells.some(x => x && x.id === obj.id);
     if (inCellar && this.byCell['room:kellari']) this.byCell['room:kellari'].credits.push(c);
   }
@@ -92,7 +98,7 @@ export function pendingDecisions(){
   const S = ST.S, cells = ST.allCells(), anySpore = Object.values(S.spores).some(n => n > 0);
   const out = { korjuu: 0, laite: 0, istutus: 0, malja: 0, kehikko: 0, myynti: 0, toimitus: 0, sijoitus: 0 };
   for (const { c } of cells){
-    if (c.kind === 'vessel'){ if (c.ready) out.korjuu++; else if (!c.strain && anySpore) out.istutus++; }
+    if (c.kind === 'vessel'){ if (G.waves ? G.waves(c) > 0 : c.ready) out.korjuu++; else if (!c.strain && anySpore) out.istutus++; }
     else if (c.done) out.laite++;
     else if (!c.busy && c.type === 'hautomo' && (S.inv.agar || 0) > 0 && Object.keys(S.spores).length >= 2) out.malja++;
     else if (!c.busy && c.type === 'kehikko' && (S.inv['raw:kalvo'] || 0) >= D.DEVICES.kehikko.need) out.kehikko++;

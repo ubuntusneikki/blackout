@@ -5,6 +5,14 @@
 // ctx: { G (sim.js), S (tila), D (data.js), ST (state.js), profile, metrics, now(), opt, plan }
 
 const base = k => k.split('~')[0];
+// TP3: satoaallot (G.waves) tai vanha ready-lippu
+const isReady = (ctx, c) => ctx.G.waves ? ctx.G.waves(c) > 0 : !!c.ready;
+// TP3: kehikon reseptit (D.FRAME: kanta -> {tuote|out, need, time}); vanha kehikko = kalvo -> suodatin
+export function frameRecipes(ctx){ const { D } = ctx;
+  if (!D.FRAME) return [{ key: 'kalvo', out: 'suodatin', need: D.DEVICES.kehikko.need }];
+  return Object.entries(D.FRAME).map(([key, f]) => ({ key, out: f.tuote || f.out || f.product || f.id, need: f.need || 3 })); }
+// torin taulun tarpeet tuotteittain (TP3)
+export function boardNeed(ctx){ const out = {}; for (const o of (ctx.S.board || [])){ const left = (o.n || 0) - (o.given || 0); if (left > 0) out[o.tuote] = (out[o.tuote] || 0) + left; } return out; }
 const cells = ctx => ctx.ST.allCells();
 const vessels = ctx => cells(ctx).filter(o => o.c.kind === 'vessel');
 const devices = (ctx, type) => cells(ctx).filter(o => o.c.kind === 'device' && o.c.type === type);
@@ -60,7 +68,7 @@ export const MODULES = {
   // korjuu: sato tai itiöt sen mukaan, tarvitaanko itiöitä
   korjuu: { act(ctx){ const { S, G } = ctx; let n = 0;
     const kalvoGrowing = vessels(ctx).filter(o => o.c.strain && base(o.c.strain) === 'kalvo').length;
-    for (const { c } of vessels(ctx)){ if (!c.ready) continue; const b = base(c.strain);
+    for (const { c } of vessels(ctx)){ if (!isReady(ctx, c)) continue; const b = base(c.strain);
       let need = spores(ctx, b) < Math.min(reserve(ctx, b), b === 'kalvo' ? 0 : 9);
       if (neededParents(ctx).includes(b) && spores(ctx, b) < 2) need = true;
       if (b === 'kalvo' && kalvoGrowing + spores(ctx, 'kalvo') < kalvoTarget(ctx)) need = true;
@@ -76,7 +84,7 @@ export const MODULES = {
   vaihto: { act(ctx){ const { S, G } = ctx; let n = 0;
     if (!S.known.kalvo || !ownsDevice(ctx, 'kehikko') || S.flags.done) return 0;
     for (const { c } of vessels(ctx)){
-      if (!c.strain || c.ready || base(c.strain) === 'kalvo' || base(c.strain) === 'hoitaja') continue;
+      if (!c.strain || isReady(ctx, c) || base(c.strain) === 'kalvo' || base(c.strain) === 'hoitaja') continue;
       const b0 = base(c.strain);
       if (neededParents(ctx).includes(b0) && vessels(ctx).filter(o => o.c.strain && base(o.c.strain) === b0).length <= 1) continue;
       if (!spores(ctx, 'kalvo')) break;
@@ -116,8 +124,23 @@ export const MODULES = {
       if (pair && G.startDish(c, sporeKey(ctx, pair[0]), sporeKey(ctx, pair[1]))) n++; }
     return n; } },
 
-  kehikko: { act(ctx){ let n = 0;
-    for (const { c } of devices(ctx, 'kehikko')){ if (!c.busy && (ctx.S.inv['raw:kalvo'] || 0) >= ctx.D.DEVICES.kehikko.need){ ctx.G.startFrame(c); n++; } }
+  // kehikko: suodatin tilaukseen ensin, sitten taulun tarvitsema tuote, sitten arvokkain resepti
+  kehikko: { act(ctx){ const { S, G, D } = ctx; let n = 0;
+    const raw = k => (S.inv['raw:' + k] || 0), bn = boardNeed(ctx);
+    const price = id => (D.SELL_BASE[id] !== undefined ? D.SELL_BASE[id] : (G.basePrice(id) || 0));
+    for (const { c } of devices(ctx, 'kehikko')){ if (c.busy) continue;
+      const opts = frameRecipes(ctx).filter(r => raw(r.key) >= r.need).map(r => ({ ...r,
+        score: (r.out === 'suodatin' && S.order && !S.flags.done ? 1000 : 0) + (bn[r.out] ? 500 : 0) + price(r.out) - r.need * (G.basePrice('raw:' + r.key) || 2) }))
+        .filter(r => r.score > 0).sort((a, b) => b.score - a.score);
+      if (!opts.length) continue;
+      const ok = D.FRAME ? G.startFrame(c, opts[0].key) : (G.startFrame(c), c.busy);
+      if (ok) n++; }
+    return n; } },
+
+  // torin taulu (TP3): toimita heti, kun tuotteita on
+  taulu: { act(ctx){ const { S, G } = ctx; let n = 0;
+    if (!S.board || !G.deliverBoard) return 0;
+    for (const o of S.board.slice()){ if ((o.given || 0) < o.n && G.boardHave(o)){ const h0 = S.hopea; G.deliverBoard(o.id); if (S.hopea !== h0 || true) n++; } }
     return n; } },
 
   // myynti: myy kunnes yksikköhinta painuu alle kynnyksen; piikkituote kokonaan
@@ -130,6 +153,8 @@ export const MODULES = {
       if (k === 'itio') can = Math.max(0, spores(ctx, base(s)) - reserve(ctx, base(s)) - (S.flags.lab ? 1 : 0));
       if (k === 'itio') can = Math.min(can, S.spores[s] || 0);
       if (id === 'raw:kalvo') can = Math.max(0, can - kalvoNeed(ctx));
+      const bn = boardNeed(ctx); if (bn[id]) can = Math.max(0, can - bn[id]);
+      if (id === 'suodatin' && !S.order && !S.flags.done) continue;
       const spike = S.market.spike && S.market.spike.id === id;
       let q = 0; while (q < can && (spike || G.unitPrice(id, q) >= opt.sellFloor * G.basePrice(id))) q++;
       if (q > 0){ G.sell(id, q); n++; } }
@@ -142,7 +167,7 @@ export const MODULES = {
       const h0 = S.hopea; G.buy(k); if (S.hopea < h0){ n++; return true; } return false; };
     if (S.flags.lab && !ownsDevice(ctx, 'hautomo')) tryBuy('hautomo');
     if (ownsDevice(ctx, 'hautomo') && !(S.inv.agar > 0) && (!S.known.hoitaja || !S.flags.done)) tryBuy('agar');
-    if (S.known.kalvo && !ownsDevice(ctx, 'kehikko')) tryBuy('kehikko');
+    if (!ownsDevice(ctx, 'kehikko') && (D.FRAME || S.known.kalvo)) tryBuy('kehikko');
     // toinen kehikko, jos kalvohelttaa kertyy enemmän kuin yksi kehikko ehtii kasvattaa
     else if (ctx.opt.extraFrames && S.order && !S.flags.done && ownsDevice(ctx, 'kehikko') < 1 + ctx.opt.extraFrames
       && (S.inv['raw:kalvo'] || 0) >= 2 * ctx.D.DEVICES.kehikko.need && kalvoNeed(ctx) > 2 * ctx.D.DEVICES.kehikko.need) tryBuy('kehikko');
@@ -187,7 +212,7 @@ export const MODULES = {
     S.retkiReady = 0; G.retki(); ctx.plan.lastRetkiDay = day; ctx.plan.retkiCount = (ctx.plan.retkiCount || 0) + 1; return 1; } }
 };
 
-export const DEFAULT_ORDER = ['laitteet', 'korjuu', 'myynti', 'ostot', 'sijoitus', 'laboratorio', 'kehikko', 'vaihto', 'istutus', 'hoito', 'retki'];
+export const DEFAULT_ORDER = ['laitteet', 'korjuu', 'taulu', 'myynti', 'ostot', 'sijoitus', 'laboratorio', 'kehikko', 'vaihto', 'istutus', 'hoito', 'retki'];
 export const DEFAULT_OPT = { sellFloor: 0.6, retki: true, retkiMax: 99, extraFrames: 1, deepRetki: true };
 
 export function makePolicy({ order = DEFAULT_ORDER, opt = {} } = {}){

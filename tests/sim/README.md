@@ -28,7 +28,11 @@ Tulos: markdown-raportti (myös tulosteena) ja JSON samaan kansioon, oletuksena 
 - `engine.js` korvaa `localStorage`, `location`, `Date.now` ja `Math.random` (siemennetty), lataa pelimoduulit ja kuuntelee tapahtumaväylää (`on('*')`). Mittarit kerätään tapahtumista, joten pelilogiikkaa ei kopioida.
 - Käynti: poissaolo simuloidaan kuten `main.js`:n `catchUp` (enintään 8 h, loppu aika ei kulu pelissä), sitten `syncKnown`, `checkUnlocks` ja `rescue`. Botti toimii, odottaa 30 s ja toimii uudelleen käynnin keston ajan (aktiivinen 2 min, 4/vrk 3 min, 2/vrk 4 min).
 - `profiles.js`: käyntien kellonajat. Uuden profiilin voi lisätä yhdellä rivillä.
-- `policy.js`: botti on joukko moduuleja (`laitteet, korjuu, myynti, ostot, sijoitus, laboratorio, kehikko, vaihto, istutus, hoito, retki`), jotka ajetaan järjestyksessä, kunnes mitään ei enää tapahdu. Uusi mekaniikka lisätään omana moduulinaan `MODULES`-olioon ja nimenä `DEFAULT_ORDER`-listaan. Moduuli saa `ctx`:n (`G` = sim.js, `S` = tila, `D` = data.js, `ST` = state.js, `R` = retki.js tai null, `now()`, `opt`, `plan`) ja palauttaa tekemiensä toimien määrän.
+- `policy.js`: botti on joukko moduuleja (`laitteet, korjuu, taulu, myynti, ostot, sijoitus, laboratorio, kehikko, vaihto, istutus, hoito, retki`), jotka ajetaan järjestyksessä, kunnes mitään ei enää tapahdu. Uusi mekaniikka lisätään omana moduulinaan `MODULES`-olioon ja nimenä `DEFAULT_ORDER`-listaan. Moduuli saa `ctx`:n (`G` = sim.js, `S` = tila, `D` = data.js, `ST` = state.js, `R` = retki.js tai null, `now()`, `opt`, `plan`) ja palauttaa tekemiensä toimien määrän.
+
+## TP3-tuki
+
+Botti tunnistaa TP3:n rajapinnan, jos se on pelissä: satoaallot (`G.waves`), kehikon reseptit (`D.FRAME`, `G.startFrame(dev, kanta)`), torin taulu (`S.board`, `G.deliverBoard`, `G.boardHave`) ja virstanpylväsketju (tapahtuma `virstanpylvas`). Taulun tilaus (`tilaus-valmis`, `lahde: 'taulu'`) ei merkitse päätilausta täytetyksi.
 
 ## Botin politiikka lyhyesti
 

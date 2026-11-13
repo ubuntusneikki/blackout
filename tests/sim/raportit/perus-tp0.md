@@ -20,6 +20,7 @@ Botti on "järkevä ahne" pelaaja (tests/sim/policy.js). Offline-kasvu kuten pel
 | ENSIMMÄINEN SUODATIN | 20/20 | 13.4 h | 3.0 h | 12.3 h | 12.8 h | 26.5 h | pv 1 |
 | HOITAJASIENI | 19/20 | 24.4 h | 1.8 h | 24.0 h | 24.0 h | 32.0 h | pv 2 |
 | KELLARI | 20/20 | 28.4 h | 1.5 h | 28.0 h | 28.0 h | 34.8 h | pv 2 |
+| ENSIMMÄINEN TAULUN TILAUS | 0/20 | – | – | – | – | – | – |
 | TILAUS TÄYTETTY | 20/20 | 28.4 h | 1.5 h | 28.0 h | 28.0 h | 34.8 h | pv 2 |
 
 ### Ostot ja takaisinmaksu
@@ -55,7 +56,7 @@ Takaisinmaksu = aika ostosta siihen, kun ostoksen tuotanto (toteutuneilla myynti
 - Tyhjiä käyntejä (ei yhtään tapahtumaa): 0 %
 - Umpikujat: jumissa-käyntejä (mikään ei kasva eikä mitään voi tehdä) 0.0/ajo, pelastusitiöitä 0.0/ajo, risteytyksen vanhempi menetetty 0/20 ajossa (–; ka. 0.0 käyntiä), tilaus jäi täyttämättä 0/20
 - Risteytyksiä 2.1/ajo, joista mutaatioita 0.1, kontaminaatioita 0.1; retkiä/testilöytöjä 2.0; kysyntäpiikkejä 2.0
-- Korjuita 535.2, itiöiden ottoja 23.9, suodattimia 5.0 per ajo
+- Korjuita 535.2, itiöiden ottoja 23.9, suodattimia 5.0 (kehikon tuotteita yhteensä 5.0), taulun tilauksia 0.0, ketjun askelia 0.0 per ajo
 
 ### Hopeakäyrä (hopeaa päivän viimeisen käynnin jälkeen)
 
@@ -80,6 +81,7 @@ Takaisinmaksu = aika ostosta siihen, kun ostoksen tuotanto (toteutuneilla myynti
 | ENSIMMÄINEN SUODATIN | 20/20 | 3.6 vrk | 2.5 h | 3.4 vrk | 3.6 vrk | 4.0 vrk | pv 4 |
 | HOITAJASIENI | 20/20 | 2.4 vrk | 3.3 h | 2.4 vrk | 2.4 vrk | 3.0 vrk | pv 3 |
 | KELLARI | 2/20 | 4.8 vrk | 5.0 h | 4.6 vrk | 4.6 vrk | 5.0 vrk | pv 5 |
+| ENSIMMÄINEN TAULUN TILAUS | 0/20 | – | – | – | – | – | – |
 | TILAUS TÄYTETTY | 20/20 | 4.6 vrk | 2.5 h | 4.4 vrk | 4.6 vrk | 5.0 vrk | pv 5 |
 
 ### Ostot ja takaisinmaksu
@@ -115,7 +117,7 @@ Takaisinmaksu = aika ostosta siihen, kun ostoksen tuotanto (toteutuneilla myynti
 - Tyhjiä käyntejä (ei yhtään tapahtumaa): 0 %
 - Umpikujat: jumissa-käyntejä (mikään ei kasva eikä mitään voi tehdä) 0.0/ajo, pelastusitiöitä 0.0/ajo, risteytyksen vanhempi menetetty 0/20 ajossa (–; ka. 0.0 käyntiä), tilaus jäi täyttämättä 0/20
 - Risteytyksiä 3.2/ajo, joista mutaatioita 0.4, kontaminaatioita 0.2; retkiä/testilöytöjä 4.1; kysyntäpiikkejä 5.0
-- Korjuita 65.2, itiöiden ottoja 18.2, suodattimia 5.0 per ajo
+- Korjuita 65.2, itiöiden ottoja 18.2, suodattimia 5.0 (kehikon tuotteita yhteensä 5.0), taulun tilauksia 0.0, ketjun askelia 0.0 per ajo
 
 ### Hopeakäyrä (hopeaa päivän viimeisen käynnin jälkeen)
 
@@ -143,6 +145,7 @@ Takaisinmaksu = aika ostosta siihen, kun ostoksen tuotanto (toteutuneilla myynti
 | ENSIMMÄINEN SUODATIN | 20/20 | 6.8 vrk | 5.9 h | 6.5 vrk | 7.0 vrk | 7.0 vrk | pv 8 |
 | HOITAJASIENI | 20/20 | 4.6 vrk | 4.3 h | 4.5 vrk | 4.5 vrk | 5.0 vrk | pv 5 |
 | KELLARI | 7/20 | 8.8 vrk | 5.9 h | 8.5 vrk | 9.0 vrk | 9.0 vrk | pv 10 |
+| ENSIMMÄINEN TAULUN TILAUS | 0/20 | – | – | – | – | – | – |
 | TILAUS TÄYTETTY | 20/20 | 8.8 vrk | 5.9 h | 8.5 vrk | 9.0 vrk | 9.0 vrk | pv 10 |
 
 ### Ostot ja takaisinmaksu
@@ -178,7 +181,7 @@ Takaisinmaksu = aika ostosta siihen, kun ostoksen tuotanto (toteutuneilla myynti
 - Tyhjiä käyntejä (ei yhtään tapahtumaa): 0 %
 - Umpikujat: jumissa-käyntejä (mikään ei kasva eikä mitään voi tehdä) 0.0/ajo, pelastusitiöitä 0.0/ajo, risteytyksen vanhempi menetetty 0/20 ajossa (–; ka. 0.0 käyntiä), tilaus jäi täyttämättä 0/20
 - Risteytyksiä 3.2/ajo, joista mutaatioita 0.3, kontaminaatioita 0.2; retkiä/testilöytöjä 7.6; kysyntäpiikkejä 6.0
-- Korjuita 66.4, itiöiden ottoja 18.0, suodattimia 5.0 per ajo
+- Korjuita 66.4, itiöiden ottoja 18.0, suodattimia 5.0 (kehikon tuotteita yhteensä 5.0), taulun tilauksia 0.0, ketjun askelia 0.0 per ajo
 
 ### Hopeakäyrä (hopeaa päivän viimeisen käynnin jälkeen)
 
