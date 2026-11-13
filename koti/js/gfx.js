@@ -85,7 +85,7 @@ export const fmt=x=> x<10 ? (Math.round(x*10)/10).toFixed(1).replace('.',',') : 
 
 // osumat
 export let HIT=[];
-export function resetHit(){ HIT.length=0; }
+export function resetHit(){ HIT.length=0; GUIDE_BOXES.length=0; }
 export function hit(x,y,w,h,fn){ HIT.push({x,y,w,h,fn}); }
 // biopunk-paneeli: tumma teräsreuna viistetyin kulmin, 1 px valo ylhäällä ja varjo alhaalla
 export function bevel(x,y,w,h,fill,hi,lo,edge){
@@ -105,6 +105,22 @@ export function button(x,y,w,h,label,fn,style){
   bevel(x,y,w,h,f,hi,lo,e);
   textC(label,x+w/2,y+((h-5)>>1),fg);
   if (st!=='d') hit(x,y,w,h,fn);
+  if (guideTest('btn:'+label)) guideMark(x,y,w,h);
+}
+// aloitusopastus (opastus.js): kohde saa sykkivän meripihkaisen kehyksen ja nuolen. Testi rekisteröidään, ei import-kehää.
+let guideTest=()=>false;
+export function setGuideTest(fn){ guideTest=fn; }
+export const isGuided=k=>guideTest(k);
+export const GUIDE_BOXES=[];   // tämän ruudun kohteet käyttöliittymän koordinaateissa (testit ja efektit)
+export function guideMark(x,y,w,h){
+  GUIDE_BOXES.push({x,y,w,h});
+  // natiivi 1 px: tumma meripihka ulkona, kirkas sykkivä sisällä; nuoli pomppii kohteen yllä (tai alla)
+  const t=performance.now()/1000, c=Math.sin(t*5)>-0.2?AMB[2]:AMB[1];
+  rect(x-2,y-2,w+4,.5,AMB[0]); rect(x-2,y+h+1.5,w+4,.5,AMB[0]); rect(x-2,y-2,.5,h+4,AMB[0]); rect(x+w+1.5,y-2,.5,h+4,AMB[0]);
+  rect(x-1.5,y-1.5,w+3,.5,c); rect(x-1.5,y+h+1,w+3,.5,c); rect(x-1.5,y-1.5,.5,h+3,c); rect(x+w+1,y-1.5,.5,h+3,c);
+  const cx=Math.round(x+w/2), b=Math.round(Math.sin(t*6)*2)/2, up=y>14;
+  for(let k=0;k<4;k++){ const yy=up? y-3.5-k*.5+b : y+h+3+k*.5-b; rect(cx-k*.5-.5,yy,k+1.5,.5,k===3?AMB[0]:AMB[2]); }
+  rect(cx-.5,up?y-7.5+b:y+h+5-b,1.5,2.5,AMB[1]);
 }
 export function bar(x,y,v,col){ const n=Math.round(v*10);
   for(let i=0;i<10;i++){ const on=i<n; rect(x+i*6,y,5.5,5,on?col:P.ui1); rect(x+i*6,y,5.5,.5,on?'#ffffff40':'#2a3646'); rect(x+i*6,y+4.5,5.5,.5,on?'#00000040':'#0d131c'); } }

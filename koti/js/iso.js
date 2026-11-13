@@ -3,7 +3,7 @@
 // Huone piirretään omaan 384 px leveään kerrokseen (ISO) käyttöliittymäpuskurin (192 px, ×2) alle.
 // Koordinaatit: kerroksen piste (lx, ly) = käyttöliittymän piste (lx/2, (ly+IY)/2).
 import {P, AMB, STRAINS, ROOMS, CUR, WILD, SYM} from './data.js';
-import {vital, rng, BAYER, clamp, ease, W, H, tw} from './gfx.js';
+import {vital, rng, BAYER, clamp, ease, W, H, tw, GUIDE_BOXES} from './gfx.js';
 import {S, strain, neighbors} from './state.js';
 import {XL, XSEC_BOX_UI} from './xsec.js';
 
@@ -305,7 +305,29 @@ function drawRoomAt(r, t, opt, ox, oy){
   }
   over.forEach(f => f());
   for (const sp of SPOTS[r]) if (!sp.noTap){ const b = spotBox(r, sp.id, ox, oy); if (b) DRAWN.push({r, kind:'spot', id:sp.id, box:b}); }
-
+  if (opt.guide && opt.guide.length) guideTargets(r, t, opt.guide, ox, oy);
+}
+// aloitusopastus (TP8): kohde sykkii meripihkana ja sen yllä pomppii nuoli. Laatikot talteen käyttöliittymän koordinaateissa.
+function guideArrow(x, y, t){
+  const b = Math.round(Math.sin(t*6)*2), X = Math.round(x), Y = Math.round(y) - 4 + b;
+  for (let k = 0; k < 5; k++){ rect(X - k - 1, Y - k - 1, 2*k + 3, 1, AMB[0]); rect(X - k, Y - k, 2*k + 1, 1, AMB[2]); }
+  rect(X - 2, Y - 11, 5, 6, AMB[0]); rect(X - 1, Y - 10, 3, 6, AMB[2]);
+}
+function guideTargets(r, t, keys, ox, oy){
+  const on = Math.sin(t*5) > -0.2, col = on ? AMB[2] : AMB[1];
+  for (const k of keys){ const [kind, kr, ki] = k.split(':'); if (kind !== 'spot' && kr !== r) continue;
+    let box = null;
+    if (kind === 'cell'){ const o = DRAWN.find(q => q.kind === 'obj' && q.r === r && q.i === +ki);
+      if (o){ L.drawImage(outline(o.s, col, 'guide' + o.s.w + 'x' + o.s.h), Math.round(o.box.x) - 1, Math.round(o.box.y) - 1); box = o.box; }
+      else if (kind === 'cell') continue; }
+    if (kind === 'floor' || (kind === 'cell' && !box)){ const [x, y] = cellAnchor(r, +ki, ox, oy);
+      diamond(x, y, col, false); diamond(x, y - 1, AMB[0], true); box = {x:x - 44, y:y - 22, w:88, h:44}; }
+    if (kind === 'spot'){ if (r !== 'huone' && kr === 'ovi') continue; box = spotBox(r, kr, ox, oy); if (!box) continue;
+      for (let k2 = 0; k2 < box.h; k2 += 2) if (on){ px(box.x, box.y + k2, AMB[2]); px(box.x + box.w - 1, box.y + k2, AMB[2]); } }
+    if (!box) continue;
+    guideArrow(box.x + box.w/2, box.y - 6, t);
+    GUIDE_BOXES.push({...boxUi(box), key:k});
+  }
 }
 
 // tilan vaihdon siirtymä: kellariin mennään alas, huoneeseen ylös

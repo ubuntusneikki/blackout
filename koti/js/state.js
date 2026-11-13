@@ -22,7 +22,9 @@ export function newGame(){
     flags:{firstHarvest:false, lab:false, firstCross:false, mutation:false, done:false, hasHautomo:false, frame:false, retki:false},
     order:null, retki:{cur:null, n:0, deep:0}, kotiLast:Date.now(),
     // TP3: torin taulu, virstanpylväsketju, kerran saadut tuotteet
-    board:[], boardNext:0, boardSeq:0, boardDone:0, chain:0, made:{}
+    board:[], boardNext:0, boardSeq:0, boardDone:0, chain:0, made:{},
+    // TP8: aloitusopastus (opastus.js). vaihe = nykyinen askel, nahty = kerran opetetut asiat
+    opastus:{vaihe:null, nahty:{}, pois:false}
   };
 }
 
@@ -51,6 +53,7 @@ export function ensure(s){
   if (!s || typeof s!=='object') return newGame();
   if (!s.schema) s=migrate(s);
   const d=newGame();
+  if (!s.opastus) s.opastus=experienced(s);
   for (const k in d) if (s[k]===undefined) s[k]=d[k];
   for (const k in d.flags) if (s.flags[k]===undefined) s.flags[k]=d.flags[k];
   for (const k in d.market) if (s.market[k]===undefined) s.market[k]=d.market[k];
@@ -75,10 +78,25 @@ export function save(){ S.kotiLast=Date.now(); try { localStorage.setItem(SAVE_K
 
 // koti omistaa nämä kentät: toisen välilehden tallennus ei ylikirjoita niitä
 export const KOTI_OWNS = ['rooms','cur','hopea','inv','deviceInv','bought','sold','known','tried','market','flags','order','retki','kotiLast','speed',
-  'board','boardNext','boardSeq','boardDone','chain','made'];
+  'board','boardNext','boardSeq','boardDone','chain','made','opastus'];
 export function mergeIncoming(inc){ const keep={}; for (const k of KOTI_OWNS) keep[k]=S[k];
   const n=ensure(inc); for (const k of KOTI_OWNS) n[k]=keep[k]; replaceState(n); }
 
+// TP8: tallennus ennen opastusta. Jos peli on jo käynnissä, ensimmäinen käynti ja jo avautuneet asiat on nähty.
+function experienced(s){
+  const o={vaihe:null, nahty:{}, pois:false}, f=s.flags||{}, cells=[];
+  for (const r in (s.rooms||{})) (s.rooms[r].cells||[]).forEach(c=>{ if(c) cells.push(c); });
+  if (!(f.firstHarvest || (s.sold||0)>0)) return o;
+  const n=o.nahty; n.ensi=n.korjaa=n.sumutus=n.ruusu=n.hinta=1;
+  if (cells.some(c=>(c.waves||0)>=2)) n.aallot=1;
+  if ((s.retki&&s.retki.n) || f.retki) n.retki=1;
+  if (f.lab){ n['lab-esittely']=1; n.taulu=1; }
+  if (f.firstCross || f.hasHautomo) n.lab=1;
+  if (f.frame || cells.some(c=>c.type==='kehikko')) n.kehikko=1;
+  if (cells.some(c=>c.strain&&c.strain.split('~')[0]==='hoitaja')) n.hoitaja=1;
+  if (s.rooms&&s.rooms.kellari&&s.rooms.kellari.owned){ n.kellari=1; n['kellari-mene']=1; }
+  return o;
+}
 // TP0: kuivausteline ja kuivatut sienet poistettiin. Vanhat kuivatut ja telineet hyvitetään hopeana.
 function dropDrying(s){
   for (const id of Object.keys(s.inv)) if (id.startsWith('dry:')){ s.hopea += s.inv[id]*LEGACY.dry; delete s.inv[id]; }
