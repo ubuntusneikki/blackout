@@ -33,7 +33,7 @@ Muutokset alkuperäiseen listaan (prototyypin loppusuunnitelma 2026-11-13): kuiv
 **Astiat** (yksi ruutu, kaksi kerrosta, sieni piirretään väliin):
 - `astia_terraario` + `astia_terraario_etu`, `astia_lasipurkki` + `astia_lasipurkki_etu` (lasilieriö teräsjalustalla).
 
-**Sienet** `sieni_<kanta>_<itu|nuori|kypsa>`, kannat `heltta` (siniheltta), `ruusu` (ruususieni), `hamara` (hämäränuppi), `kalvo` (kalvoheltta, verkkomainen kalvohame), `hoitaja` (hoitajasieni, sivuille kurottavat rihmat ja sumupisarat). Kypsä sieni mahtuu molempiin astioihin.
+**Sienet** `sieni_<kanta>_<itu|nuori|kypsa>`, kannat `heltta` (siniheltta), `ruusu` (ruususieni), `hamara` (hämäränuppi), `kalvo` (kalvoheltta, verkkomainen kalvohame), `hoitaja` (hoitajasieni, sivuille kurottavat rihmat ja sumupisarat), `yoruusu` (yöruusu, ruususienen rypäsmuoto omin värein) ja `verkko` (verkkoheltta, kalvoheltan verkkomuoto omin värein). Kypsä sieni mahtuu molempiin astioihin. Uusien kantojen ja hoitajasienen värit on lisätty `pix.py`:n palettiin (rivi 6).
 
 **Laitteet** (yksi ruutu):
 - `laite_hautomo_<tyhja|kaynnissa|valmis>`.

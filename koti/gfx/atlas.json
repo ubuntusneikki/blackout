@@ -47,7 +47,9 @@
    "ruusu": "RUUSUSIENI",
    "hamara": "HÄMÄRÄNUPPI",
    "kalvo": "KALVOHELTTA",
-   "hoitaja": "HOITAJASIENI"
+   "hoitaja": "HOITAJASIENI",
+   "yoruusu": "YÖRUUSU",
+   "verkko": "VERKKOHELTTA"
   },
   "tuotteet": {
    "valokalvo": "VALOKALVO",
@@ -99,28 +101,12 @@
   "ikoni_agar": {
    "ax": 16,
    "ay": 16,
-   "x": 942,
-   "y": 321,
-   "w": 32,
-   "h": 32
-  },
-  "ikoni_hopea": {
-   "ax": 16,
-   "ay": 16,
-   "x": 975,
-   "y": 321,
-   "w": 32,
-   "h": 32
-  },
-  "ikoni_itio_hamara": {
-   "ax": 16,
-   "ay": 16,
    "x": 0,
    "y": 412,
    "w": 32,
    "h": 32
   },
-  "ikoni_itio_heltta": {
+  "ikoni_hopea": {
    "ax": 16,
    "ay": 16,
    "x": 33,
@@ -128,7 +114,7 @@
    "w": 32,
    "h": 32
   },
-  "ikoni_itio_hoitaja": {
+  "ikoni_itio_hamara": {
    "ax": 16,
    "ay": 16,
    "x": 66,
@@ -136,7 +122,7 @@
    "w": 32,
    "h": 32
   },
-  "ikoni_itio_kalvo": {
+  "ikoni_itio_heltta": {
    "ax": 16,
    "ay": 16,
    "x": 99,
@@ -144,7 +130,7 @@
    "w": 32,
    "h": 32
   },
-  "ikoni_itio_ruusu": {
+  "ikoni_itio_hoitaja": {
    "ax": 16,
    "ay": 16,
    "x": 132,
@@ -152,7 +138,7 @@
    "w": 32,
    "h": 32
   },
-  "ikoni_lamporihma": {
+  "ikoni_itio_kalvo": {
    "ax": 16,
    "ay": 16,
    "x": 165,
@@ -160,7 +146,7 @@
    "w": 32,
    "h": 32
   },
-  "ikoni_sato_hamara": {
+  "ikoni_itio_ruusu": {
    "ax": 16,
    "ay": 16,
    "x": 198,
@@ -168,7 +154,7 @@
    "w": 32,
    "h": 32
   },
-  "ikoni_sato_heltta": {
+  "ikoni_itio_verkko": {
    "ax": 16,
    "ay": 16,
    "x": 231,
@@ -176,7 +162,7 @@
    "w": 32,
    "h": 32
   },
-  "ikoni_sato_hoitaja": {
+  "ikoni_itio_yoruusu": {
    "ax": 16,
    "ay": 16,
    "x": 264,
@@ -184,7 +170,7 @@
    "w": 32,
    "h": 32
   },
-  "ikoni_sato_kalvo": {
+  "ikoni_lamporihma": {
    "ax": 16,
    "ay": 16,
    "x": 297,
@@ -192,7 +178,7 @@
    "w": 32,
    "h": 32
   },
-  "ikoni_sato_ruusu": {
+  "ikoni_sato_hamara": {
    "ax": 16,
    "ay": 16,
    "x": 330,
@@ -200,7 +186,7 @@
    "w": 32,
    "h": 32
   },
-  "ikoni_suodatin": {
+  "ikoni_sato_heltta": {
    "ax": 16,
    "ay": 16,
    "x": 363,
@@ -208,7 +194,7 @@
    "w": 32,
    "h": 32
   },
-  "ikoni_valokalvo": {
+  "ikoni_sato_hoitaja": {
    "ax": 16,
    "ay": 16,
    "x": 396,
@@ -216,10 +202,58 @@
    "w": 32,
    "h": 32
   },
-  "ikoni_villi": {
+  "ikoni_sato_kalvo": {
    "ax": 16,
    "ay": 16,
    "x": 429,
+   "y": 412,
+   "w": 32,
+   "h": 32
+  },
+  "ikoni_sato_ruusu": {
+   "ax": 16,
+   "ay": 16,
+   "x": 462,
+   "y": 412,
+   "w": 32,
+   "h": 32
+  },
+  "ikoni_sato_verkko": {
+   "ax": 16,
+   "ay": 16,
+   "x": 495,
+   "y": 412,
+   "w": 32,
+   "h": 32
+  },
+  "ikoni_sato_yoruusu": {
+   "ax": 16,
+   "ay": 16,
+   "x": 528,
+   "y": 412,
+   "w": 32,
+   "h": 32
+  },
+  "ikoni_suodatin": {
+   "ax": 16,
+   "ay": 16,
+   "x": 561,
+   "y": 412,
+   "w": 32,
+   "h": 32
+  },
+  "ikoni_valokalvo": {
+   "ax": 16,
+   "ay": 16,
+   "x": 594,
+   "y": 412,
+   "w": 32,
+   "h": 32
+  },
+  "ikoni_villi": {
+   "ax": 16,
+   "ay": 16,
+   "x": 627,
    "y": 412,
    "w": 32,
    "h": 32
@@ -331,7 +365,7 @@
   "sieni_hamara_itu": {
    "ax": 7,
    "ay": 11,
-   "x": 572,
+   "x": 815,
    "y": 412,
    "w": 16,
    "h": 17
@@ -339,7 +373,7 @@
   "sieni_hamara_kypsa": {
    "ax": 14,
    "ay": 29,
-   "x": 915,
+   "x": 968,
    "y": 321,
    "w": 26,
    "h": 35
@@ -347,7 +381,7 @@
   "sieni_hamara_nuori": {
    "ax": 7,
    "ay": 19,
-   "x": 532,
+   "x": 752,
    "y": 412,
    "w": 16,
    "h": 25
@@ -355,7 +389,7 @@
   "sieni_heltta_itu": {
    "ax": 10,
    "ay": 9,
-   "x": 645,
+   "x": 926,
    "y": 412,
    "w": 21,
    "h": 14
@@ -371,7 +405,7 @@
   "sieni_heltta_nuori": {
    "ax": 10,
    "ay": 20,
-   "x": 510,
+   "x": 730,
    "y": 412,
    "w": 21,
    "h": 27
@@ -379,7 +413,7 @@
   "sieni_hoitaja_itu": {
    "ax": 4,
    "ay": 13,
-   "x": 589,
+   "x": 832,
    "y": 412,
    "w": 17,
    "h": 17
@@ -395,7 +429,7 @@
   "sieni_hoitaja_nuori": {
    "ax": 12,
    "ay": 24,
-   "x": 484,
+   "x": 704,
    "y": 412,
    "w": 25,
    "h": 28
@@ -403,7 +437,7 @@
   "sieni_kalvo_itu": {
    "ax": 10,
    "ay": 12,
-   "x": 623,
+   "x": 882,
    "y": 412,
    "w": 21,
    "h": 16
@@ -419,7 +453,7 @@
   "sieni_kalvo_nuori": {
    "ax": 10,
    "ay": 22,
-   "x": 462,
+   "x": 660,
    "y": 412,
    "w": 21,
    "h": 29
@@ -427,7 +461,7 @@
   "sieni_ruusu_itu": {
    "ax": 12,
    "ay": 11,
-   "x": 607,
+   "x": 850,
    "y": 412,
    "w": 15,
    "h": 17
@@ -435,7 +469,7 @@
   "sieni_ruusu_kypsa": {
    "ax": 15,
    "ay": 30,
-   "x": 885,
+   "x": 908,
    "y": 321,
    "w": 29,
    "h": 36
@@ -443,7 +477,55 @@
   "sieni_ruusu_nuori": {
    "ax": 13,
    "ay": 19,
-   "x": 549,
+   "x": 769,
+   "y": 412,
+   "w": 22,
+   "h": 25
+  },
+  "sieni_verkko_itu": {
+   "ax": 10,
+   "ay": 12,
+   "x": 904,
+   "y": 412,
+   "w": 21,
+   "h": 16
+  },
+  "sieni_verkko_kypsa": {
+   "ax": 11,
+   "ay": 33,
+   "x": 885,
+   "y": 321,
+   "w": 22,
+   "h": 40
+  },
+  "sieni_verkko_nuori": {
+   "ax": 10,
+   "ay": 22,
+   "x": 682,
+   "y": 412,
+   "w": 21,
+   "h": 29
+  },
+  "sieni_yoruusu_itu": {
+   "ax": 12,
+   "ay": 11,
+   "x": 866,
+   "y": 412,
+   "w": 15,
+   "h": 17
+  },
+  "sieni_yoruusu_kypsa": {
+   "ax": 15,
+   "ay": 30,
+   "x": 938,
+   "y": 321,
+   "w": 29,
+   "h": 36
+  },
+  "sieni_yoruusu_nuori": {
+   "ax": 13,
+   "ay": 19,
+   "x": 792,
    "y": 412,
    "w": 22,
    "h": 25

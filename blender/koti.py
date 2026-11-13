@@ -75,6 +75,8 @@ STRAIN = {   # kanta: (lakki, heltat/hehku, tumma). Uusi kanta: lisää värit t
     'hamara': ('#8a4ad0', '#d6b0ff', '#3a1f5a'),
     'kalvo':  ('#9fd3d6', '#ffa6d6', '#2d4a55'),
     'hoitaja':('#8fd0a0', '#e8fff0', '#2f5a3a'),
+    'yoruusu':('#9a46c0', '#f2b4ff', '#3a1a50'),
+    'verkko': ('#d0606e', '#ffc8cc', '#5a2a3a'),
 }
 def M():
     return {
@@ -95,7 +97,7 @@ def M():
       'mossD':   mat('sammalT', '#24391c', 1.0),
       'stem':    mat('jalka', '#efe6cc', 0.7),
       'stemD':   mat('jalkaT', '#c9bc9c', 0.8),
-      'sky':     mat('taivas', '#3a3a5e', 1.0, emit='#7a4a5a', estr=1.2),
+      'sky':     mat('taivas', '#3a3a5e', 1.0, emit='#7a4a5a', estr=0.7),
       'skyT':    mat('taivasY', '#141c28', 1.0, emit='#1b2a4a', estr=1.2),
       'city':    mat('kaupunki', '#141c28', 1.0),
       'cityL':   mat('kaupunkiV', '#ffcf7a', 1.0, emit='#ffcf7a', estr=3.0),
@@ -127,7 +129,7 @@ def M():
       'pot':     mat('ruukku', '#a8602f', 0.8),
     }
 
-CAP_GLOW = {'kalvo': 0.4, 'hoitaja': 0.4}   # vaaleat lakit hehkuvat vähemmän, jotta väri ei puhkea valkoiseksi
+CAP_GLOW = {'kalvo': 0.4, 'hoitaja': 0.4, 'verkko': 0.8}   # vaaleat lakit hehkuvat vähemmän, jotta väri ei puhkea valkoiseksi
 def strain_mats(k):
     cap_c, gill_c, dark_c = STRAIN[k]
     return (mat('lakki_' + k, cap_c, 0.5, emit=cap_c, estr=CAP_GLOW.get(k, 1.6)),
@@ -329,6 +331,8 @@ KANNAT = {
     'hamara':  ('HÄMÄRÄNUPPI', muoto_nuppi),
     'kalvo':   ('KALVOHELTTA', muoto_kalvo),
     'hoitaja': ('HOITAJASIENI', muoto_hoitaja),
+    'yoruusu': ('YÖRUUSU', muoto_ruusu),        # ruususieni × hämäränuppi
+    'verkko':  ('VERKKOHELTTA', muoto_kalvo),   # kalvoheltta × hämäränuppi
 }
 STAGES = ('itu', 'nuori', 'kypsa')
 
@@ -464,7 +468,7 @@ def laite_hautomo(state='kaynnissa'):
 TUOTTEET = {   # kehikon tuotteet: avain -> (nimi, kanta, väri, hehku)
     'valokalvo':  ('VALOKALVO', 'heltta', '#5fc7d0', '#a8fbee'),
     'lamporihma': ('LÄMPÖRIHMA', 'ruusu', '#c4428f', '#ffc46a'),
-    'suodatin':   ('ITIÖSUODATIN', 'kalvo', '#9fd3d6', '#ffa6d6'),
+    'suodatin':   ('ITIÖSUODATIN', 'kalvo', '#9fd3d6', '#ffa6d6'),   # syöte kalvo- tai verkkoheltta
 }
 def membrane(prod, frac, x0, x1, z0, z1, y=0.0):
     """Kehikkoon kasvava elävä kasvusto. frac = kasvun osuus alhaalta ylös (0..1)."""
