@@ -41,6 +41,8 @@ Muutokset alkuperäiseen listaan (prototyypin loppusuunnitelma 2026-11-13): kuiv
 
 **Kuvakkeet** 32×32: `ikoni_hopea`, `ikoni_agar`, `ikoni_villi`, `ikoni_itio_<kanta>` (itiöampulli), `ikoni_sato_<kanta>`, `ikoni_<tuote>`.
 
+**Moodboard-päätökset** (`docs/moodboard-biopunk.md`, Juuso 2026-11-13) on otettu atlakseen: ei näyttöjä, konsoleita eikä kylttejä (jalustoissa ravinnenesteen ikkuna, tila näkyy teal- tai meripihkaisesta itiökuplasta ja maljojen väristä), ei myrkynvihreää (merkkivalot ja putkien neste hillittyä tealia), valolista keskisävyssä, villiä violettia rihmastoa vähän kellarin takanurkassa ja seinän raossa, huone pysyy siistinä. Hautomo: tyhjä = tumma, käynnissä = maljoissa himmeät kantojen värit, valmis = meripihka.
+
 **Uuden kannan lisääminen:** lisää värit `STRAIN`-taulukkoon ja rivi `KANNAT`-taulukkoon (nimi ja muotofunktio; muodon voi lainata toiselta kannalta tai kirjoittaa uuden `muoto_*`-funktion). Spritet, kuvakkeet ja atlas-merkinnät syntyvät automaattisesti. Uusi kehikkotuote lisätään samoin `TUOTTEET`-taulukkoon ja `membrane()`-funktioon.
 
 ## Sprite-atlas: liitäntä grafiikan ja pelin välillä

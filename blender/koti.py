@@ -101,13 +101,13 @@ def M():
       'cityL':   mat('kaupunkiV', '#ffcf7a', 1.0, emit='#ffcf7a', estr=3.0),
       'door':    wmat('ovi', '#45301f', '#33242a', 5.0, 0.9, stretch=(1, 1, 6)),
       'dark':    mat('pimea', '#0b1018', 1.0),
-      'ledG':    mat('ledV', '#6ae07a', 0.5, emit='#6ae07a', estr=8),
+      'ledG':    mat('kuplaT', '#5fc7d0', 0.5, emit='#5fc7d0', estr=4),   # elävä merkki: teal itiökupla (ei myrkynvihreää)
       'ledA':    mat('ledA', '#e8a02a', 0.5, emit='#ffcf7a', estr=8),
       'ledOff':  mat('ledP', '#23272a', 0.5),
-      'warmIn':  mat('hautomoS', '#d99a5b', 1.0, emit='#ffb860', estr=2.2),
+      'warmIn':  mat('hautomoS', '#6a4a30', 1.0, emit='#45301f', estr=0.8),   # käynnissä: himmeä, maljojen kannan värit näkyvät
       'warmInA': mat('hautomoSA', '#e8a02a', 1.0, emit='#ffcf7a', estr=6.0),
       'warmOff': mat('hautomoSP', '#33242a', 1.0),
-      'agar':    mat('agar', '#f3d08a', 0.4, emit='#d99a5b', estr=0.3),
+      'agar':    mat('agar', '#8a7d68', 0.4),
       # futuristinen laboratorio
       'labtile': brick('laatta', '#46566a', '#3c4239', '#141c28', 1.0, (0.25, 0.25), 0.008, 'xy', 0.0),
       'panelL':  wmat('paneeliV', '#2c3a4a', '#1f2a38', 3.0, 0.6, 0.2, stretch=(1, 1, 0.3)),
@@ -116,8 +116,8 @@ def M():
       'steel':   mat('teras', '#77705f', 0.35, 0.8),
       'steelD':  mat('terasT', '#2c3a4a', 0.45, 0.7),
       'rubber':  mat('kumi', '#141c28', 0.9),
-      'strip':   mat('valolista', '#ffcf7a', 0.5, emit='#ffcf7a', estr=5.0),
-      'tube':    mat('ravinneputki', '#5fc7d0', 0.1, emit='#1d6a78', estr=1.2),
+      'strip':   mat('valolista', '#d99a5b', 0.5, emit='#d99a5b', estr=4.0),   # tunnelmavalo keskisävyssä
+      'tube':    mat('ravinneputki', '#1d6a78', 0.1, emit='#1d6a78', estr=0.9),   # hillitty teal-neste
       'screen':  mat('naytto', '#16262e', 0.3, emit='#1d6a78', estr=0.8),
       'screenL': mat('nayttoV', '#5fc7d0', 0.3, emit='#5fc7d0', estr=2.0),
       'leaf':    wmat('lehti', '#3f6a26', '#79a83a', 6.0, 0.8),
@@ -344,10 +344,8 @@ def astia_terraario(part='taka'):
         box((0, 0, z0 / 2 + 0.03), (w + 0.04, d + 0.04, z0 - 0.06), m['steelD'])
         box((0, 0, z0 - 0.02), (w + 0.08, d + 0.08, 0.04), m['steel'])
         box((0, 0, 0.02), (w - 0.06, d - 0.06, 0.04), m['rubber'])
-        box((0.08, -d / 2 - 0.025, z0 / 2), (0.34, 0.012, 0.09), m['screen'])                 # lukema-näyttö
-        for i in range(4):
-            box((-0.04 + i * 0.07, -d / 2 - 0.033, z0 / 2 - 0.02 + (i % 3) * 0.015), (0.04, 0.01, 0.025 + (i % 3) * 0.02), m['screenL'])
-        sphere((-0.24, -d / 2 - 0.03, z0 / 2), 0.022, m['ledG'])
+        box((0.05, -d / 2 - 0.022, z0 / 2), (0.4, 0.012, 0.08), m['glassB'])                  # ravinnenesteen ikkuna
+        box((0.05, -d / 2 - 0.026, z0 / 2 - 0.012), (0.38, 0.01, 0.045), m['tube'])
         box((w / 2 + 0.025, 0.1, z0 / 2), (0.012, 0.3, 0.05), m['panelD'])                   # tuuletusrako
         box((0, 0, z0 + 0.06), (w, d, 0.12), m['soil'])
         box((0, 0, z0 + 0.125), (w - 0.02, d - 0.02, 0.012), m['moss'])
@@ -371,6 +369,9 @@ def astia_terraario(part='taka'):
         rod((0.05, d / 2 - 0.07, z0 + h + 0.1), (0.05, d / 2 + 0.12, z0 + h + 0.1), 0.018, m['tube'], 8)
     else:
         box((w / 2, -d / 2, z0 + h / 2), (t, t, h), m['steel'])
+        hl = mat('heijastus', '#9fd3d6', 0.3, emit='#9fd3d6', estr=0.6)
+        rod((w / 2 - 0.06, -d / 2 - 0.005, z0 + 0.12), (w / 2 - 0.06, -d / 2 - 0.005, z0 + h - 0.08), 0.006, hl, 4)
+        rod((w / 2 + 0.005, -d / 2 + 0.06, z0 + 0.12), (w / 2 + 0.005, -d / 2 + 0.06, z0 + h - 0.08), 0.006, hl, 4)
         for z in (z0, z0 + h):
             box((w / 2, 0, z), (t, d + t, t), m['steel']); box((0, -d / 2, z), (w + t, t, t), m['steel'])
 J_R, J_H, J_BASE = 0.3, 0.8, 0.2
@@ -381,8 +382,6 @@ def astia_lasipurkki(part='taka'):
     if part == 'taka':
         cyl((0, 0, z0 / 2), J_R + 0.04, z0, m['steelD'], 20)
         cyl((0, 0, z0 - 0.015), J_R + 0.06, 0.03, m['steel'], 20)
-        box((0.0, -J_R * 0.72 - 0.02, z0 / 2), (0.18, 0.012, 0.07), m['screen'], rot=(0, 0, math.radians(45)))
-        sphere((J_R * 0.55, -J_R * 0.95, z0 / 2 + 0.01), 0.02, m['ledG'])
         cyl((0, 0, z0 + 0.06), J_R - 0.01, 0.12, m['soil'], 20)
         cyl((0, 0, z0 + 0.125), J_R - 0.02, 0.012, m['moss'], 20)
         rnd = random.Random(12)
@@ -416,10 +415,9 @@ def laite_hautomo(state='kaynnissa'):
     box((0, 0, z0 / 2 + 0.03), (w + 0.04, d + 0.04, z0 - 0.06), m['steelD'])
     box((0, 0, z0 - 0.02), (w + 0.08, d + 0.08, 0.04), m['steel'])
     box((0, 0, 0.02), (w - 0.06, d - 0.06, 0.04), m['rubber'])
-    box((0.06, -d / 2 - 0.025, z0 / 2), (0.3, 0.012, 0.09), m['screen'])
     lit = state != 'tyhja'
-    for i in range(3):
-        box((-0.03 + i * 0.07, -d / 2 - 0.033, z0 / 2), (0.045, 0.01, 0.03), m['screenL'] if lit else m['panelD'])
+    box((0.05, -d / 2 - 0.022, z0 / 2), (0.36, 0.012, 0.08), m['glassB'])
+    if lit: box((0.05, -d / 2 - 0.026, z0 / 2 - 0.012), (0.34, 0.01, 0.045), m['tube'])
     box((w / 2 + 0.025, 0.1, z0 / 2), (0.012, 0.3, 0.05), m['panelD'])
     # kaappi: takaseinä ja sivut tummaa paneelia, katto ja pohja
     box((0, d / 2 - 0.02, z0 + h / 2), (w, 0.04, h), m['panelL'])
@@ -432,7 +430,7 @@ def laite_hautomo(state='kaynnissa'):
     inner = {'tyhja': m['warmOff'], 'kaynnissa': m['warmIn'], 'valmis': m['warmInA']}[state]
     box((0, d / 2 - 0.045, z0 + h / 2), (w - 0.1, 0.01, h - 0.16), inner)
     if lit:
-        glow_light((0, -0.05, z0 + h * 0.55), '#ffcf7a' if state == 'valmis' else '#ffb860', 6 if state == 'valmis' else 3, 0.2)
+        glow_light((0, -0.05, z0 + h * 0.55), '#ffcf7a' if state == 'valmis' else '#d99a5b', 6 if state == 'valmis' else 0.8, 0.2)
     # hyllyt ja maljat
     rnd = random.Random(5)
     cols = ['heltta', 'ruusu', 'heltta', 'hamara']
@@ -444,7 +442,7 @@ def laite_hautomo(state='kaynnissa'):
             cyl((x, -0.06 + (j % 2) * 0.08, zz + 0.02), 0.065, 0.025, m['agar'], 14)
             k = cols[(i + j) % 4]; capm, gillm, _ = strain_mats(k)
             if lit:
-                cyl((x + rnd.uniform(-0.02, 0.02), -0.06 + (j % 2) * 0.08, zz + 0.035), 0.035, 0.008, gillm, 10)
+                cyl((x + rnd.uniform(-0.01, 0.01), -0.06 + (j % 2) * 0.08, zz + 0.035), 0.05, 0.01, m['ledA'] if state == 'valmis' else capm, 10)
     # lasiluukku ja teräskehys (pystytolpat ja reunat kuten terraariossa)
     # luukun lasi jätetään pois kuten terraarion etulasit; vain ohut heijastusjuova lasin paikalla
     rod((-w / 2 + 0.1, -d / 2 + 0.005, z0 + h - 0.12), (-w / 2 + 0.22, -d / 2 + 0.005, z0 + h - 0.3), 0.008, mat('heijastus', '#9fd3d6', 0.3, emit='#9fd3d6', estr=0.6), 4)
@@ -514,7 +512,6 @@ def laite_kehikko(prod=None, stage='tyhja'):
     box((0, 0, z0 / 2 + 0.02), (0.8, 0.36, z0 - 0.04), m['steelD'])
     box((0, 0, z0 - 0.015), (0.84, 0.4, 0.03), m['steel'])
     box((0, 0, 0.02), (0.74, 0.3, 0.04), m['rubber'])
-    box((-0.18, -0.181, z0 / 2), (0.24, 0.012, 0.07), m['screen'])
     led = {'tyhja': m['ledOff'], 'kasvaa_1': m['ledG'], 'kasvaa_2': m['ledG'], 'valmis': m['ledA']}[stage]
     sphere((0.25, -0.19, z0 / 2), 0.025, led)
     if stage == 'valmis': glow_light((0.25, -0.3, z0 / 2), '#ffcf7a', 0.8, 0.05)
@@ -602,10 +599,8 @@ def tila_huone():
     box((-hx + 0.105, dy + 0.25, 1.25), (0.02, 0.24, 0.42), m['glassB'], shadow=False)
     for z in (0.35, 0.6):
         box((-hx + 0.105, dy, z), (0.02, dw - 0.1, 0.04), mat('varoitus', '#e8a02a', 0.6), shadow=False)
-    box((-hx + 0.06, dy + dw / 2 + 0.2, 1.05), (0.05, 0.12, 0.2), m['panelD'], shadow=False)  # ovipaneeli
-    box((-hx + 0.09, dy + dw / 2 + 0.2, 1.08), (0.02, 0.07, 0.07), m['screenL'], shadow=False)
-    box((-hx + 0.06, dy, dh + 0.2), (0.03, 0.5, 0.13), m['panelD'], shadow=False)           # kyltti
-    box((-hx + 0.08, dy, dh + 0.2), (0.02, 0.42, 0.06), mat('kyltti', '#5fc7d0', 0.5, emit='#1d6a78', estr=1.5), shadow=False)
+    box((-hx + 0.06, dy + dw / 2 + 0.2, 1.05), (0.05, 0.12, 0.2), m['panelD'], shadow=False)  # avausvipu
+    box((-hx + 0.09, dy + dw / 2 + 0.2, 1.12), (0.04, 0.03, 0.08), m['copper'], shadow=False)
     # symbiontin rihma: muutama hehkuva säie lattialla oven raosta huoneeseen
     rnd = random.Random(31)
     for i in range(6):
@@ -708,6 +703,20 @@ def tila_kellari():
     for i in range(10):
         box((-hx + 0.006, hy - 0.2 - rnd.random() * 0.5, rnd.random() * 0.4), (0.02, 0.08, 0.07), m['moss'], shadow=False)
     vine(-hx, -0.2, WALL_H - 0.05, 0.6, (1, 0), 42, m); vine(1.7, hy, WALL_H - 0.05, 0.8, (0, -1), 43, m)
+    # villi rihmasto (kylmä violetti) tunkee kellarin takanurkkaan ja seinän raosta, vain vähän
+    wild = m['wild']; wildD = mat('villiT', '#24203f', 0.8)
+    for i in range(14):
+        a = rnd.uniform(-1.5, 0); l = rnd.uniform(0.15, 0.6)
+        rod((-hx + 0.08, hy - 0.08, 0.006), (-hx + 0.08 + math.cos(a) * l, hy - 0.08 + math.sin(a) * l, 0.006), 0.007, wild, 4)
+    for i in range(8):
+        sphere((-hx + 0.1 + rnd.random() * 0.3, hy - 0.1 - rnd.random() * 0.3, 0.01), rnd.uniform(0.03, 0.06), wildD if i % 2 else wild, (1, 1, 0.5), 6)
+    for i in range(5):
+        y0 = hy - 0.12 - rnd.random() * 0.25
+        rod((-hx + 0.004, y0, 0), (-hx + 0.004, y0 + rnd.uniform(-0.1, 0.1), rnd.uniform(0.25, 0.6)), 0.007, wild, 4)
+    for i in range(6):                                                                    # seinän rako oikealla
+        x0 = hx - 0.35 + rnd.uniform(-0.05, 0.05)
+        rod((x0, hy - 0.004, 1.1 + i * 0.05), (x0 + rnd.uniform(-0.2, 0.2), hy - 0.004, 1.1 + i * 0.05 + rnd.uniform(-0.15, 0.15)), 0.006, wild, 4)
+    box((hx - 0.35, hy - 0.003, 1.25), (0.025, 0.01, 0.5), mat('rako', '#130f24', 0.9), shadow=False)
     L = bpy.data.lights.new('katto', 'AREA'); L.energy = 55; L.size = 2.5; L.color = hexc('#9fd3d6')[:3]
     lo = bpy.data.objects.new('katto', L); lo.location = (0, 0, WALL_H + 0.3); link(lo)
     L = bpy.data.lights.new('lamppu', 'POINT'); L.energy = 12; L.color = hexc('#ffcf7a')[:3]
