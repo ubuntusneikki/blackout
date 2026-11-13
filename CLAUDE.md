@@ -20,7 +20,7 @@ Pelaaja ei valmista esineitä vaan kasvattaa elävää rihmastoa: kantoja ristey
 ## Rakenne
 
 ```
-index.html          aloitussivu: ohjaa suoraan kotipeliin (ulko/ ja iso/ jäädytetty tästä protosta)
+index.html          aloitussivu: ohjaa suoraan kotipeliin
 ulko/index.html     ULKO-01 (JÄÄDYTETTY: ulkopeli ei kuulu tähän protoon, saaliit simuloidaan kotona)
 koti/index.html     KOTI-01 v1: kotipeli ES-moduuleina koti/js/ (data, gfx, events, state, sim, room, iso, xsec, ui, main)
                     iso.js = isometrinen päänäkymä (atlas koti/gfx/, 384 px kerros UI-puskurin ×2 alla, osumat, siirtymät)
