@@ -22,7 +22,9 @@ export function newGame(){
     flags:{firstHarvest:false, lab:false, firstCross:false, mutation:false, done:false, hasHautomo:false, frame:false, retki:false},
     order:null, retki:{cur:null, n:0, deep:0}, kotiLast:Date.now(),
     // TP3: torin taulu, virstanpylväsketju, kerran saadut tuotteet
-    board:[], boardNext:0, boardSeq:0, boardDone:0, chain:0, made:{}
+    board:[], boardNext:0, boardSeq:0, boardDone:0, chain:0, made:{},
+    // TP7: mutaatioiden nimet (avain kanta~perk -> nimi) ja kantakirjan nähdyt sivut (hehku = uutta)
+    names:{}, book:{seen:{heltta:1, ruusu:1}}
   };
 }
 
@@ -60,6 +62,10 @@ export function ensure(s){
   for (const k in d.retki) if (s.retki[k]===undefined) s.retki[k]=d.retki[k];
   if (!s.flags.retki && (s.sold||0)>=1) s.flags.retki=true;
   delete s.retkiReady; delete s.trips;
+  // TP7: vanhan tallennuksen tunnetut kannat on jo nähty (kantakirja ei hehku turhaan)
+  if (!s.book || typeof s.book!=='object') s.book={seen:{...s.known}};
+  if (!s.book.seen) s.book.seen={...s.known};
+  if (!s.names || typeof s.names!=='object') s.names={};
   dropDrying(s);
   upgradeV12(s);
   // ulkosivu voi tuoda vanhoja kenttiä; ne eivät haittaa
@@ -75,7 +81,7 @@ export function save(){ S.kotiLast=Date.now(); try { localStorage.setItem(SAVE_K
 
 // koti omistaa nämä kentät: toisen välilehden tallennus ei ylikirjoita niitä
 export const KOTI_OWNS = ['rooms','cur','hopea','inv','deviceInv','bought','sold','known','tried','market','flags','order','retki','kotiLast','speed',
-  'board','boardNext','boardSeq','boardDone','chain','made'];
+  'board','boardNext','boardSeq','boardDone','chain','made','names','book'];
 export function mergeIncoming(inc){ const keep={}; for (const k of KOTI_OWNS) keep[k]=S[k];
   const n=ensure(inc); for (const k of KOTI_OWNS) n[k]=keep[k]; replaceState(n); }
 
@@ -102,9 +108,15 @@ function upgradeV12(s){
   }
 }
 // apurit
+// kanta avaimella; mutaatiolla on pelaajan antama nimi (S.names) tai oletus "SINIHELTTA (MUTAATIO)".
+// orig = alkuperäinen kanta ja mutaatio pienellä ("SINIHELTTA, MUTAATIO: SATO +1").
+export const PERK_TXT = {grow:'KASVU +25%', yield:'SATO +1'};
 export function strain(key){ if(!key) return null; const [base,perk]=key.split('~'); const T=STRAINS[base]; if(!T) return null;
   if (!perk) return {...T, key, base, short:T.name};
-  return {...T, key, base, perk, mutant:true, name:T.name+' (MUTAATIO)', short:T.name+' (M)', grow: perk==='grow'?T.grow/1.25:T.grow, yield: perk==='yield'?T.yield+1:T.yield}; }
+  const own = S && S.names && S.names[key];
+  return {...T, key, base, perk, mutant:true, named:!!own, name: own || T.name+' (MUTAATIO)', short: own || T.name+' (M)',
+    orig: T.name+', MUTAATIO: '+PERK_TXT[perk],
+    grow: perk==='grow'?T.grow/1.25:T.grow, yield: perk==='yield'?T.yield+1:T.yield}; }
 export function roomOf(r){ return S.rooms[r]; }
 export function neighbors(r,i){ const {w,h}={w:4,h:r==='kellari'?3:4}; const c=i%w, y=(i/w)|0, out=[];
   if(c>0) out.push(i-1); if(c<w-1) out.push(i+1); if(y>0) out.push(i-w); if(y<h-1) out.push(i+w); return out; }
