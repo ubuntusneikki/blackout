@@ -20,13 +20,15 @@ Pelaaja ei valmista esineitä vaan kasvattaa elävää rihmastoa: kantoja ristey
 ## Rakenne
 
 ```
-index.html          aloitussivu (linkit protoihin)
+index.html          aloitussivu: ohjaa suoraan kotipeliin
 ulko/index.html     ULKO-01 (JÄÄDYTETTY: ulkopeli ei kuulu tähän protoon, saaliit simuloidaan kotona)
-koti/index.html     KOTI-01 v1: kotipeli ES-moduuleina koti/js/ (data, gfx, events, state, sim, room, xsec, ui, main)
+koti/index.html     KOTI-01 v1: kotipeli ES-moduuleina koti/js/ (data, gfx, events, state, sim, retki, retki-ui, room, iso, xsec, ui, main)
+                    iso.js = isometrinen päänäkymä (atlas koti/gfx/, 384 px kerros UI-puskurin ×2 alla, osumat, siirtymät)
+koti/pwa.js, sw.js  puhelinversio: asennus (manifest.webmanifest, ikonit/), offline, tallennuksen vienti/tuonti koodina
 iso/index.html      kokeilu (JÄÄDYTETTY): isometrinen 3D-kartta three.js r128:lla + pikselöintivarjostin
-blender/            Blender-skriptit (bpy): room.py (huone), kit.py (katupakkaus + talot), pix.py (pikselöinti), sheet.py
-docs/               ydinvisio.md, kotipeli-v1.md (+ suunnitelma), prototyypin-tila.md
-tests/              Playwright-skriptit: v1-lapipeluu.js (botti pelaa tilaukseen asti), tallennukset.js
+blender/            Blender-skriptit (bpy): room.py (huone), kit.py (katupakkaus + talot), koti.py (kodin spritet), koti_atlas.py (atlas + esikatselu), pix.py (pikselöinti), sheet.py
+docs/               ydinvisio.md, kotipeli-v1.md (+ suunnitelma), prototyypin-tila.md, grafiikka-koti.md (kodin spritet ja atlas)
+tests/              Playwright-skriptit: v1-lapipeluu.js (botti pelaa tilaukseen asti), tallennukset.js, pwa.js
 ```
 
 Ei build-vaihetta: staattisia sivuja GitHub Pagesissa. Paikallisesti: `python3 -m http.server` repon juuressa.
@@ -39,8 +41,8 @@ Koti on ES-moduuleina (`koti/js/*.js`) ilman bundleria; se vaatii http-palvelime
 ## Yhteinen tallennus
 
 - `localStorage` avain **`solmu_yhteinen_v1`**, sama ulko- ja kotisivulla (toimii vain samassa origin-osoitteessa).
-- Kodin v1-skeema (`schema:1`): `speed, hopea, rooms{huone,kellari}{owned, cells[]}, cur, inv{raw:kanta, suodatin, villi, agar}, spores{kanta:n}, vesselInv[], deviceInv[], bought, sold, known{}, tried{}, market{sat, spike, nextSpike}, flags{}, order, kotiLast`. Ulko käyttää: `spores, vesselInv, found, cells, memories, walked`.
-- Ruutu on `{kind:'vessel', type, strain, growth, moist, ready}` tai `{kind:'device', type, t, busy, done, dish|job}`. Mutaatiokannan avain on `kanta~grow` tai `kanta~yield`.
+- Kodin v1-skeema (`schema:1`): `speed, hopea, rooms{huone,kellari}{owned, cells[]}, cur, inv{raw:kanta, suodatin, villi, agar}, spores{kanta:n}, vesselInv[], deviceInv[], bought, sold, known{}, tried{}, market{sat, spike, nextSpike}, flags{}, order, retki{cur, n, deep}, kotiLast, board[], boardNext, boardSeq, boardDone, chain, made{}`. Rihmaretki (`retki.js`, TP5): `retki.cur = {type:'lyhyt'|'syva', t, back}`, ovi aukeaa ensimmäisestä myynnistä (`flags.retki`). Ulko käyttää: `spores, vesselInv, found, cells, memories, walked`.
+- Ruutu on `{kind:'vessel', type, strain, growth, moist, ready, waves}` tai `{kind:'device', type, t, busy, done, dish|job}`. `waves` = kypsät satoaallot (≤3), kehikon `job` = syötekanta (`FRAME` data.js:ssä). Mutaatiokannan avain on `kanta~grow` tai `kanta~yield`.
 - Kuivausteline ja `dry:*`-tuotteet poistettiin (TP0): `ensure()` hyvittää ne hopeana (kuivattu 5, teline 40).
 - Tallennus ilman `schema`-kenttää on vanha (V0.2/V0.3): `state.js` `migrate()` muuntaa sen (sato, uute, mk, jalosteet ja tulikääpä → hopeaksi; hylly 3 sarakkeesta 4×4-ruudukkoon).
 - Koti omistaa kentät `KOTI_OWNS` (state.js). Kun toinen välilehti kirjoittaa (`storage`-tapahtuma), koti ottaa uuden tilan mutta pitää nämä omat arvonsa. Ulko tekee muutokset aina tuoreimpaan tallennukseen (`mutate`).
@@ -50,6 +52,7 @@ Koti on ES-moduuleina (`koti/js/*.js`) ilman bundleria; se vaatii http-palvelime
 ## Visuaaliset säännöt
 
 - **Pikselitaide 192 px leveänä** (iso-kokeilu 256 px), skaalaus kokonaisluvulla, `image-rendering: pixelated`.
+  - Poikkeus: kodin isometrinen huone on 384 px leveä (ruutu 88×44 px, ks. docs/grafiikka-koti.md), Juuson hyväksymä 2026-11-12. 192 px:n raja oli ulkopelin yhtenäistä tarkkuutta varten; ulkopelin tarkkuus päätetään myöhemmin.
 - **3×5 pikselifontti** (F-taulukko koodissa), Ä/Ö pisteillä glyfin yläpuolella.
 - **Paletti** (pix.py `PAL` ja iso/index.html `PAL` ovat sama lista): tumma viileä pohja, lämmin sisävalo, kantojen omat värit:
   - siniheltta `#1d5c58 #34b8ac #a8fbee`, ruususieni `#5a1f4a #c4428f #ffa6d6`, tulikääpä `#6b2e12 #d9702a #ffc46a`, hämäränuppi `#3a1f5a #8a4ad0 #d6b0ff`, hoitajasieni `#2f5a3a #8fd0a0 #e8fff0`, meripihka `#7a4a14 #e8a02a #ffe08a`.
@@ -69,8 +72,9 @@ Koti on ES-moduuleina (`koti/js/*.js`) ilman bundleria; se vaatii http-palvelime
 
 - Selaintestit Playwrightilla (headless Chrome). WebGL: `--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader`.
 - URL-parametrit: koti `?reset` (uusi peli); ulko `?sim` (ei GPS:ää), `?demo` (demokaupunki ilman OSM:ää); iso `?demo`.
-- Debug-koukut: koti `window.__S()` (tila), `__sim(s)` (pelisekunteja eteenpäin), `__G` (pelilogiikka), `__U` (käyttöliittymä); ulko `window.DBG` (P, finds, S, collect), iso `window.DBG`.
+- Debug-koukut: koti `window.__S()` (tila), `__sim(s)` (pelisekunteja eteenpäin), `__G` (pelilogiikka), `__R` (rihmaretki), `__U` (käyttöliittymä); ulko `window.DBG` (P, finds, S, collect), iso `window.DBG`.
 - Katso aina kuvakaappaus ennen kuin sanot jonkin visuaalisen asian olevan valmis.
+- Puhelinversio: `node tests/pwa.js` (oma palvelin). Service worker hakee verkosta ensin, joten uusi versio näkyy seuraavalla käynnistyksellä; tiedostolistaa ei tarvitse päivittää. Tallennuksen tuonti kulkee sessionStoragen (`solmu_tuonti`) kautta, ettei pelin oma save() ylikirjoita sitä.
 - Julkaisu: GitHub Pages. Käyttäjä ohittaa välimuistin lisäämällä `?v=N`; näytä versionumero käyttöliittymässä (`VERSION`).
 
 ## Tehtävät järjestyksessä
