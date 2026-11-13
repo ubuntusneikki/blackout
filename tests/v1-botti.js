@@ -15,13 +15,16 @@ module.exports = function(){
         const needSp = S.flags.lab && ((b==='heltta'&&has('heltta')<2)||(b==='ruusu'&&has('ruusu')<1)||(b==='hamara'&&has('hamara')<1)||(b==='kalvo'&&has(c.strain)<1));
         if(needSp) G.takeSpores(c); else G.harvest(c); }
       if(c.strain && c.moist<0.3) G.mist(c);
-      if(c.strain && !c.ready && S.order && c.type!=='purkki' && !c.strain.startsWith('kalvo') && !c.strain.startsWith('hoitaja') && Object.keys(S.spores).some(k=>k.startsWith('kalvo'))) G.clearVessel(c);
+      if(c.strain && !c.ready && flags.keh && S.known.kalvo && c.type!=='purkki' && !c.strain.startsWith('kalvo') && !c.strain.startsWith('hoitaja') && Object.keys(S.spores).some(k=>k.startsWith('kalvo'))) G.clearVessel(c);
       if(!c.strain){ const pref = S.known.kalvo&&c.type!=='purkki' ? Object.keys(S.spores).filter(k=>k.startsWith('kalvo')) : [];
         const opts = pref.length?pref:Object.keys(S.spores).filter(k=>!(S.flags.lab&&has(k)<=1&&k!=='heltta'&&!k.startsWith('kalvo')));
         const k = opts.sort((a,b)=>G.matchOf(c,b)-G.matchOf(c,a))[0]; if(k) G.plant(c,k); }
     }
+    // torin taulu ensin; pidä taulun tilauksiin tarvittavat tuotteet
+    for(const o of (S.board||[])) if(!o.given && G.boardHave(o)>=o.n){ G.deliverBoard(o.id); ev('taulu '+o.n+' × '+o.tuote); }
+    const keep={}; for(const o of (S.board||[])) if(!o.given) keep[o.tuote]=(keep[o.tuote]||0)+o.n;
     // myynti: kaikki paitsi kehikon kalvoheltta ja tilauksen suodattimet
-    for(const id of G.sellables()){ if(id.startsWith('itio:')) { const k=id.slice(5); if (has(k)>3 && !k.startsWith('kalvo')) G.sell(id,has(k)-3); continue; }
+    for(const id of G.sellables()){ if(keep[id]){ if(G.owned(id)>keep[id]) G.sell(id,G.owned(id)-keep[id]); continue; } if(id.startsWith('itio:')) { const k=id.slice(5); if (has(k)>3 && !k.startsWith('kalvo')) G.sell(id,has(k)-3); continue; }
       if(id==='raw:kalvo'&&S.rooms && cells().some(o=>o.c.type==='kehikko')) continue;
       if(id==='suodatin' && S.order && !S.flags.done) continue;
       G.sell(id,G.owned(id)); }
@@ -33,6 +36,7 @@ module.exports = function(){
       if(flags.hautomo && (S.inv.agar||0)<1) buyIf('agar',true);
     }
     if(S.known.kalvo && !flags.keh) flags.keh=buyIf('kehikko',true);
+    if(!S.known.kalvo && S.flags.lab && flags.hautomo && !flags.keh && S.hopea>90) flags.keh=buyIf('kehikko',true);
     if(flags.keh && !flags.kel) flags.kel=buyIf('kellari',S.hopea>360);
     const vcount=cells().filter(o=>o.c.kind==='vessel').length;
     if(vcount<6 && free()) buyIf('terraario', S.hopea>(flags.hautomo?(flags.keh?40:140):70));
@@ -43,9 +47,10 @@ module.exports = function(){
     if(h && S.inv.agar){ if(!S.known.kalvo && has('heltta')&&has('ruusu')) G.startDish(h.c,'heltta','ruusu');
       else if(S.known.kalvo && !S.known.hoitaja && has('heltta')&&has('hamara')) G.startDish(h.c,'heltta','hamara'); }
     // kehikko
-    const k=cells().find(o=>o.c.type==='kehikko'&&!o.c.busy); if(k) G.startFrame(k.c);
-    // testilöytö (hämäränuppi) kerran laboratorion jälkeen
-    if(S.flags.lab && !flags.retki){ S.retkiReady=0; G.retki(); flags.retki=1; ev('testilöytö'); }
+    const k=cells().find(o=>o.c.type==='kehikko'&&!o.c.busy); if(k){ if(!G.startFrame(k.c,'kalvo') && !S.flags.frame) G.startFrame(k.c,'heltta'); }
+    // rihmaretki: ota löydöt vastaan, lähetä lyhyelle retkelle aina kun ovi on vapaa
+    const R=__R; if(R.status()&&R.status().back){ const res=R.collect(); ev('retki: '+res.loot.map(R.lootName).join(', ')); }
+    if(R.canStart('lyhyt')) R.start('lyhyt');
     if(S.flags.lab && !flags.lab){ flags.lab=1; ev('labra auki'); }
     if(S.known.kalvo && !flags.kalvo){ flags.kalvo=1; ev('kalvoheltta tunnettu'); }
     if(S.order && !flags.order){ flags.order=1; ev('tilaus'); }

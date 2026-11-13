@@ -6,14 +6,22 @@ import {U, render, audioInit, openHautomo, switchRoom} from './ui.js';
 import {STRAINS} from './data.js';
 import {loadAtlas, composite, zoomActive} from './iso.js';
 import * as ISO from './iso.js';
+import * as retki from './retki.js';
+import {emit} from './events.js';
 
-// offline-kasvu (enintään 8 h)
-function catchUp(){ const away=Math.min(8*3600,(Date.now()-(S.kotiLast||Date.now()))/1000)*S.speed; if (away>1) sim.simulate(away); }
+// offline-kasvu (enintään 8 h) ja yhteenveto palatessa
+function catchUp(){ const real=(Date.now()-(S.kotiLast||Date.now()))/1000, away=Math.min(8*3600,real)*S.speed; if (away<=1) return;
+  const a=sim.snapshot(); sim.simulate(away); const b=sim.snapshot();
+  if (away<600) return;   // alle 10 pelimin poissaolo: ei yhteenvetoa
+  const parts=[]; if (b.w>a.w) parts.push((b.w-a.w)+' SATOAALTOA'); if (b.dev>a.dev) parts.push((b.dev-a.dev)+' LAITE VALMIS');
+  if (b.board!==a.board) parts.push('UUSI TILAUS TAULULLA'); if (b.spike && b.spike!==a.spike) parts.push('KYSYNTÄPIIKKI');
+  const h=real/3600, aika=h>=1?Math.floor(h)+' H':Math.max(1,Math.round(real/60))+' MIN';
+  emit('paluu',{poissa:real, ...b, viesti: parts.length ? 'POISSA '+aika+': '+parts.join(', ')+'.' : null}); }
 // itiöt voivat tulla myös testilöydöistä tai vanhasta tallennuksesta: kanta on silloin tunnettu
 function syncKnown(){ for (const k in S.spores){ const b=k.split('~')[0]; if (STRAINS[b]) S.known[b]=1; } }
 // aamupaljastus: valmistunut malja avautuu heti, kun peli avataan
 function morningReveal(){ for (const r in S.rooms) for (const c of S.rooms[r].cells) if (c&&c.type==='hautomo'&&c.done){ openHautomo(c); return; } }
-catchUp(); syncKnown(); sim.checkUnlocks(); sim.rescue(); morningReveal(); save();
+catchUp(); syncKnown(); sim.checkUnlocks(); sim.progressChain(); sim.rescue(); morningReveal(); save();
 
 let lastMs=performance.now(), lastFrame=0, lastSave=0;
 function loop(ms){
@@ -47,5 +55,5 @@ document.addEventListener('visibilitychange',()=>{ if(document.hidden){ save(); 
   try { const inc=JSON.parse(localStorage.getItem(SAVE_KEY)); if(inc) mergeIncoming(inc); } catch(e){}
   catchUp(); syncKnown(); morningReveal(); lastMs=performance.now(); });
 addEventListener('storage',e=>{ if(e.key!==SAVE_KEY||!e.newValue) return; try { mergeIncoming(JSON.parse(e.newValue)); syncKnown(); } catch(_){} });
-window.__S=()=>S; window.__sim=sim.simulate; window.__U=U; window.__G=sim; window.__ISO=ISO;
+window.__S=()=>S; window.__sim=sim.simulate; window.__U=U; window.__G=sim; window.__ISO=ISO; window.__R=retki;
 loadAtlas('gfx/').then(()=>requestAnimationFrame(loop));
