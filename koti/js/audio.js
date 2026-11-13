@@ -125,6 +125,7 @@ const SOUNDS = {
   valmis(t,v){ bell(note(10), t, 0.9, 0.04*v); bell(note(14), t+0.14, 1.1, 0.04*v); },
   kypsyi(t,v){ for (let k=0;k<3;k++) bell(note(12+k*2), t+k*0.09, 0.9, 0.022*v); },
   // horros: alas liukuva huokaus
+  herasi(t,v){ tone(note(4), t, 0.6, 0.03*v, {to:note(9), glide:0.4, type:'triangle', lp:900, attack:0.05}); },
   horros(t,v){ tone(note(7), t, 0.8, 0.03*v, {to:note(2), glide:0.7, type:'triangle', lp:800, attack:0.08}); },
   // paljastus: pehmeä sointu, joka aukeaa (Dm9 → F-maj7 -henki)
   reveal(t,v){ [0,2,4,6,8].forEach((i,k)=>{ const f=note(5+i);
@@ -201,7 +202,7 @@ const MAP = {
   komposti:['komposti',20], sijoitus:['sijoitus',15], siirto:['siirto',10],
   'malja-alku':['malja',12], 'laite-alku':['malja',12], 'laite-valmis':['valmis',null], 'laite-keruu':['korjuu',[18,40,28]],
   myynti:['coin',10], osto:['osto',[12,30,12]], toimitus:['coin',[10,30,10]], kysyntapiikki:['piikki',null],
-  avaus:['avaus',[20,60,20,60,40]], 'tilaus-valmis':['avaus',[30,60,30,60,80]], 'tilaus-uusi':['valmis',null],
+  avaus:['avaus',[20,60,20,60,40]], virstanpylvas:['avaus',[20,60,20,60,40]], herasi:['herasi',null], paluu:['valmis',null], 'tilaus-uusi':['valmis',null],
   testiloyto:['itiot',10], pelastus:['itiot',null], virhe:['virhe',[25,50,25]], kypsyi:['kypsyi',null], horros:['horros',null],
   'retki-alku':['itiot',12], 'retki-palasi':['valmis',[15,40,15]], 'retki-loyto':['reveal',[20,60,40]]   // TP5 rihmaretki
 };
@@ -209,6 +210,8 @@ on('*', (d, name) => {
   const m = MAP[name]; if (!m) return;
   play(m[0], d); if (m[1]) haptic(m[1]);
 });
+// taulun tilaus on pienempi juhla kuin torin väen suodatintilaus
+on('tilaus-valmis', d => { if (d.lahde==='taulu'){ play('coin'); play('valmis'); haptic([15,40,15]); } else { play('avaus'); haptic([30,60,30,60,80]); } });
 on('malja-auki', d => { const k = d.tulos && d.tulos.kind;
   if (k==='fail') { play('fail'); haptic([40,80,40]); }
   else if (k==='villi') { play('villi'); haptic([30,50,30,50,30]); }

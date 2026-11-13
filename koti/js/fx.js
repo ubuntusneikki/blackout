@@ -96,7 +96,8 @@ on('osto', d=>{ const c=L.counter(), n=reduced?0:clamp(Math.ceil((d.hinta||3)/10
 // iso juhla: itiöitä koko ruudulle
 function confetti(cols){ if (reduced) return; for (let k=0;k<70;k++) add({x:Math.random()*W,y:-4-Math.random()*60,vx:(Math.random()-0.5)*10,vy:10+Math.random()*20,g:6,drag:0.3,life:4+Math.random()*2,col:cols[k%cols.length],layer:'ui'}); }
 on('avaus', ()=>confetti([AMB[2],'#8fd0a0','#e8fff0']));
-on('tilaus-valmis', ()=>confetti([AMB[2],AMB[1],'#a8fbee','#ffa6d6']));
+on('tilaus-valmis', d=>{ if (d.lahde!=='taulu') confetti([AMB[2],AMB[1],'#a8fbee','#ffa6d6']); else counterFlash=performance.now(); });
+on('virstanpylvas', ()=>confetti([AMB[2],'#a8fbee']));
 on('kysyntapiikki', ()=>{ counterFlash=performance.now(); });
 
 // valmistumisen rengas
@@ -107,6 +108,8 @@ function ring(b,col){ RINGS.push({b,col,t0:performance.now()}); }
 // (kunnes sim.js lähettää omat tapahtumansa; silloin nämä eivät tuplaannu, koska tila on jo merkitty)
 const seen=new WeakMap(); let firstScan=true;
 on('kypsyi', d=>{ if (d.astia) mark(d.astia, true); });
+on('horros', d=>{ if (d.astia) mark(d.astia, false); });
+on('herasi', d=>{ if (d.astia){ mark(d.astia, false); onCell(d,(b,x,y)=>burst(x,y,reduced?3:8,colsOf(d.astia.strain),{speed:10,g:-6,life:1})); } });
 function mark(c, fromEvent){ const s=seen.get(c)||{}; s.ready=c.ready; s.dry=c.moist<0.1; seen.set(c,s); if (fromEvent){ const b=boxOf(c); if (b) ring(b,AMB[2]); } }
 function scanStates(){
   for (const r in S.rooms){ if (!S.rooms[r].owned) continue; for (const c of S.rooms[r].cells){ if (!c || c.kind!=='vessel') continue;
