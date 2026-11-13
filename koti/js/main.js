@@ -4,8 +4,11 @@ import {S, SAVE_KEY, save, mergeIncoming} from './state.js';
 import * as sim from './sim.js';
 import {U, render, audioInit, openHautomo, switchRoom} from './ui.js';
 import {STRAINS} from './data.js';
+import * as fx from './fx.js';
+import {play} from './audio.js';
 import {loadAtlas, composite, zoomActive} from './iso.js';
 import * as ISO from './iso.js';
+import {isoLocator} from './iso.js';
 import * as retki from './retki.js';
 import {emit} from './events.js';
 
@@ -29,11 +32,11 @@ function loop(ms){
   if (!U.modal && U.view!=='reveal') sim.tick(dt*S.speed);
   if (ms-lastFrame>90){ lastFrame=ms; draw(ms); }
   if (ms-lastSave>3000){ lastSave=ms; save(); sim.rescue(); }
-  loadAtlas('gfx/').then(()=>requestAnimationFrame(loop));
+  requestAnimationFrame(loop);
 }
 // näyttö on 384×672 (huonekerros 1:1, käyttöliittymäpuskuri ×2); kerroin K laitepikseleinä
 let K=1;
-function draw(ms){ render(ms); composite(sctx, buf, K, U.view); }
+function draw(ms){ render(ms); fx.draw(ms); composite(sctx, buf, K, U.view); }
 function fit(){
   const dpr=window.devicePixelRatio||1, s=Math.min(innerWidth*dpr/(2*W), innerHeight*dpr/(2*H)), n=Math.floor(s);
   // kokonaislukukerroin laitepikseleinä, jos se täyttää näytön melkein; muuten venytys (pikselöity)
@@ -46,7 +49,7 @@ let down=null;
 screen.addEventListener('pointerdown',e=>{ audioInit();
   const r=screen.getBoundingClientRect(), x=(e.clientX-r.left)/r.width*W, y=(e.clientY-r.top)/r.height*H;
   down={x,y,cx:e.clientX};
-  for(let i=HIT.length-1;i>=0;i--){ const h=HIT[i]; if(x>=h.x&&x<h.x+h.w&&y>=h.y&&y<h.y+h.h){ h.fn(x,y); draw(performance.now()); return; } }
+  for(let i=HIT.length-1;i>=0;i--){ const h=HIT[i]; if(x>=h.x&&x<h.x+h.w&&y>=h.y&&y<h.y+h.h){ play('tap'); h.fn(x,y); draw(performance.now()); return; } }
 });
 // pyyhkäisy vaihtaa tilaa
 screen.addEventListener('pointerup',e=>{ if(!down) return; const r=screen.getBoundingClientRect(), dx=(e.clientX-down.cx)/r.width*W;
@@ -56,4 +59,5 @@ document.addEventListener('visibilitychange',()=>{ if(document.hidden){ save(); 
   catchUp(); syncKnown(); morningReveal(); lastMs=performance.now(); });
 addEventListener('storage',e=>{ if(e.key!==SAVE_KEY||!e.newValue) return; try { mergeIncoming(JSON.parse(e.newValue)); syncKnown(); } catch(_){} });
 window.__S=()=>S; window.__sim=sim.simulate; window.__U=U; window.__G=sim; window.__ISO=ISO; window.__R=retki;
+fx.setLocator(isoLocator);   // TP6:n efektit isometrisen huoneen ja poikkileikkauksen ruutuihin
 loadAtlas('gfx/').then(()=>requestAnimationFrame(loop));

@@ -15,24 +15,15 @@ export const U = {doorGlow:false, view:'room', sel:null, modal:null, build:false
 const now=()=>performance.now();
 export function toast(m){ U.msg=m; U.msgT=now(); U.msgCol=P.ui3; }
 export function say(m){ U.msg=m; U.msgT=now()+4000; U.msgCol=SYM; }     // symbiontin vihje näkyy pidempään
-// ---------- ääni ----------
-let AC=null;
-export function audioInit(){ if(AC) return; try { AC=new (window.AudioContext||window.webkitAudioContext)(); } catch(e){} }
-function tone(f,t0,dur,vol,type){ const o=AC.createOscillator(), gg=AC.createGain(); o.type=type||'sine'; o.frequency.value=f;
-  gg.gain.setValueAtTime(0.0001,t0); gg.gain.exponentialRampToValueAtTime(vol,t0+0.01); gg.gain.exponentialRampToValueAtTime(0.0001,t0+dur);
-  o.connect(gg).connect(AC.destination); o.start(t0); o.stop(t0+dur+0.05); }
-export function sound(kind){ if(!AC) return; const t=AC.currentTime;
-  if (kind==='coin'){ tone(1319,t,0.08,0.05,'square'); tone(1760,t+0.07,0.18,0.05,'square'); }
-  else if (kind==='harvest'){ [659,880].forEach((f,k)=>tone(f,t+k*0.08,0.5,0.05)); }
-  else if (kind==='reveal'){ [392,523,659,784,1047].forEach((f,k)=>tone(f,t+k*0.11,1.2,0.05)); }
-  else if (kind==='fail'){ [330,277].forEach((f,k)=>tone(f,t+k*0.15,0.6,0.04,'triangle')); } }
-// tapahtumaväylän kuuntelijat: viesti paneeliin, symbiontin vihje ja ääni
+// ---------- ääni (TP6: audio.js kuuntelee tapahtumat itse) ----------
+import {init as audioStart, play, isEnabled, setEnabled, setScene} from './audio.js';
+export function audioInit(){ audioStart(); }
+export function sound(kind){ play(kind); }
+// tapahtumaväylän kuuntelija: viesti paneeliin ja symbiontin vihje
 on('*',(d)=>{ if (d.vihje) say(d.vihje); else if (d.viesti) toast(d.viesti); });
-const SOUND_OF = {korjuu:'harvest', itiot:'harvest', 'laite-keruu':'harvest', myynti:'coin', osto:'coin', toimitus:'coin', 'tilaus-valmis':'coin', virstanpylvas:'coin', virhe:'fail'};
-on('*',(d,name)=>{ if (SOUND_OF[name]) sound(SOUND_OF[name]); });
 on('tilaus-valmis',(d)=>{ if (d.lahde!=='taulu') startReveal({kind:'done'}); });
 
-export function startReveal(res){ U.rev={res, t0:now()}; U.modal=null; U.view='reveal'; sound(res.kind==='fail'?'fail':'reveal'); }
+export function startReveal(res){ U.rev={res, t0:now()}; U.modal=null; U.view='reveal'; }   // ääni tulee tapahtumasta (audio.js)
 export function openHautomo(dev){ const res=sim.openDish(dev); if(res) startReveal(res); }
 
 // ---------- yläpalkki ja paneeli ----------
@@ -346,6 +337,7 @@ function drawModal(t){
   else if (m.type==='retki') drawRetkiModal(m,X,Y,WW,HH,t,{close:()=>{ U.modal=null; }, reveal:res=>startReveal({kind:'retki', ...res})});
   else if (m.type==='settings'){
     title('ASETUKSET');
+    row('ÄÄNI', isEnabled()?'PÄÄLLÄ':'POIS','ÄÄNET, AMBIENT JA VÄRINÄ',()=>{ setEnabled(!isEnabled()); },true);
     row('NOPEUS', S.speed===60?'×60 TESTI':'×1 OIKEA','KASVU OIKEASSA AJASSA TAI 60X',()=>{ S.speed = S.speed===60?1:60; save(); },true);
     if (window.SOLMU_PWA) row('TALLENNUS JA ASENNUS','','VIENTI, TUONTI JA ASENNUSOHJE',()=>{ U.modal=null; window.SOLMU_PWA.open(); },true);
     row('UUSI PELI','','POISTAA TALLENNUKSEN',()=>{ U.modal={type:'confirmReset'}; },true);
@@ -360,6 +352,7 @@ function drawModal(t){
 
 export function render(ms){
   const t=ms/1000; resetHit(); g.clearRect(0,0,W,H);
+  setScene(U.view==='reveal'?'reveal':S.cur);
   // poikkileikkaukseen zoomatessa huone näkyy taustalla
   if (U.view==='vessel' && zoomActive() && ZOOM.dir>0) drawIso(t,{});
   if (U.view==='reveal' && U.rev) drawReveal(t);
