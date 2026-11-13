@@ -375,5 +375,5 @@ export function composite(sctx, buf, k, view){
     sctx.drawImage(z && ZOOM.dir < 0 ? ZOOM.snap : XL, 0, 0, IW, IH, Math.round(x*2*k), Math.round(y*2*k), Math.round(w*2*k), Math.round(h*2*k));
     sctx.globalAlpha = 1;
   }
-  sctx.drawImage(buf, 0, 0, W, H, 0, 0, 2*W*k, 2*H*k);
+  sctx.drawImage(buf, 0, 0, buf.width, buf.height, 0, 0, 2*W*k, 2*H*k);
 }

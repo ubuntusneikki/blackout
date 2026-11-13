@@ -1,6 +1,6 @@
 // näkymät, modaalit ja paljastus
 import {P, AMB, WILD, SYM, VESSELS, DEVICES, STRAINS, STRAIN_ORDER, ORIGIN_TXT, RECIPES, SHOP, CUR, ORDER, ROOMS, VERSION, SELL_BASE, LAB_UNLOCK_SOLD, FRAME, FRAME_ORDER, PRODUCTS, WAVES, TENDER} from './data.js';
-import {W, H, g, px, rect, rng, BAYER, clamp, ease, text, textC, tw, wrap, wrapLines, fmt, button, hit, bar, vitalRect, HIT, resetHit} from './gfx.js';
+import {W, H, g, px, dot, bay, rect, rng, BAYER, clamp, ease, text, textC, tw, wrap, wrapLines, fmt, button, hit, bar, vitalRect, HIT, resetHit, bevel, frame, veil} from './gfx.js';
 import {S, save, strain, replaceState, newGame} from './state.js';
 import * as sim from './sim.js';
 import {on} from './events.js';
@@ -28,14 +28,15 @@ export function openHautomo(dev){ const res=sim.openDish(dev); if(res) startReve
 
 // ---------- yläpalkki ja paneeli ----------
 function topBar(){
-  rect(0,0,W,13,P.ui0); rect(0,13,W,1,P.ui2);
+  rect(0,0,W,13,P.ui0); rect(0,0,W,.5,'#1a2430'); rect(0,12.5,W,.5,'#05080d'); rect(0,13,W,.5,P.ui2); rect(0,13.5,W,.5,'#05080d');
+  for (let x=0;x<W;x+=.5) if (bay(x,13)<6*(1-x/W)) dot(x,13,'#34b8ac');   // himmeä teal-valolista (tunnelmahehku)
   const title = U.view==='vessel'&&U.sel ? 'SOLMU > '+VESSELS[U.sel.c.type].name : U.view==='book' ? 'SOLMU > KANTAKIRJA' : 'SOLMU > '+ROOMS[S.cur].name;
   text(title,4,4,P.ui3);
   const res=Math.floor(S.hopea)+' '+CUR; text(res,W-4-tw(res),4,AMB[2]);
   hit(0,0,W,13,()=>{ U.modal={type:'settings'}; });
 }
 function panel(lines){
-  rect(0,272,W,64,P.ui0); rect(0,272,W,1,P.ui2);
+  rect(0,272,W,64,P.ui0); rect(0,272,W,.5,'#05080d'); rect(0,272.5,W,.5,P.ui2); rect(0,273,W,.5,'#1a2430');
   const age=now()-U.msgT;
   if (U.msg && age<7000) wrap(U.msg,5,278,182,U.msgCol);
   else if (lines) lines();
@@ -119,7 +120,7 @@ function drawVessel(t){
   text('KOSTEUS',5,297,P.ui3); bar(46,297,vs.moist, vs.moist<0.25?P.red:P.wa2);
   const w=sim.waves(vs);
   if (T && !T.auto){ text('KASVU',5,305,P.ui3); bar(46,305,w>=WAVES?1:vs.growth, w>=WAVES?AMB[1]:T.col[1]);
-    for(let k=0;k<WAVES;k++) rect(108+k*4,305,3,5,k<w?AMB[2]:P.ui1); }
+    for(let k=0;k<WAVES;k++){ rect(108+k*4,305,3,5,k<w?AMB[1]:P.ui1); rect(108+k*4,305,3,.5,k<w?AMB[2]:'#2a3646'); } }
   const care=sim.tended()[U.sel.r+':'+U.sel.i];
   if (T){ const m=sim.matchOf(vs,vs.strain); text(['HUONO ASTIA','KELPO ASTIA','TÄYDELLINEN'][m],116,297, m===2?P.grn:m===1?P.ui3:P.red);
     if (vs.moist<0.1) text('HORROS',124,305,P.wa2); else if (T.auto) text('HOITAA NAAPUREITA',124,305,T.col[2]);
@@ -141,7 +142,7 @@ function drawBook(t){
   const PER=9, pages=Math.ceil(keys.length/PER); U.bookPage=Math.min(U.bookPage||0,pages-1);
   keys.slice(U.bookPage*PER,(U.bookPage+1)*PER).forEach(k=>{
     const T=strain(k), kn=!!S.known[k];
-    rect(4,y,W-8,24,P.ui0); rect(4,y,W-8,1,P.ui1);
+    bevel(4,y,W-8,24,P.ui0,P.ui1,'#070b11','#05080d');
     // pieni sieni-ikoni
     const ix=16, iy=y+18;
     if (kn){ rect(ix,iy-6,1,6,P.st1); rect(ix-4,iy-9,9,3,T.col[1]); rect(ix-3,iy-10,7,1,T.col[2]); if(T.mutant) px(ix+5,iy-11,AMB[2]); }
@@ -171,7 +172,7 @@ function drawReveal(t){
   rect(0,0,W,H,'#06080c');
   const cx=W/2, cy=130;
   if (res.kind==='done'){ // tilaus täytetty
-    for(let k=0;k<60;k++){ const r=rng(k)(); const ang=k*0.7+a*0.3, rr=(a*40+k*7)%140; px(cx+Math.cos(ang)*rr, cy+Math.sin(ang)*rr*0.8, k%3?SYM:AMB[2]); }
+    for(let k=0;k<60;k++){ const r=rng(k)(); const ang=k*0.7+a*0.3, rr=(a*40+k*7)%140; rect(cx+Math.cos(ang)*rr, cy+Math.sin(ang)*rr*0.8, 1, 1, k%3?SYM:AMB[2]); }
     if (a>0.8) textC('V1 LÄPÄISTY',cx,cy-10,AMB[2],2);
     if (a>1.6) wrap('TORIN VÄKI SAI SUODATTIMENSA. +'+ORDER.reward+' '+CUR+'.',16,cy+20,160,P.ui3);
     if (a>2.2){ button(cx-34,290,68,14,'JATKA',()=>{ U.view='room'; U.rev=null; },'a'); }
@@ -180,8 +181,8 @@ function drawReveal(t){
   const A=strain(res.a), B=strain(res.b);
   // malja
   const lid = clamp((a-0.5)/0.8,0,1);
-  for(let y=-26;y<=26;y++) for(let x=-40;x<=40;x++){ const d=(x*x)/(40*40)+(y*y)/(26*26); if(d>1) continue;
-    px(cx+x,cy+y, d>0.86?'#9a9480':'#2a2620'); }
+  for(let y=-26;y<=26;y+=.5) for(let x=-40;x<=40;x+=.5){ const d=(x*x)/(40*40)+(y*y)/(26*26); if(d>1) continue;
+    dot(cx+x,cy+y, d>0.93?'#c9c2a8':d>0.86?'#9a9480':'#2a2620'); }
   // rihmasto kasvaa kahdesta pisteestä
   const grow=clamp((a-1.2)/1.6,0,1), fail=res.kind==='fail', wild=res.kind==='villi';
   const r1=rng(7), r2=rng(9);
@@ -189,17 +190,17 @@ function drawReveal(t){
     for(let n=0;n<14;n++){ let x=sx, y=cy, ang=r()*6.28; const len=Math.floor(grow*22*(0.6+r()*0.6));
       for(let i=0;i<len;i++){ ang+= (r()-0.5)*0.6; x+=Math.cos(ang); y+=Math.sin(ang)*0.7;
         if (fail && Math.abs(x-cx)<5) break;
-        const col = wild && i>len*0.5 ? WILD[1] : T.col[i%3===0?2:1]; px(x,y,col); } }
+        const col = wild && i>len*0.5 ? WILD[1] : T.col[i%3===0?2:1]; dot(x,y,col); dot(x-Math.cos(ang)*.5,y-Math.sin(ang)*.35,col); } }
   }
   // kansi nousee
   const ly=cy-30-lid*50;
-  if (lid<1) for(let x=-42;x<=42;x++){ if(BAYER[ly&3][(cx+x)&3]<16*(1-lid)+1){ px(cx+x,ly,'#d8d0b8'); if(Math.abs(x)<40) px(cx+x,ly+1,'#8a846e'); } }
+  if (lid<1) for(let x=-42;x<=42;x+=.5){ if(bay(cx+x,ly)<16*(1-lid)+1){ rect(cx+x,ly,.5,1,'#d8d0b8'); if(Math.abs(x)<40) rect(cx+x,ly+1,.5,1,'#8a846e'); } }
   if (a<0.5) textC('MALJA AUKEAA...',cx,cy+44,P.uiD);
   const done=a>3;
   if (done){
     if (res.kind==='new'){ const T=strain(res.key);
       const pulse=0.5+0.5*Math.sin(a*3);
-      for(let y=-34;y<=34;y++) for(let x=-50;x<=50;x++){ const d=Math.hypot(x/50,y/34); if(d>1||d<0.8) continue; if(BAYER[(cy+y)&3][(cx+x)&3]<(1-d)*60*pulse) px(cx+x,cy+y,T.mutant?AMB[2]:T.col[2]); }
+      for(let y=-34;y<=34;y+=.5) for(let x=-50;x<=50;x+=.5){ const d=Math.hypot(x/50,y/34); if(d>1||d<0.8) continue; if(bay(cx+x,cy+y)<(1-d)*60*pulse) dot(cx+x,cy+y,T.mutant?AMB[2]:T.col[2]); }
       textC(res.first?'UUSI KANTA!':'ONNISTUI',cx,30,T.mutant?AMB[2]:T.col[2],2);
       wrapLines(T.name,180).forEach((l,i)=>textC(l,cx,182+i*14,T.mutant?AMB[2]:T.col[2],res.first?2:1));
       textC('+'+res.n+' ITIÖPUSSIA',cx,214,P.ui3);
@@ -220,14 +221,14 @@ function drawReveal(t){
 // ---------- modaalit ----------
 function drawModal(t){
   const m=U.modal; if(!m) return;
-  for(let y=0;y<H;y++) for(let x=(y&1);x<W;x+=2) px(x,y,P.bg0);
+  veil(P.bg0);
   resetHit();
   const X=8,Y=40,WW=176,HH=250;
-  rect(X,Y,WW,HH,P.ui0); rect(X,Y,WW,1,P.ui2); rect(X,Y+HH-1,WW,1,P.ui2); rect(X,Y,1,HH,P.ui2); rect(X+WW-1,Y,1,HH,P.ui2);
+  frame(X,Y,WW,HH);
   let y=Y+20;
   const row=(label,right,sub,fn,ok,side,sideFn,rightCol,subCol)=>{
     const rw=WW-12-(side?38:0);
-    rect(X+6,y,rw,20,ok?P.ui2:P.ui1); rect(X+6,y,rw,1,ok?P.bg4:P.ui1);
+    if (ok) bevel(X+6,y,rw,20,'#243142',P.ui2,'#151d28','#070b11'); else bevel(X+6,y,rw,20,P.ui1,'#222f3f','#141c28','#0a0f16');
     text(label,X+10,y+4,ok?P.ui3:P.uiD); if(right) text(right,X+6+rw-4-tw(right),y+4,ok?(rightCol||P.ui3):P.uiD);
     if(sub) text(sub,X+10,y+12,subCol||(ok?P.uiD:P.ui2));
     if(ok) hit(X+6,y,rw,20,fn);
@@ -341,7 +342,7 @@ function drawModal(t){
     row('NOPEUS', S.speed===60?'×60 TESTI':'×1 OIKEA','KASVU OIKEASSA AJASSA TAI 60X',()=>{ S.speed = S.speed===60?1:60; save(); },true);
     if (window.SOLMU_PWA) row('TALLENNUS JA ASENNUS','','VIENTI, TUONTI JA ASENNUSOHJE',()=>{ U.modal=null; window.SOLMU_PWA.open(); },true);
     row('UUSI PELI','','POISTAA TALLENNUKSEN',()=>{ U.modal={type:'confirmReset'}; },true);
-    y+=4; text(VERSION,X+10,y,P.uiD);
+    y+=4; text(window.SOLMU_PWA&&window.SOLMU_PWA.version?window.SOLMU_PWA.version():VERSION,X+10,y,P.uiD);
   }
   else if (m.type==='confirmReset'){
     title('ALOITA ALUSTA?');

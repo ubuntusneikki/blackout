@@ -103,9 +103,9 @@ function versionText(){ return (gameVersion ? gameVersion + ' · ' : '') + PWA_V
 const ui = {open:false, mode:null, code:'', msg:'', confirm:false, update:false};
 let btn, panel;
 const CSS = `
-#solmu-pwa-btn{position:fixed;z-index:50;font:10px/1 ui-monospace,Menlo,Consolas,monospace;letter-spacing:1px;
+#solmu-pwa-btn{display:none;position:fixed;z-index:50;font:10px/1 ui-monospace,Menlo,Consolas,monospace;letter-spacing:1px;
   color:#6a7a8c;background:#101722;border:0;border-top:2px solid #3a4b60;padding:6px 8px;cursor:pointer;opacity:.85}
-#solmu-pwa-btn.uusi{color:#101722;background:#e8a02a;border-top-color:#ffe08a;opacity:1}
+#solmu-pwa-btn.uusi{display:block;color:#101722;background:#e8a02a;border-top-color:#ffe08a;opacity:1}
 #solmu-pwa{position:fixed;inset:0;z-index:60;background:rgba(11,16,24,.94);display:none;overflow:auto;
   font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;color:#d8e2ea;text-transform:uppercase;letter-spacing:1px;
   -webkit-user-select:text;user-select:text}
@@ -137,6 +137,7 @@ function build(){
   refresh();
   if (imported) toast('TALLENNUS TUOTU');
 }
+// versio ja valikko ovat pelin asetuksissa (TALLENNUS JA ASENNUS); DOM-nappi näkyy vain uuden version ilmoituksena.
 // nappi pelikuvan ulkopuolelle, jos tilaa on; muuten oikeaan alakulmaan
 function place(){
   if (!btn) return;
