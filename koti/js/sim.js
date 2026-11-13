@@ -91,7 +91,7 @@ export function startDish(dev,a,b){
   else if (Math.random()<MUTATION_P) res={kind:'new', key:rec.out+'~'+(Math.random()<0.5?'grow':'yield'), n:2};
   else res={kind:'new', key:rec.out, n:2};
   dev.dish={a,b,res}; dev.busy=true; dev.done=false; dev.t=0; dev.seen=false;
-  S.tried[[a.split('~')[0],b.split('~')[0]].sort().join('+')]=1;
+  if (!S.tried[pairKey(a,b)]) S.tried[pairKey(a,b)]=1;
   emit('malja-alku',{laite:dev, a, b, viesti:'MALJA HAUTOMOSSA. KYPSYY 8 H'}); save(); return true;
 }
 // maljan avaus: palauttaa tuloksen paljastusta varten
@@ -101,10 +101,39 @@ export function openDish(dev){
     if (res.key.includes('~')) S.known[res.key]=1;
     res.first=first; }
   if (res.kind==='villi') addInv('villi',1);
+  // kokeiltu pari muistetaan tuloksen kanssa: 'ok' | 'fail' (kontaminaatio ei kerro parista mitään)
+  const pair=pairKey(d.a,d.b); if (res.kind==='new') S.tried[pair]='ok'; else if (res.kind==='fail') S.tried[pair]='fail';
+  if (res.kind==='new' && res.key.includes('~')) res.suggest=suggestName(res.key);
   dev.dish=null; dev.busy=false; dev.done=false; dev.t=0;
   if (res.kind==='new' && !S.flags.firstCross){ S.flags.firstCross=true; res.hint=HINT.firstCross; }
   else if (res.kind==='new' && res.key.includes('~') && !S.flags.mutation){ S.flags.mutation=true; res.hint=HINT.mutation; }
   const out={...res, a:d.a, b:d.b}; emit('malja-auki',{laite:dev, tulos:out}); progressChain(); save(); return out;
+}
+
+export function pairKey(a,b){ return [a.split('~')[0],b.split('~')[0]].sort().join('+'); }
+// hylätty pari (paljastettu): näytetään hautomossa yliviivattuna
+export function failedPair(a,b){ return S.tried[pairKey(a,b)]==='fail'; }
+
+// ---------- mutaation nimeäminen (TP7) ----------
+export const NAME_MAX = 14;
+const NAME_PREFIX = {grow:'PIKA', yield:'KULTA'};
+const NAME_STEM = {heltta:'HELTTA', ruusu:'RUUSU', hamara:'NUPPI', kalvo:'KALVO', hoitaja:'HOITAJA', yoruusu:'YÖRUUSU', verkko:'VERKKO'};
+// sallitut merkit: pikselifontin kirjaimet A–Ö, numerot, välilyönti ja viiva
+export function cleanName(str){ return String(str||'').toUpperCase().replace(/[^A-ZÄÖ0-9 \-]/g,'').replace(/ +/g,' ').trimStart().slice(0,NAME_MAX); }
+function nameTaken(n, except){ if (Object.values(STRAINS).some(T=>T.name===n)) return true;
+  return Object.keys(S.names).some(k=>k!==except && S.names[k]===n); }
+export function suggestName(key){ const [b,perk]=key.split('~');
+  const base=(NAME_PREFIX[perk]||'')+(NAME_STEM[b]||b.toUpperCase()); let n=base.slice(0,NAME_MAX), i=2;
+  while (nameTaken(n,key)) n=(base.slice(0,NAME_MAX-2)+' '+(i++));
+  return n; }
+// palauttaa uuden nimen tai null (tyhjä nimi palauttaa oletusnimen)
+export function renameStrain(key, str){
+  if (!key.includes('~') || !STRAINS[key.split('~')[0]]) return null;
+  const n=cleanName(str).trim();
+  if (!n){ delete S.names[key]; save(); return null; }
+  if (nameTaken(n,key)){ virhe('nimi','NIMI ON JO KÄYTÖSSÄ'); return null; }
+  const old=S.names[key]||null; S.names[key]=n;
+  emit('nimeys',{kanta:key, nimi:n, vanha:old, viesti:'KANTA NIMETTY: '+n}); save(); return n;
 }
 
 // ---------- kehikko: elävä muotti ----------

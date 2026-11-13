@@ -132,6 +132,13 @@ const SOUNDS = {
       tone(f, t+k*0.11, 2.6, 0.032*v, {attack:0.25, type:'triangle', lp:1800}); tone(f, t+k*0.11, 2.6, 0.02*v, {attack:0.3, detune:7}); });
     bell(note(17), t+0.65, 1.6, 0.03*v); },
   uusi(t,v){ SOUNDS.reveal(t,v); [12,14,15,17,19].forEach((i,k)=>bell(note(i), t+1.0+k*0.08, 1.2, 0.03*v)); },
+  // tuttu kanta: lyhyt versio soinnusta
+  tuttu(t,v){ [0,4,7].forEach((i,k)=>tone(note(5+i), t+k*0.08, 1.3, 0.03*v, {attack:0.15, type:'triangle', lp:1800})); bell(note(17), t+0.3, 0.9, 0.025*v); },
+  // mutaatio: kultainen purkaus, kirkas kellosade soinnun päälle
+  kulta(t,v){ SOUNDS.reveal(t,v); for (let k=0;k<9;k++) bell(note(14+((k*3)%8)), t+0.15+k*0.06, 1.4, 0.03*v*(1-k*0.06));
+    [note(17)*2, note(19)*2].forEach((f,k)=>tone(f, t+0.7+k*0.12, 1.6, 0.012*v, {attack:0.05})); },
+  // paljastuksen alku: hiljainen nouseva odotus
+  kohina(t,v){ noise(t, 1.2, 0.03*v, {f:400, to:2400, q:1.2, attack:0.6, verb:true}); },
   // epäonnistunut risteytys: kaksi laskevaa vaimeaa säveltä
   fail(t,v){ [note(7), note(5)].forEach((f,k)=>tone(f, t+k*0.18, 0.8, 0.045*v, {type:'triangle', lp:900, attack:0.03})); },
   // kontaminaatio: villi, kylmä violetti huojunta
@@ -204,7 +211,7 @@ const MAP = {
   myynti:['coin',10], osto:['osto',[12,30,12]], toimitus:['coin',[10,30,10]], kysyntapiikki:['piikki',null],
   avaus:['avaus',[20,60,20,60,40]], virstanpylvas:['avaus',[20,60,20,60,40]], herasi:['herasi',null], paluu:['valmis',null], 'tilaus-uusi':['valmis',null],
   testiloyto:['itiot',10], pelastus:['itiot',null], virhe:['virhe',[25,50,25]], kypsyi:['kypsyi',null], horros:['horros',null],
-  'retki-alku':['itiot',12], 'retki-palasi':['valmis',[15,40,15]], 'retki-loyto':['reveal',[20,60,40]]   // TP5 rihmaretki
+  'retki-alku':['itiot',12], 'retki-palasi':['valmis',[15,40,15]]   // TP5 rihmaretki; löytöjen sointu tulee paljastuksesta (TP7)
 };
 on('*', (d, name) => {
   const m = MAP[name]; if (!m) return;
@@ -212,8 +219,14 @@ on('*', (d, name) => {
 });
 // taulun tilaus on pienempi juhla kuin torin väen suodatintilaus
 on('tilaus-valmis', d => { if (d.lahde==='taulu'){ play('coin'); play('valmis'); haptic([15,40,15]); } else { play('avaus'); haptic([30,60,30,60,80]); } });
-on('malja-auki', d => { const k = d.tulos && d.tulos.kind;
+// TP7: paljastuksen sointu soi tuloksen hetkellä (reveal.js), ei maljaa avattaessa
+on('paljastus-alku', () => play('kohina'));
+on('paljastus-tulos', d => { const r = d.tulos || {}, k = r.kind;
+  if (k==='done') return;                               // tilaus-valmis soitti jo juhlan
+  if (k==='retki'){ if ((r.loot||[]).some(o=>o.first)) { play('uusi'); haptic([20,60,20,60,60]); } else { play('reveal'); haptic([20,60,40]); } return; }
   if (k==='fail') { play('fail'); haptic([40,80,40]); }
   else if (k==='villi') { play('villi'); haptic([30,50,30,50,30]); }
-  else if (d.tulos && d.tulos.first) { play('uusi'); haptic([20,60,20,60,60]); }
-  else { play('reveal'); haptic([20,60,40]); } });
+  else if (r.key && r.key.includes('~')) { play('kulta'); haptic([20,40,20,40,20,40,80]); }
+  else if (r.first) { play('uusi'); haptic([20,60,20,60,60]); }
+  else { play('tuttu'); haptic([20,60,40]); } });
+on('nimeys', () => play('valmis'));

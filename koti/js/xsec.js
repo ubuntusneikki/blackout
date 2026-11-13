@@ -24,6 +24,30 @@ const VC = new Map();
 export function vcol(h, v){ const lv = Math.round(clamp(v,0,1)*10), k = h + lv; let c = VC.get(k);
   if (!c){ const d = [...hex(h), 255]; vital(d, 0, lv/10); c = toHex(d.slice(0,3)); VC.set(k, c); } return c; }
 
+// ---------- lähikuva-atlas (Blender: samat astiat ja sienet kuin huoneessa, edestä ja suurempina) ----------
+// koti/gfx/lahikuva.png + .json (blender/koti.py lk_* ja koti_atlas.py --lk). Ilman atlasta piirretään vanha koodigrafiikka.
+let LKA = {state:'idle'};
+function loadLk(){
+  if (LKA.state !== 'idle') return; LKA.state = 'loading';
+  fetch('gfx/lahikuva.json').then(r => { if (!r.ok) throw 0; return r.json(); }).then(js => new Promise((ok, bad) => {
+    const im = new Image(); im.onload = () => { LKA = {state:'ok', img:im, sprites:js.sprites}; ok(); }; im.onerror = bad; im.src = 'gfx/lahikuva.png';
+  })).catch(() => { LKA = {state:'fail'}; });
+}
+const LK_TYPE = {purkki:'lasipurkki', terraario:'terraario', akvaario:'akvaario', palvelin:'palvelin'};
+const LK_ANCHOR_Y = {terraario:438, lasipurkki:438, akvaario:438, palvelin:496};   // = koti.py LK_ANCHOR
+const LK_INNER = {terraario:[66,318], lasipurkki:[90,294], akvaario:[46,338], palvelin:[86,298]};   // lasin sisäreunat (T_W, J_R, A_W, P_W × 340 px/m)
+const LKC = {};
+// spriten kangas elinvoimatasolla (0…5), välimuistissa
+function lk(name, v){
+  if (LKA.state !== 'ok') return null; const d = LKA.sprites[name]; if (!d) return null;
+  const lv = v == null ? 5 : clamp(Math.round(v*5), 0, 5), key = name + '@' + lv; if (LKC[key]) return LKC[key];
+  const c = document.createElement('canvas'); c.width = d.w; c.height = d.h; const g = c.getContext('2d');
+  g.drawImage(LKA.img, d.x, d.y, d.w, d.h, 0, 0, d.w, d.h);
+  if (lv < 5){ const img = g.getImageData(0, 0, d.w, d.h), D = img.data; for (let i = 0; i < D.length; i += 4) if (D[i+3]) vital(D, i, lv/5); g.putImageData(img, 0, 0); }
+  return (LKC[key] = {c, w:d.w, h:d.h, ax:d.ax, ay:d.ay, plant:d.plant});
+}
+export const lkReady = () => LKA.state === 'ok';
+
 const px = (x, y, c) => { X.fillStyle = c; X.fillRect(x|0, y|0, 1, 1); };
 const rect = (x, y, w, h, c) => { X.fillStyle = c; X.fillRect(x|0, y|0, w|0, h|0); };
 function dith(x0, y0, w, h, col, lvl){ for (let y = y0|0; y < y0 + h; y++) for (let x = x0|0; x < x0 + w; x++) if (BAYER[y&3][x&3] < lvl) px(x, y, col); }
@@ -257,6 +281,9 @@ export function drawXsec(vs, t, v, opt){
   opt = opt || {};
   const type = INNER[vs.type] ? vs.type : 'terraario', [x0, x1] = INNER[type], T = strain(vs.strain);
   X.drawImage(background(type), 0, 0);
+  loadLk();
+  const lt = LK_TYPE[type], back = lk('lk_astia_' + lt), front = lk('lk_astia_' + lt + '_etu');
+  if (back && front) return drawLk(vs, t, v, opt, type, lt, back, front, T);
   // ravinneputken neste
   for (let i = 0; i < 9; i++){ const y = 452 - ((t*30 + i*53) % 452); px(356, y, '#5fc7d0'); px(357, y - 1, '#93d7a8'); }
   vesselBack(type);
@@ -292,3 +319,50 @@ export function drawXsec(vs, t, v, opt){
     for (let k = 0; k < 32; k++){ const ang = k*0.196, r = a*130; rect(cx + Math.cos(ang)*r, topY + 40 + Math.sin(ang)*r*0.7, 2, 2, AMB[2]); } }
   return topY;
 }
+
+// ---------- lähikuva Blender-spriteillä ----------
+function drawLk(vs, t, v, opt, type, lt, back, front, T){
+  const AY = LK_ANCHOR_Y[lt], ox = XW/2 - back.ax, oy = AY - back.ay;
+  // ravinneputken neste taustalla
+  for (let i = 0; i < 9; i++){ const y = 452 - ((t*30 + i*53) % 452); px(356, y, '#5fc7d0'); px(357, y - 1, '#93d7a8'); }
+  X.drawImage(back.c, ox, oy);
+  const gx = ox + back.plant.x, gy = oy + back.plant.y, [x0, x1] = LK_INNER[lt];
+  let topY = gy - 20;
+  if (T){
+    const dry = vs.moist < 0.1, glow = dry ? 0 : clamp(v*1.2 - 0.2, 0, 1), br = 0.6 + 0.4*Math.sin(t*1.3);
+    const ready = vs.ready || vs.waves > 0, stage = (ready || vs.growth >= 0.999) ? 'kypsa' : vs.growth >= 0.4 ? 'nuori' : 'itu';
+    const base = String(vs.strain).split('~')[0], sh = lk('lk_sieni_' + base + '_' + stage, v);
+    const s = (0.18 + 0.82*ease(vs.growth))*1.3;
+    if (glow > 0){ halo(gx, gy + 2, 110*s + 20, 8, vcol(T.col[1], v), 0.45*glow*br, [x0 - 30, x1 + 30, 0, XH]);
+      halo(gx, gy - 60*s, 80*s + 12, 60*s + 8, vcol(T.col[0], v), 0.16*glow*br, [x0, x1, oy + 10, gy]); }
+    if (sh){
+      const sway = (!dry && stage !== 'itu') ? Math.round(Math.sin(t*0.9)*1.5) : 0;
+      X.drawImage(sh.c, gx - sh.ax + sway, gy - sh.ay + (dry ? 2 : 0));
+      topY = gy - sh.ay + firstRow(sh);
+    } else {   // kanta ilman lähikuvaspriteä: koodigrafiikka
+      const style = SHAPE[T.style] ? T.style : (STYLE_ALIAS[T.style] || 'cap');
+      topY = SHAPE[style](gx, gy, s*(SCALE[style] || 1.3)*0.75, strainCols(T, v), stemCols(T, v), {sway: dry ? 0 : Math.round(Math.sin(t*0.9)*1.5), droop: dry ? 3 : 0, glow}, t);
+    }
+    if (T.auto){ const sc = stemCols(T, v), c4 = vcol(T.col[2], v);   // hoitajan rihmat kulkevat ulos astiasta naapureihin
+      for (let k = 0; k < 3; k++){ const yy = 478 + k*7, ph = (t*40 + k*31) % (XW + 40);
+        for (let x = 0; x < XW; x++) if (((x + k*3) % 5) === 0 && (x < x0 - 30 || x > x1 + 30)) px(x, yy, sc[0]);
+        px(ph - 20, yy, c4); px(ph - 19, yy, c4); } }
+    if (!dry && stage !== 'itu') for (let i = 0; i < (T.mutant ? 30 : 18); i++){   // itiöt leijuvat
+      const sx = x0 + 10 + ((i*53) % (x1 - x0 - 20)), y = gy - 20 - ((t*(6 + i%4*3) + i*29) % Math.max(40, gy - oy - 60));
+      px(sx + Math.round(Math.sin(t + i)*3), y, T.mutant && i % 3 === 0 ? AMB[2] : vcol(T.col[i % 3 ? 2 : 1], v)); }
+    if (T.mutant) for (let k = 0; k < 6; k++){ const a = t*1.2 + k*1.047; px(gx + Math.cos(a)*70, gy - 50 + Math.sin(a)*24, AMB[2]); }
+  }
+  X.drawImage(front.c, XW/2 - front.ax, AY - front.ay);
+  // kostea astia: huurua ja pisaroita etulasissa
+  if (VWET[type] && vs.moist > 0.3){ const R = rng(3), top = oy + 40;
+    for (let i = 0; i < 40*vs.moist; i++){ const x = x0 + 6 + R()*(x1 - x0 - 12), y = top + R()*(gy - top - 20); px(x, y, '#4f7d86'); px(x, y + 1, '#9fd3d6'); if (R() < 0.3) px(x, y + 2, '#4f7d86'); } }
+  if (opt.ready){ const by = Math.round(Math.max(oy + 30, topY - 10) + (Math.sin(t*4) > 0 ? 0 : -2));
+    rect(gx - 3, by - 20, 7, 13, AMB[0]); rect(gx - 2, by - 19, 5, 11, AMB[1]); rect(gx - 1, by - 19, 2, 8, AMB[2]);
+    rect(gx - 3, by - 4, 7, 6, AMB[0]); rect(gx - 2, by - 3, 5, 4, AMB[2]); }
+  if (opt.burst >= 0 && opt.burst < 1){ const a = opt.burst;
+    for (let k = 0; k < 32; k++){ const ang = k*0.196, r = a*130; rect(gx + Math.cos(ang)*r, topY + 40 + Math.sin(ang)*r*0.7, 2, 2, AMB[2]); } }
+  return topY;
+}
+// spriten ylin ei-läpinäkyvä rivi (valmiin sadon merkin paikka)
+function firstRow(s){ if (s.top != null) return s.top; const d = s.c.getContext('2d').getImageData(0, 0, s.w, s.h).data;
+  for (let y = 0; y < s.h; y++) for (let x = 0; x < s.w; x++) if (d[(y*s.w + x)*4 + 3]) return (s.top = y); return (s.top = 0); }
