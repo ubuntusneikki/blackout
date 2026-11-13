@@ -165,7 +165,9 @@ function windowLight(t){
         if (cellsB.some(b=>x>=b.x&&x<b.x+b.w&&y>=b.y&&y<b.y+b.h)) continue;
         const e=Math.min(x-x0, x0+bw-x)/8; let k=bandK*fall*Math.min(1,e)*0.9;   // pehmeät reunat
         if (BAYER[y&3][x&3] < 3) k*=1.6;                                           // pistekuvioitu kirkkaus
-        const i=((y-y0)*W+x)*4; D[i]=Math.min(255,D[i]*(1+k)+60*k); D[i+1]=Math.min(255,D[i+1]*(1+k*0.85)+44*k); D[i+2]=Math.min(255,D[i+2]*(1+k*0.4)+18*k); } }
+        const i=((y-y0)*W+x)*4;
+        if (D[i+3]<250){ if (D[i+3]===0){ D[i]=255; D[i+1]=240; D[i+2]=192; D[i+3]=Math.min(110,k*90); } continue; }   // läpinäkyvä g (TP4:n huonekerros alla): puoliläpinäkyvä valo
+        D[i]=Math.min(255,D[i]*(1+k)+60*k); D[i+1]=Math.min(255,D[i+1]*(1+k*0.85)+44*k); D[i+2]=Math.min(255,D[i+2]*(1+k*0.4)+18*k); } }
     g.putImageData(img,0,y0);
     // pölyhiukkaset valokaistassa
     if (!reduced && Math.random()<0.15) add({x:w.x+30+Math.random()*80,y:w.y+w.h+Math.random()*120,vx:(Math.random()-0.5)*2,vy:-1,g:0,drag:0,life:3,col:'#fff0c0',mote:true});
