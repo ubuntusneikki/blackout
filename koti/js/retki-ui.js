@@ -55,13 +55,13 @@ export function drawRetkiModal(m,X,Y,WW,HH,t,ctx){
   text('LÄHETÄ SYMBIONTTI RETKELLE',X+10,y,AMB[1]); y+=12;
   for (const type of ['lyhyt','syva']){
     const R=retki.RETKET[type], ok=retki.canStart(type);
-    rect(X+6,y,WW-12,44,ok?P.ui2:P.ui1); rect(X+6,y,WW-12,1,ok?P.bg4:P.ui1);
+    rect(X+6,y,WW-12,34,ok?P.ui2:P.ui1); rect(X+6,y,WW-12,1,ok?P.bg4:P.ui1);
     text(R.name,X+10,y+4,ok?P.ui3:P.uiD);
     const right = R.cost ? 'SUODATIN '+(S.inv[R.cost]||0) : 'ILMAINEN';
     text(right,X+WW-10-tw(right),y+4,ok?(R.cost?AMB[2]:P.grn):P.uiD);
     wrap(R.txt,X+10,y+14,152,ok?P.uiD:P.ui2);
-    if (ok) hit(X+6,y,WW-12,44,()=>{ retki.start(type); ctx.close(); });
-    y+=48;
+    if (ok) hit(X+6,y,WW-12,34,()=>{ retki.start(type); ctx.close(); });
+    y+=38;
   }
 }
 

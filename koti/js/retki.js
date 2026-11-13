@@ -65,11 +65,11 @@ function roll(type){
     // syvä: ensimmäinen syvä retki tuo aina harvinaisen astian
     const base = Object.keys(STRAINS).filter(k=>S.known[k] && !STRAINS[k].auto);
     const opts = [
-      {w:S.retki.deep===0?100:3, v:()=>({kind:'vessel', key:Math.random()<0.5?'akvaario':'palvelin'})},
+      {w:3, v:()=>({kind:'vessel', key:Math.random()<0.5?'akvaario':'palvelin'})},
       {w:3, v:()=>({kind:'item', id:'villi', n:2+(Math.random()<0.5?1:0)})},
       {w:base.length?3:0, v:()=>({kind:'spore', key:base[(Math.random()*base.length)|0]+'~'+(Math.random()<0.5?'grow':'yield'), n:2})}
     ].filter(o=>o.w>0);
-    loot.push(pick(opts).v());
+    loot.push(S.retki.deep===0 ? opts[0].v() : pick(opts).v());
     if (needHamara) loot.push({kind:'spore', key:'hamara', n:2});
   }
   return loot;
