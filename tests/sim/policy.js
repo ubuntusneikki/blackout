@@ -85,14 +85,17 @@ export const MODULES = {
   // kalvoheltta parempiin astioihin, kun kehikko on: kompostoi muut kannat pois
   vaihto: { act(ctx){ const { S, G } = ctx; let n = 0;
     if (!S.known.kalvo || !ownsDevice(ctx, 'kehikko') || S.flags.done) return 0;
-    for (const { c } of vessels(ctx)){
-      if (!c.strain || isReady(ctx, c) || base(c.strain) === 'kalvo' || base(c.strain) === 'hoitaja') continue;
+    // parhaiten kalvoheltalle sopivat astiat ensin; valmis sato korjataan ennen vaihtoa
+    const cand = vessels(ctx).filter(o => o.c.strain && !['kalvo', 'hoitaja'].includes(base(o.c.strain)) && G.matchOf(o.c, 'kalvo') >= 1)
+      .sort((x, y) => G.matchOf(y.c, 'kalvo') - G.matchOf(x.c, 'kalvo') || ctx.D.VESSELS[y.c.type].size - ctx.D.VESSELS[x.c.type].size);
+    for (const { c } of cand){
       const b0 = base(c.strain);
       if (neededParents(ctx).includes(b0) && vessels(ctx).filter(o => o.c.strain && base(o.c.strain) === b0).length <= 1) continue;
       if (!spores(ctx, 'kalvo')) break;
       const growing = vessels(ctx).filter(o => o.c.strain && base(o.c.strain) === 'kalvo').length;
       if (growing >= kalvoTarget(ctx)) break;
-      if (G.matchOf(c, 'kalvo') >= 1 && plantScore(ctx, c, 'kalvo') > plantScore(ctx, c, c.strain)){ G.clearVessel(c); n++; }
+      if (isReady(ctx, c)) G.harvest(c);
+      G.clearVessel(c); G.plant(c, sporeKey(ctx, 'kalvo')); n++;
     }
     return n; } },
 
