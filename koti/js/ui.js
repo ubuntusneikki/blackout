@@ -9,7 +9,9 @@ import {drawIso, pickAt, toLayer, cellBoxUi, startTransition, startZoom, zoomAct
 import {emit} from './events.js';
 import {drawXsec} from './xsec.js';
 import * as retki from './retki.js';
-import {drawRetkiModal, drawRetkiReveal, timeLeft} from './retki-ui.js';
+import {drawRetkiModal, timeLeft} from './retki-ui.js';
+import * as reveal from './reveal.js';
+import * as book from './book.js';
 
 export const U = {doorGlow:false, view:'room', sel:null, modal:null, build:false, pick:null, msg:'', msgT:-1e9, msgCol:P.ui3, rev:null, burst:null};
 const now=()=>performance.now();
@@ -21,10 +23,10 @@ export function audioInit(){ audioStart(); }
 export function sound(kind){ play(kind); }
 // tapahtumaväylän kuuntelija: viesti paneeliin ja symbiontin vihje
 on('*',(d)=>{ if (d.vihje) say(d.vihje); else if (d.viesti) toast(d.viesti); });
-on('tilaus-valmis',(d)=>{ if (d.lahde!=='taulu') startReveal({kind:'done'}); });
+on('tilaus-valmis',(d)=>{ if (d.lahde!=='taulu') reveal.showDone(); });
 
-export function startReveal(res){ U.rev={res, t0:now()}; U.modal=null; U.view='reveal'; }   // ääni tulee tapahtumasta (audio.js)
-export function openHautomo(dev){ const res=sim.openDish(dev); if(res) startReveal(res); }
+// TP7: paljastus on reveal.js:ssä (malja, retki, jono); kantakirja book.js:ssä
+export function openHautomo(dev){ reveal.openMalja(dev); }
 
 // ---------- yläpalkki ja paneeli ----------
 function topBar(){
@@ -76,13 +78,15 @@ function drawRoom(t){
   hit(0,14,W,258,(x,y)=>{ const [lx,ly]=toLayer(x,y), p=pickAt(lx,ly); if(!p) return;
     if (p.kind==='cell') tapCell(p.r,p.i); else tapSpot(p.id); });
   panel(()=>{ wrap(hint(),5,278,182,P.uiD); const pl=promiseLine(); if (pl) text(pl,5,307,SYM); });
+  // TP7: myöhemmäksi jätetyt paljastukset odottavat
+  const pend=reveal.pending(); if (pend>1 || (pend && !U.build)) button(W-64,300,60,14,'PALJASTUS',()=>reveal.queueOnOpen(),'a');
   const cellar=S.rooms.kellari.owned, bw=cellar?45:60, gap=2;
   let bx=4;
   const spikeOwned = S.market.spike && sim.owned(S.market.spike.id)>0;
   const orderReady = S.order && !S.flags.done && (S.inv.suodatin||0)>0;
   const boardReady = orderReady || S.board.some(o=>!o.given && sim.boardHave(o)>=o.n);
   button(bx,318,bw,14,'MARKKINA',()=>{ U.modal={type:'market',tab:boardReady?'board':'sell',page:0}; }, (spikeOwned||boardReady)?'a':'n'); bx+=bw+gap;
-  button(bx,318,bw,14,'KANNAT',()=>{ U.view='book'; }); bx+=bw+gap;
+  button(bx,318,bw,14,'KANNAT',()=>book.open(), book.newCount()?'a':'n'); bx+=bw+gap;
   button(bx,318,bw,14,U.build?'VALMIS':'RAKENNA',()=>{ U.build=!U.build; U.pick=null; }, U.build?'g':'n'); bx+=bw+gap;
   if (cellar) button(bx,318,W-4-bx,14,r==='huone'?'KELLARI':'HUONE',()=>switchRoom());
 }
@@ -116,6 +120,7 @@ function drawVessel(t){
   panel(()=>{
     text(V.name+'  '+(V.wet?'KOSTEA':'KUIVA')+' / '+(V.warm?'LÄMMIN':'VIILEÄ')+(U.sel.r==='kellari'?'  KELLARI':''),5,278,P.uiD);
     text(T?T.name:'TYHJÄ',5,287,T?(T.mutant?AMB[2]:T.col[2]):P.ui3);
+    if (T && T.mutant) text(T.orig,9+tw(T.name),287,P.uiD);   // TP7: alkuperäinen kanta pienellä
   });
   text('KOSTEUS',5,297,P.ui3); bar(46,297,vs.moist, vs.moist<0.25?P.red:P.wa2);
   const w=sim.waves(vs);
@@ -131,91 +136,6 @@ function drawVessel(t){
   else if (w){ button(70,318,76,14,w>1?'KORJAA '+w+' AALTOA':'KORJAA SATO',()=>{ sim.harvest(vs); U.burst=now(); },'a'); button(148,318,40,14,'ITIÖT',()=>{ sim.takeSpores(vs); U.burst=now(); },'n'); }
   else { button(70,318,72,14, vs.moist<0.1?'HORROKSESSA':(T.auto?'HOITAA':'KASVAA '+Math.floor(vs.growth*100)+'%'),()=>{},'d');
          button(144,318,44,14,'KOMPOSTI',()=>{ U.modal={type:'confirmClear',vs}; }); }
-}
-
-// ---------- kantakirja ----------
-function drawBook(t){
-  rect(0,14,W,258,P.bg1);
-  textC('KANTAKIRJA',W/2,20,AMB[2]);
-  let y=30;
-  const keys=STRAIN_ORDER.slice(); for (const k in S.known) if (k.includes('~')) keys.push(k);
-  const PER=9, pages=Math.ceil(keys.length/PER); U.bookPage=Math.min(U.bookPage||0,pages-1);
-  keys.slice(U.bookPage*PER,(U.bookPage+1)*PER).forEach(k=>{
-    const T=strain(k), kn=!!S.known[k];
-    bevel(4,y,W-8,24,P.ui0,P.ui1,'#070b11','#05080d');
-    // pieni sieni-ikoni
-    const ix=16, iy=y+18;
-    if (kn){ rect(ix,iy-6,1,6,P.st1); rect(ix-4,iy-9,9,3,T.col[1]); rect(ix-3,iy-10,7,1,T.col[2]); if(T.mutant) px(ix+5,iy-11,AMB[2]); }
-    else textC('?',ix,iy-9,P.uiD);
-    text(kn?T.name:'???',30,y+4,kn?(T.mutant?AMB[2]:T.col[2]):P.uiD);
-    if (kn && !T.auto && !T.mutant){ const pr=fmt(T.price)+' H'; text(pr,W-8-tw(pr),y+4,P.uiD); }
-    let sub;
-    if (kn){ sub=(T.wet?'KOSTEA':'KUIVA')+' / '+(T.warm?'LÄMMIN':'VIILEÄ')+'  '+T.txt;
-      if (T.mutant) sub=T.perk==='grow'?'MUTAATIO: KASVU +25%':'MUTAATIO: SATO +1'; }
-    else { const rec=RECIPES.find(r=>r.out===k);
-      if (rec){ const a=S.known[rec.a]?STRAINS[rec.a].name:null, b=S.known[rec.b]?STRAINS[rec.b].name:null;
-        sub = 'RISTEYTYS: '+(a||'???')+' × '+(a&&b?'???':(b||'???')); }
-      else sub = ORIGIN_TXT[k]||''; }
-    text(sub,30,y+13,P.uiD);
-    y+=26;
-  });
-  const tried=Object.keys(S.tried).length; text('KOKEILTUJA YHDISTELMIÄ: '+tried,6,264,P.uiD);
-  if (pages>1) button(W-34,318,30,14,(U.bookPage+1)+'/'+pages,()=>{ U.bookPage=(U.bookPage+1)%pages; });
-  panel(()=>wrap('UUSIA KANTOJA SYNTYY, KUN KAKSI ITIÖPUSSIA KYPSYY SAMALLA AGAR-MALJALLA HAUTOMOSSA.',5,278,182,P.uiD));
-  button(4,318,60,14,'< TAKAISIN',()=>{ U.view='room'; });
-}
-
-// ---------- paljastus ----------
-function drawReveal(t){
-  const R=U.rev, a=(now()-R.t0)/1000, res=R.res;
-  if (res.kind==='retki'){ drawRetkiReveal(R,a,{close:()=>{ U.view='room'; U.rev=null; }}); return; }
-  rect(0,0,W,H,'#06080c');
-  const cx=W/2, cy=130;
-  if (res.kind==='done'){ // tilaus täytetty
-    for(let k=0;k<60;k++){ const r=rng(k)(); const ang=k*0.7+a*0.3, rr=(a*40+k*7)%140; rect(cx+Math.cos(ang)*rr, cy+Math.sin(ang)*rr*0.8, 1, 1, k%3?SYM:AMB[2]); }
-    if (a>0.8) textC('V1 LÄPÄISTY',cx,cy-10,AMB[2],2);
-    if (a>1.6) wrap('TORIN VÄKI SAI SUODATTIMENSA. +'+ORDER.reward+' '+CUR+'.',16,cy+20,160,P.ui3);
-    if (a>2.2){ button(cx-34,290,68,14,'JATKA',()=>{ U.view='room'; U.rev=null; },'a'); }
-    return;
-  }
-  const A=strain(res.a), B=strain(res.b);
-  // malja
-  const lid = clamp((a-0.5)/0.8,0,1);
-  for(let y=-26;y<=26;y+=.5) for(let x=-40;x<=40;x+=.5){ const d=(x*x)/(40*40)+(y*y)/(26*26); if(d>1) continue;
-    dot(cx+x,cy+y, d>0.93?'#c9c2a8':d>0.86?'#9a9480':'#2a2620'); }
-  // rihmasto kasvaa kahdesta pisteestä
-  const grow=clamp((a-1.2)/1.6,0,1), fail=res.kind==='fail', wild=res.kind==='villi';
-  const r1=rng(7), r2=rng(9);
-  for(const [sx,T,r] of [[cx-16,A,r1],[cx+16,B,r2]]){
-    for(let n=0;n<14;n++){ let x=sx, y=cy, ang=r()*6.28; const len=Math.floor(grow*22*(0.6+r()*0.6));
-      for(let i=0;i<len;i++){ ang+= (r()-0.5)*0.6; x+=Math.cos(ang); y+=Math.sin(ang)*0.7;
-        if (fail && Math.abs(x-cx)<5) break;
-        const col = wild && i>len*0.5 ? WILD[1] : T.col[i%3===0?2:1]; dot(x,y,col); dot(x-Math.cos(ang)*.5,y-Math.sin(ang)*.35,col); } }
-  }
-  // kansi nousee
-  const ly=cy-30-lid*50;
-  if (lid<1) for(let x=-42;x<=42;x+=.5){ if(bay(cx+x,ly)<16*(1-lid)+1){ rect(cx+x,ly,.5,1,'#d8d0b8'); if(Math.abs(x)<40) rect(cx+x,ly+1,.5,1,'#8a846e'); } }
-  if (a<0.5) textC('MALJA AUKEAA...',cx,cy+44,P.uiD);
-  const done=a>3;
-  if (done){
-    if (res.kind==='new'){ const T=strain(res.key);
-      const pulse=0.5+0.5*Math.sin(a*3);
-      for(let y=-34;y<=34;y+=.5) for(let x=-50;x<=50;x+=.5){ const d=Math.hypot(x/50,y/34); if(d>1||d<0.8) continue; if(bay(cx+x,cy+y)<(1-d)*60*pulse) dot(cx+x,cy+y,T.mutant?AMB[2]:T.col[2]); }
-      textC(res.first?'UUSI KANTA!':'ONNISTUI',cx,30,T.mutant?AMB[2]:T.col[2],2);
-      wrapLines(T.name,180).forEach((l,i)=>textC(l,cx,182+i*14,T.mutant?AMB[2]:T.col[2],res.first?2:1));
-      textC('+'+res.n+' ITIÖPUSSIA',cx,214,P.ui3);
-      if (T.mutant) textC(T.perk==='grow'?'MUTAATIO: KASVU +25%':'MUTAATIO: SATO +1',cx,224,AMB[1]);
-      if (res.hint) wrap(res.hint,10,240,172,SYM);
-    } else if (fail){
-      textC('EI TULOSTA',cx,30,P.uiD,2);
-      wrap('RIHMASTOT HYLKIVÄT TOISIAAN. '+A.name+' JA '+B.name+' EIVÄT SOVI YHTEEN. KOKEILE TOISTA PARIA.',10,182,172,P.ui3);
-    } else {
-      textC('KONTAMINAATIO',cx,30,WILD[2],2);
-      wrap('VILLI ITIÖ PÄÄSI MALJAAN. MALJA PILAANTUI, MUTTA SAIT VILLIN NÄYTTEEN. MARKKINA MAKSAA SIITÄ HYVIN.',10,182,172,P.ui3);
-    }
-    button(cx-34,300,68,14,'JATKA',()=>{ U.view='room'; U.rev=null; },'a');
-  } else hit(0,0,W,H,()=>{ R.t0=now()-3100; });
-  text(A.name+' × '+B.name,4,4,P.uiD);
 }
 
 // ---------- modaalit ----------
@@ -321,10 +241,12 @@ function drawModal(t){
         if (!keys.length) wrap('TARVITSET KAHDEN ERI KANNAN ITIÖT. OTA ITIÖT KYPSISTÄ KANNOISTA.',X+10,y,154,P.uiD);
         const first=pager(keys.length,6);
         keys.slice(first,first+6).forEach(k=>{ const T=strain(k);
-          const tried = m.pickA && S.tried[[m.pickA.split('~')[0],k.split('~')[0]].sort().join('+')];
-          row(T.short,'× '+S.spores[k], tried?'KOKEILTU PARI':(T.wet?'KOSTEA':'KUIVA')+' / '+(T.warm?'LÄMMIN':'VIILEÄ'), ()=>{
+          const tried = m.pickA && S.tried[sim.pairKey(m.pickA,k)], failed = tried==='fail';
+          const y0=y;
+          row(T.short,'× '+S.spores[k], failed?'HYLKIVÄT TOISIAAN':tried==='ok'?'TUTTU PARI':tried?'KOKEILTU PARI':(T.wet?'KOSTEA':'KUIVA')+' / '+(T.warm?'LÄMMIN':'VIILEÄ'), ()=>{
             if (!m.pickA){ m.pickA=k; m.page=0; return; }
-            if (sim.startDish(d,m.pickA,k)) U.modal=null; }, true, null, null, T.mutant?AMB[2]:T.col[2]); });
+            if (sim.startDish(d,m.pickA,k)) U.modal=null; }, true, null, null, T.mutant?AMB[2]:T.col[2]);
+          if (failed) rect(X+9,y0+6,tw(T.short)+2,1,'#c4428f'); });   // hylätty pari yliviivattuna
       }
     } else if (d.type==='kehikko'){
       text('VALITSE KANTA JA MUOTO',X+10,y,AMB[1]); y+=10;
@@ -335,7 +257,7 @@ function drawModal(t){
       wrap('SATO KASVAA KEHIKKOON ELÄVÄKSI TUOTTEEKSI. TUOTE ON ARVOKKAAMPI KUIN SATO.',X+10,Y+HH-46,154,P.uiD);
     }
   }
-  else if (m.type==='retki') drawRetkiModal(m,X,Y,WW,HH,t,{close:()=>{ U.modal=null; }, reveal:res=>startReveal({kind:'retki', ...res})});
+  else if (m.type==='retki') drawRetkiModal(m,X,Y,WW,HH,t,{close:()=>{ U.modal=null; }, reveal:()=>reveal.openRetki()});
   else if (m.type==='settings'){
     title('ASETUKSET');
     row('ÄÄNI', isEnabled()?'PÄÄLLÄ':'POIS','ÄÄNET, AMBIENT JA VÄRINÄ',()=>{ setEnabled(!isEnabled()); },true);
@@ -356,9 +278,9 @@ export function render(ms){
   setScene(U.view==='reveal'?'reveal':S.cur);
   // poikkileikkaukseen zoomatessa huone näkyy taustalla
   if (U.view==='vessel' && zoomActive() && ZOOM.dir>0) drawIso(t,{});
-  if (U.view==='reveal' && U.rev) drawReveal(t);
+  if (U.view==='reveal') reveal.drawReveal(t);
   else {
-    if (U.view==='vessel') drawVessel(t); else if (U.view==='book') drawBook(t); else { U.view='room'; drawRoom(t); }
+    if (U.view==='vessel') drawVessel(t); else if (U.view==='book') book.drawBook(t); else { U.view='room'; drawRoom(t); }
     topBar();
   }
   drawModal(t);

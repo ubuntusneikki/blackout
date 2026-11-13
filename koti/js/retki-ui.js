@@ -1,4 +1,4 @@
-// rihmaretken näkymät: oven modaali ja paluun paljastus (TP5). TP4:n isometrisessä huoneessa ovi on napautuskohde,
+// rihmaretken näkymät: oven modaali (TP5). Paluun paljastus on reveal.js:ssä (TP7). TP4:n isometrisessä huoneessa ovi on napautuskohde,
 // joka avaa saman modaalin: U.modal={type:'retki'}.
 import {P, AMB, WILD, SYM, STRAINS, VESSELS} from './data.js';
 import {W, px, dot, bay, bevel, rect, rng, BAYER, clamp, text, textC, tw, wrap, button, hit, bar} from './gfx.js';
@@ -41,7 +41,7 @@ export function drawRetkiModal(m,X,Y,WW,HH,t,ctx){
   }
   if (st && st.back){
     wrap('SYMBIONTTI PALASI '+(st.tyyppi==='syva'?'SYVÄLTÄ':'LYHYELTÄ')+' RETKELTÄ. RIHMOISSA ON JOTAIN.',X+10,y,154,P.ui3); y+=24;
-    button(X+16,y,WW-32,18,'OTA LÖYDÖT VASTAAN',()=>{ const res=retki.collect(); if(res) ctx.reveal(res); },'a');
+    button(X+16,y,WW-32,18,'OTA LÖYDÖT VASTAAN',()=>ctx.reveal(),'a');
     return;
   }
   if (st){
@@ -65,38 +65,3 @@ export function drawRetkiModal(m,X,Y,WW,HH,t,ctx){
   }
 }
 
-// ---------- paluun paljastus ----------
-export function drawRetkiReveal(R,a,ctx){
-  const res=R.res, cx=W/2, cy=150;
-  rect(0,0,W,336,'#06080c');
-  // villi ulkona: kylmä violetti rihmasto kasvaa reunoilta
-  const r=rng(5);
-  for(let n=0;n<26;n++){ let x=r()*W, y=r()<0.5?14:300, ang=y<100?1.57:-1.57; const len=40+r()*60;
-    for(let i=0;i<len*clamp(a/1.5,0,1);i++){ ang+=(r()-0.5)*0.5; x+=Math.cos(ang); y+=Math.sin(ang)*0.8; const c=i%7?WILD[0]:WILD[1]; dot(x,y,c); dot(x-Math.cos(ang)*.5,y-Math.sin(ang)*.4,c); } }
-  // ovi
-  door(cx,cy+40,40,64,a,clamp(a/0.8,0,1));
-  rect(cx-24,cy+40,48,2,P.lamp);
-  // symbiontin rihmat palaavat oveen löytöjen kanssa
-  const back=clamp((a-0.6)/1.6,0,1);
-  res.loot.forEach((o,k)=>{
-    const sx=k%2?W+10:-10, sy=40+k*50, ex=cx+(k%2?6:-6), ey=cy+10;
-    const px0=sx+(ex-sx)*back, py0=sy+(ey-sy)*back;
-    for(let i=0;i<=80;i++){ const f=i/80, x=sx+(px0-sx)*f+Math.sin(f*9+a*2+k)*4, y=sy+(py0-sy)*f;
-      if (BAYER[i&3][k&3]<12) dot(x,y,i%3?SYM:'#34b8ac'); }
-    const pal=lootPal(o); rect(px0-2,py0-2,5,5,pal[0]); rect(px0-1.5,py0-1.5,4,4,pal[1]); rect(px0-1,py0-1.5,2,1,pal[2]);
-  });
-  const done=a>2.6;
-  if (!done){ textC('SYMBIONTTI PALAA...',cx,30,P.uiD); hit(0,0,W,336,()=>{ R.t0-=3000; }); return; }
-  // hehku oven ympärillä
-  const pulse=0.5+0.5*Math.sin(a*3);
-  for(let y=-50;y<=50;y+=.5) for(let x=-60;x<=60;x+=.5){ const d=Math.hypot(x/60,y/50); if(d>1||d<0.75) continue;
-    if(bay(cx+x,cy+y)<(1-d)*60*pulse) dot(cx+x,cy+8+y,SYM); }
-  textC('SYMBIONTTI PALASI',cx,26,SYM,2);
-  text(res.tyyppi==='syva'?'SYVÄ RETKI':'LYHYT RETKI',4,4,P.uiD);
-  let y=222;
-  res.loot.forEach(o=>{ textC(retki.lootName(o),cx,y,lootCol(o)); y+=10;
-    if (o.first){ textC('UUSI KANTA KANTAKIRJAAN!',cx,y,AMB[2]); y+=10; }
-    if (o.kind==='vessel'){ textC('HARVINAINEN ASTIA. ASETA SE RUUTUUN.',cx,y,P.uiD); y+=10; }
-    if (o.kind==='spore' && o.key.includes('~')){ textC('MUTAATIOHERKKÄ VILLI KANTA',cx,y,AMB[1]); y+=10; } });
-  button(cx-34,300,68,14,'JATKA',()=>ctx.close(),'a');
-}

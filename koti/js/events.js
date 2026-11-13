@@ -6,6 +6,7 @@
 // TP3: kypsyi {astia,kanta,aalto}, horros/herasi {astia}, virhe {syy,viesti}, virstanpylvas {nimi,palkkio},
 // paluu {poissa, w, dev}. Torin taulun tilaukset käyttävät tilaus-uusi / tilaus-valmis kentällä lahde:'taulu'
 // (torin väen suodatintilaus: lahde:'torin vaki'). Kehikko: laite-alku / laite-keruu {resepti, tuote, n}.
+// TP7: paljastus-alku / paljastus-tulos / paljastus-loppu {lahde:'malja'|'retki'|'tilaus', tulos}, nimeys {kanta, nimi, vanha}.
 const L = {};
 export function on(name, fn){ (L[name] = L[name] || []).push(fn); return () => { L[name] = L[name].filter(f => f !== fn); }; }
 export function emit(name, data){
