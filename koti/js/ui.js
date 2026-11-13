@@ -12,6 +12,8 @@ import * as retki from './retki.js';
 import {drawRetkiModal, timeLeft} from './retki-ui.js';
 import * as reveal from './reveal.js';
 import * as book from './book.js';
+import * as opastus from './opastus.js';
+import {isGuided, guideMark} from './gfx.js';
 
 export const U = {doorGlow:false, view:'room', sel:null, modal:null, build:false, pick:null, msg:'', msgT:-1e9, msgCol:P.ui3, rev:null, burst:null};
 const now=()=>performance.now();
@@ -74,10 +76,11 @@ function drawRoom(t){
   const r=S.cur;
   // ovi hehkuu, kun retki on mahdollinen (syaani) tai symbiontti on palannut (meripihka)
   const rs=retki.status(); U.doorGlow = rs&&rs.back ? 'amb' : (!rs && retki.retkiOpen());
-  drawIso(t,{placeable: U.build ? !!U.pick : anyPlaceable(), pick:U.pick, doorGlow:U.doorGlow});
+  drawIso(t,{placeable: U.build ? !!U.pick : anyPlaceable(), pick:U.pick, doorGlow:U.doorGlow, guide:opastus.isoTargets()});
   hit(0,14,W,258,(x,y)=>{ const [lx,ly]=toLayer(x,y), p=pickAt(lx,ly); if(!p) return;
     if (p.kind==='cell') tapCell(p.r,p.i); else tapSpot(p.id); });
-  panel(()=>{ wrap(hint(),5,278,182,P.uiD); const pl=promiseLine(); if (pl) text(pl,5,307,SYM); });
+  // opastuksen vihje näkyy yläreunan symbiontin rivillä; silloin paneelin oma vihje jää pois
+  panel(()=>{ if (!opastus.current()) wrap(hint(),5,278,182,P.uiD); const pl=promiseLine(); if (pl) text(pl,5,307,SYM); });
   // TP7: myöhemmäksi jätetyt paljastukset odottavat
   const pend=reveal.pending(); if (pend>1 || (pend && !U.build)) button(W-64,300,60,14,'PALJASTUS',()=>reveal.queueOnOpen(),'a');
   const cellar=S.rooms.kellari.owned, bw=cellar?45:60, gap=2;
@@ -153,6 +156,7 @@ function drawModal(t){
     if(sub) text(sub,X+10,y+12,subCol||(ok?P.uiD:P.ui2));
     if(ok) hit(X+6,y,rw,20,fn);
     if(side) button(X+WW-6-36,y,36,20,side,sideFn,ok?'n':'d');
+    if(ok && isGuided('row:'+label)) guideMark(X+6,y,rw,20);
     y+=23; };
   const pager=(n,per)=>{ const pages=Math.max(1,Math.ceil(n/per)); m.page=Math.min(m.page||0,pages-1);
     if(pages>1){ button(X+WW-36,Y+HH-18,30,13,'>',()=>{ m.page=(m.page+1)%pages; }); text((m.page+1)+'/'+pages,X+8,Y+HH-14,P.uiD); }
@@ -165,7 +169,8 @@ function drawModal(t){
     const tabs=[['sell','MYY'],['buy','OSTA']]; if (S.order || S.board.length) tabs.push(['board','TAULU']);
     const boardReady=(S.order&&S.inv.suodatin>0&&!S.flags.done) || S.board.some(o=>!o.given && sim.boardHave(o)>=o.n);
     const tw_=Math.floor((WW-12-(tabs.length-1)*2)/tabs.length);
-    tabs.forEach(([k,l],j)=>button(X+6+j*(tw_+2),Y+15,tw_,11,l,()=>{ m.tab=k; m.page=0; }, m.tab===k?'g':(k==='board'&&boardReady?'a':'n')));
+    tabs.forEach(([k,l],j)=>{ button(X+6+j*(tw_+2),Y+15,tw_,11,l,()=>{ m.tab=k; m.page=0; }, m.tab===k?'g':(k==='board'&&boardReady?'a':'n'));
+      if (isGuided('tab:'+l)) guideMark(X+6+j*(tw_+2),Y+15,tw_,11); });
     y=Y+31; text('HOPEAA: '+Math.floor(S.hopea),X+8,y,P.ui3);
     if (sp){ const h=Math.max(1,Math.ceil(sp.left/3600)), s2='PIIKKI ×2  '+h+' H'; text(s2,X+WW-8-tw(s2),y,AMB[1]); }
     y+=10;
@@ -262,9 +267,16 @@ function drawModal(t){
     title('ASETUKSET');
     row('ÄÄNI', isEnabled()?'PÄÄLLÄ':'POIS','ÄÄNET, AMBIENT JA VÄRINÄ',()=>{ setEnabled(!isEnabled()); },true);
     row('NOPEUS', S.speed===60?'×60 TESTI':'×1 OIKEA','KASVU OIKEASSA AJASSA TAI 60X',()=>{ S.speed = S.speed===60?1:60; save(); },true);
+    row('OPASTUS', opastus.enabled()?'PÄÄLLÄ':'POIS','SYMBIONTIN VIHJEET JA HEHKU',()=>{ opastus.setEnabled(!opastus.enabled()); },true);
+    row('ALOITA OPASTUS ALUSTA','','NÄYTTÄÄ VIHJEET UUDELLEEN',()=>{ opastus.restart(); opastus.setEnabled(true); U.modal=null; toast('OPASTUS ALKAA ALUSTA'); },true);
     if (window.SOLMU_PWA) row('TALLENNUS JA ASENNUS','','VIENTI, TUONTI JA ASENNUSOHJE',()=>{ U.modal=null; window.SOLMU_PWA.open(); },true);
     row('UUSI PELI','','POISTAA TALLENNUKSEN',()=>{ U.modal={type:'confirmReset'}; },true);
     y+=4; text(window.SOLMU_PWA&&window.SOLMU_PWA.version?window.SOLMU_PWA.version():VERSION,X+10,y,P.uiD);
+  }
+  else if (m.type==='opastus'){   // laboratorion ensiesittely: opastuksen ainoa modaali
+    title(m.title);
+    wrap(m.txt,X+10,y,154,P.ui3);
+    button(X+WW/2-30,Y+HH-40,60,14,'SELVÄ',()=>{ U.modal=null; },'a');
   }
   else if (m.type==='confirmReset'){
     title('ALOITA ALUSTA?');
@@ -275,6 +287,7 @@ function drawModal(t){
 
 export function render(ms){
   const t=ms/1000; resetHit(); g.clearRect(0,0,W,H);
+  opastus.guide(U);
   setScene(U.view==='reveal'?'reveal':S.cur);
   // poikkileikkaukseen zoomatessa huone näkyy taustalla
   if (U.view==='vessel' && zoomActive() && ZOOM.dir>0) drawIso(t,{});
@@ -284,4 +297,5 @@ export function render(ms){
     topBar();
   }
   drawModal(t);
+  if (U.view!=='reveal') opastus.drawStrip(t);
 }

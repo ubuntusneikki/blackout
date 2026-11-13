@@ -1,7 +1,7 @@
 // rihmaretken näkymät: oven modaali (TP5). Paluun paljastus on reveal.js:ssä (TP7). TP4:n isometrisessä huoneessa ovi on napautuskohde,
 // joka avaa saman modaalin: U.modal={type:'retki'}.
 import {P, AMB, WILD, SYM, STRAINS, VESSELS} from './data.js';
-import {W, px, dot, bay, bevel, rect, rng, BAYER, clamp, text, textC, tw, wrap, button, hit, bar} from './gfx.js';
+import {W, px, dot, bay, bevel, rect, rng, BAYER, clamp, text, textC, tw, wrap, button, hit, bar, isGuided, guideMark} from './gfx.js';
 import {S, strain} from './state.js';
 import * as retki from './retki.js';
 
@@ -61,6 +61,7 @@ export function drawRetkiModal(m,X,Y,WW,HH,t,ctx){
     text(right,X+WW-10-tw(right),y+4,ok?(R.cost?AMB[2]:P.grn):P.uiD);
     wrap(R.txt,X+10,y+14,152,ok?P.uiD:P.ui2);
     if (ok) hit(X+6,y,WW-12,34,()=>{ retki.start(type); ctx.close(); });
+    if (ok && isGuided('row:'+R.name)) guideMark(X+6,y,WW-12,34);
     y+=38;
   }
 }
