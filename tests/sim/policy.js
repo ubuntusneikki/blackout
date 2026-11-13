@@ -52,9 +52,16 @@ function reserve(ctx, b){
   return 0;
 }
 function kalvoNeed(ctx){ // montako kalvohelttaa tilaus vielä tarvitsee (suodattimina)
-  const { S, D } = ctx; if (!S.order || S.flags.done) return 0;
-  const left = S.order.need - S.order.given - (S.inv.suodatin || 0) - devices(ctx, 'kehikko').filter(o => o.c.busy).length;
+  const { S, D } = ctx; if (S.flags.done) return 0;
+  // tilaus tulee ketjun lopussa: kun kalvoheltta ja kehikko ovat, kalvohelttaa kasvatetaan jo valmiiksi (kuten pelaaja)
+  const order = S.order || (S.known.kalvo && ownsDevice(ctx, 'kehikko') ? { need: (D.ORDER && D.ORDER.need) || 5, given: 0 } : null);
+  if (!order) return 0;
+  const left = order.need - order.given - (S.inv.suodatin || 0) - devices(ctx, 'kehikko').filter(o => o.c.busy).length;
   return Math.max(0, left) * D.DEVICES.kehikko.need; }
+// ketjun askel "kasvata tuote kehikossa": pidä halvimman reseptin sato kehikkoa varten (siniheltta), kunnes askel on tehty
+function muottiReserve(ctx){ const { S, G, D } = ctx; if (!D.FRAME || !ownsDevice(ctx, 'kehikko') || S.flags.frame) return null;
+  const st = G.chainStep && G.chainStep(); if (st && ['tilaus'].includes(st.id)) return null;
+  return D.FRAME_ORDER ? D.FRAME_ORDER.find(k => S.known[k]) : 'heltta'; }
 function kalvoTarget(ctx){ // montako kalvohelttaa halutaan kasvamaan: kehikoiden tarve per käynti, ei enempää
   const { S, D } = ctx; if (!S.known.kalvo || !ownsDevice(ctx, 'kehikko') || !kalvoNeed(ctx)) return 0;
   const suitable = vessels(ctx).filter(o => ctx.G.matchOf(o.c, 'kalvo') >= 1).length;
@@ -151,12 +158,13 @@ export const MODULES = {
     return n; } },
 
   // myynti: myy kunnes yksikköhinta painuu alle kynnyksen; piikkituote kokonaan
-  myynti: { act(ctx){ const { S, G, opt } = ctx; let n = 0;
+  myynti: { act(ctx){ const { S, G, D, opt } = ctx; let n = 0;
     for (const id of G.sellables()){
       const [k, s] = id.split(':');
       if (id === 'raw:kalvo' && S.known.kalvo && !S.order) continue;   // kehikkoa odotetaan
       if (id === 'suodatin' && !S.flags.done) continue;
       let can = G.owned(id);
+      if (k === 'raw' && muottiReserve(ctx) === s) can = Math.max(0, can - D.FRAME[s].need);
       if (k === 'itio') can = Math.max(0, spores(ctx, base(s)) - reserve(ctx, base(s)) - (S.flags.lab ? 1 : 0));
       if (k === 'itio') can = Math.min(can, S.spores[s] || 0);
       if (id === 'raw:kalvo') can = Math.max(0, can - kalvoNeed(ctx));

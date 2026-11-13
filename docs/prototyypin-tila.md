@@ -63,3 +63,11 @@ Toteutuneet luvut. Ajat ovat pelinopeudella ×1; testinopeus ×60 on oletus.
 - **Uudet kannat** (Juuso hyväksyi nimet 13.11.): YÖRUUSU = ruususieni × hämäränuppi, VERKKOHELTTA = kalvoheltta × hämäränuppi.
 - **Mitoitus TP2:n simulaattorilla** (20 siementä, ×1): kasvuajat tunneissa (siniheltta ja verkkoheltta 1 h, kalvoheltta 2 h, ruususieni ja hämäränuppi 3 h, yöruusu 6 h), itiöpussi 1,5 H, laboratorio aukeaa 15 myydystä. Tilauksen mediaani: aktiivinen 2,0 vrk, 4 käyntiä/vrk 6,0 vrk (tavoite 6–8), 2 käyntiä/vrk 11,5 vrk.
 - Havainto: 4/vrk-profiililla laboratorio aukeaa vasta noin 2,6 vrk:n kohdalla, joten alkuvaihe on pitkä pelkillä kahdella kannalla.
+
+## KOTI-01 V1.5 (TP10: viimeistely ja pelitesti)
+
+- **Akvaario korjattu** (`blender/koti.py`): vesi on matala (0,14 m) ja lasi korkeampi (0,74 m), joten kypsä sieni mahtuu kannen alle sekä huoneessa että lähikuvassa. Vedenpinta ja vesi ovat karheita ja himmeitä, joten kirkasta valkoista nauhaa ei enää näy.
+- **Palvelinkaappi:** hyllyn reunan sammalpalikat vaihdettu roikkuviksi sammalrihmoiksi (lähikuvassa ne näyttivät vihreiltä virhepalikoilta).
+- **Simulaattorin botti** (`tests/sim/policy.js`): botti jätti kehikon tyhjäksi päiviksi, koska se myi siniheltan ennen kuin ehti kasvattaa siitä tuotteen (ketjun askel "kasvata tuote kehikossa"), eikä se kasvattanut kalvohelttaa ennen tilausta. Nyt se pitää halvimman reseptin sadon kehikolle ja kasvattaa kalvohelttaa valmiiksi, kuten pelaaja tekisi. Pelin luvut eivät muuttuneet.
+- **Loppuajo** (20 siementä, ×1): tilauksen mediaani aktiivinen 1,5 vrk, 4 käyntiä/vrk 6,0 vrk (ka. 6,2, tavoite 6–8), 2 käyntiä/vrk 11,5 vrk (16/20 ajoa 14 vrk:ssa). Laboratorio aukeaa 4/vrk-profiililla noin 33 h:n kohdalla (päivän 2 aamu). Kokeilu: laboratorio 10 myynnistä (nyt 15) avaisi sen 24 h:ssa ja lyhentäisi tilauksen noin 5,5 vrk:een, eli alle tavoitteen, joten raja pidettiin.
+- Pages julkaisee mainin onnistuneesti (pages build and deployment, PR #14:n merge).

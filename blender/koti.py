@@ -408,13 +408,13 @@ def astia_lasipurkki(part='taka'):
         rod((math.cos(a) * J_R, math.sin(a) * J_R, z0 + 0.15), (math.cos(a) * J_R, math.sin(a) * J_R, z0 + J_H - 0.1), 0.008,
             mat('heijastus', '#9fd3d6', 0.3, emit='#9fd3d6', estr=0.6), 4)
 
-A_W, A_D, A_H, A_WATER = 0.86, 0.62, 0.5, 0.34
+A_W, A_D, A_H, A_WATER = 0.86, 0.62, 0.74, 0.14   # matala vesi, korkea lasi: kypsä sieni mahtuu kannen alle
 def astia_akvaario(part='taka'):
     """Akvaario (harvinainen löytö): matala, leveä lasiallas teräsjalustalla, hillitty teal-vesi ja kivet.
     Sieni kasvaa sammaloituneella kivisaarekkeella veden pinnan yläpuolella."""
     m = M(); w, d, h = A_W, A_D, A_H; z0 = BASE_H; t = 0.035
-    water = mat('akvaariovesi', '#103540', 0.1, emit='#1d6a78', estr=0.5)
-    surf = mat('vedenpinta', '#5fc7d0', 0.1, emit='#1d6a78', estr=0.8)
+    water = mat('akvaariovesi', '#103540', 0.7, emit='#1d6a78', estr=0.5)   # karhea: ei valkoista heijastusta
+    surf = mat('vedenpinta', '#1d6a78', 0.7, emit='#1d6a78', estr=0.35)   # himmeä pinta: ei kirkasta nauhaa lähikuvassa
     if part == 'taka':
         box((0, 0, z0 / 2 + 0.03), (w + 0.04, d + 0.04, z0 - 0.06), m['steelD'])
         box((0, 0, z0 - 0.02), (w + 0.08, d + 0.08, 0.04), m['steel'])
@@ -423,14 +423,14 @@ def astia_akvaario(part='taka'):
         box((0, 0, z0 + 0.06 + (A_WATER - 0.06) / 2), (w - 0.01, d - 0.01, A_WATER - 0.06), water)
         box((0, 0, z0 + A_WATER), (w - 0.01, d - 0.01, 0.006), surf)
         # kivisaareke keskellä ja pienet kivet
-        sphere((0.02, 0.04, z0 + 0.2), 0.2, m['steelD'], (1.2, 1, 0.75), 10)
+        sphere((0.02, 0.04, z0 + 0.06), 0.2, m['steelD'], (1.2, 1, 0.55), 10)
         sphere((0.02, 0.04, z0 + A_WATER - 0.0), 0.17, m['moss'], (1.15, 1, 0.3), 10)
         rnd = random.Random(61)
         for i in range(5):
-            sphere((rnd.uniform(-0.35, 0.35), rnd.uniform(-0.22, 0.22), z0 + 0.08), rnd.uniform(0.03, 0.06), m['steelD'], (1, 1, 0.7), 6)
+            sphere((rnd.uniform(-0.35, 0.35), rnd.uniform(-0.22, 0.22), z0 + 0.07), rnd.uniform(0.03, 0.05), m['steelD'], (1, 1, 0.7), 6)
         for i in range(6):                                                        # vesikasvit
             x = rnd.uniform(-0.38, 0.38); y = rnd.uniform(0.0, 0.25)
-            rod((x, y, z0 + 0.06), (x + rnd.uniform(-0.04, 0.04), y, z0 + rnd.uniform(0.2, 0.32)), 0.012, m['leafD'], 4)
+            rod((x, y, z0 + 0.06), (x + rnd.uniform(-0.04, 0.04), y, z0 + rnd.uniform(0.16, 0.26)), 0.012, m['leafD'], 4)
         box((-w / 2, 0, z0 + h / 2), (0.01, d, h), m['glassB'])
         box((0, d / 2, z0 + h / 2), (w, 0.01, h), m['glassB'])
         for (sx, sy) in ((-1, -1), (-1, 1), (1, 1)):
@@ -476,8 +476,9 @@ def astia_palvelin(part='taka'):
         for i in range(5):
             x = rnd.uniform(-0.25, 0.2); y = rnd.uniform(-0.1, 0.2); zt = h - 0.06
             rod((x, y, zt), (x + rnd.uniform(-0.05, 0.05), y, zt - rnd.uniform(0.15, 0.3)), 0.01, m['rubber'] if i % 2 else m['copper'], 4)
-        for i in range(6):
-            box((rnd.uniform(-0.25, 0.25), -d / 2 + 0.05, P_SHELF - 0.03 - rnd.random() * 0.06), (0.06, 0.02, 0.06), m['moss'])
+        for i in range(6):                                                                    # sammalrihmat roikkuvat hyllyn reunalta
+            x = rnd.uniform(-0.25, 0.25); L = 0.05 + rnd.random() * 0.1
+            rod((x, -d / 2 + 0.05, P_SHELF - 0.01), (x + rnd.uniform(-0.02, 0.02), -d / 2 + 0.05, P_SHELF - 0.01 - L), 0.008, m['moss'], 4)
         vine(-w / 2 + 0.03, 0.1, h - 0.05, 0.5, (1, 0), 72, m)
         rod((0.12, d / 2 - 0.06, h), (0.12, d / 2 + 0.12, h + 0.02), 0.018, m['tube'], 8)       # kostutusletku
     else:
