@@ -860,7 +860,8 @@ def ikoni_villi():
     sphere((0, 0, 0.035), 0.025, w, seg=8)
 
 # =================== KOHTAUS JA RENDERÖINTI ===================
-def setup_scene():
+def setup_scene(rot=None):
+    rot = rot or CAM_ROT
     bpy.ops.wm.read_factory_settings(use_empty=True)
     MATS.clear()
     sc = bpy.context.scene
@@ -872,21 +873,22 @@ def setup_scene():
     ko = bpy.data.objects.new('paavalo', key); ko.rotation_mode = 'QUATERNION'
     ko.rotation_quaternion = Vector((0.3, -1.0, 1.3)).normalized().to_track_quat('Z', 'Y'); sc.collection.objects.link(ko)
     fill = bpy.data.lights.new('tayte', 'SUN'); fill.energy = 0.8; fill.color = hexc('#8fd0c0')[:3]
-    fo = bpy.data.objects.new('tayte', fill); fo.rotation_euler = CAM_ROT; sc.collection.objects.link(fo)
+    fo = bpy.data.objects.new('tayte', fill); fo.rotation_euler = rot; sc.collection.objects.link(fo)
     cam = bpy.data.cameras.new('kamera'); cam.type = 'ORTHO'; cam.clip_end = 1000
-    co = bpy.data.objects.new('kamera', cam); co.rotation_euler = CAM_ROT; sc.collection.objects.link(co); sc.camera = co
+    co = bpy.data.objects.new('kamera', cam); co.rotation_euler = rot; sc.collection.objects.link(co); sc.camera = co
     sc.render.engine = 'CYCLES'; sc.cycles.device = 'CPU'; sc.cycles.filter_width = 0.01; sc.cycles.max_bounces = 5
     sc.view_settings.view_transform = 'Standard'; sc.view_settings.exposure = 0.3
     sc.render.film_transparent = True
     return sc, co
 
-def frame_anchor(sc, co, W, H, ax, ay):
+def frame_anchor(sc, co, W, H, ax, ay, ppm=None):
     """Kangas W×H px; maailman origo osuu pikseliin (ax, ay)."""
+    ppm = ppm or PPM
     R = co.rotation_euler.to_matrix()
-    cx = (W / 2 - ax) / PPM; cy = -(H / 2 - ay) / PPM
+    cx = (W / 2 - ax) / ppm; cy = -(H / 2 - ay) / ppm
     co.location = R @ Vector((cx, cy, 200))
     sc.render.resolution_x, sc.render.resolution_y = W, H; sc.render.resolution_percentage = 100
-    co.data.ortho_scale = max(W, H) / PPM
+    co.data.ortho_scale = max(W, H) / ppm
 
 def render_pair(sc, path, samples=96):
     sc.cycles.samples = samples; sc.cycles.use_denoising = True
@@ -955,6 +957,23 @@ for k in KANNAT:
 for p in TUOTTEET:
     SPRITES['ikoni_' + p] = ((lambda p=p: ikoni_tuote(p)), IC, IC, None, None)
 
+# ---------- lähikuva (poikkileikkaus): samat mallit edestä, suurempi mittakaava ----------
+# Kamera katsoo edestä (-y) hieman ylhäältä; astioiden etulasit puuttuvat jo 'taka'-osista (aukileikkaus).
+LK_ROT = (math.radians(76), 0, 0)
+LK_PPM = 340                     # px/m: terraarion lasi noin 250 px leveä 384 px:n kerroksessa
+LK_W, LK_H = 384, 516            # poikkileikkauskerroksen koko (koti/js/xsec.js)
+LK_ANCHOR = {'terraario': 438, 'lasipurkki': 438, 'akvaario': 438, 'palvelin': 496}
+LK_SH = (288, 300, 144, 272)     # sienen kangas ja tyven ankkuri
+LK_SH_PPM = 290                  # sienet hieman pienempinä, jotta kypsä lakki mahtuu kannen alle
+LK = {}
+for t, fn in (('terraario', astia_terraario), ('lasipurkki', astia_lasipurkki), ('akvaario', astia_akvaario), ('palvelin', astia_palvelin)):
+    LK['lk_astia_' + t] = ((lambda fn=fn: fn('taka')), LK_W, LK_H, LK_W // 2, LK_ANCHOR[t])
+    LK['lk_astia_%s_etu' % t] = ((lambda fn=fn: fn('etu')), LK_W, LK_H, LK_W // 2, LK_ANCHOR[t])
+for k, (nimi, fn) in KANNAT.items():
+    for st in STAGES:
+        LK['lk_sieni_%s_%s' % (k, st)] = ((lambda fn=fn, st=st, k=k: fn(st, k)), *LK_SH)
+SPRITES.update(LK)
+
 def meta():
     rooms = {}
     for n, (nx, ny) in ROOMS.items():
@@ -964,6 +983,7 @@ def meta():
                     'dc': [HW, HH], 'dr': [-HW, HH]}
     return {'tile': [TILE_W, TILE_W // 2], 'ppm': PPM, 'rooms': rooms,
             'plant_dy': {k: round(z * math.sin(math.radians(60)) * PPM) for k, z in PLANT.items()},
+            'plant_dy_lk': {'lk_' + k: round(z * math.sin(LK_ROT[0]) * LK_PPM) for k, z in PLANT.items()},
             'kannat': {k: v[0] for k, v in KANNAT.items()}, 'tuotteet': {k: v[0] for k, v in TUOTTEET.items()},
             'sprites': {n: {'w': W, 'h': H, 'ax': ax, 'ay': ay} for n, (_, W, H, ax, ay) in SPRITES.items()}}
 
@@ -973,8 +993,10 @@ if __name__ == '__main__' or argv:
     json.dump(meta(), open(os.path.join(OUTDIR, 'koti.json'), 'w'), indent=1, ensure_ascii=False)
     for name, (fn, W, H, ax, ay) in SPRITES.items():
         if ONLY and not any(fnmatch.fnmatch(name, p) for p in ONLY): continue
-        sc, co = setup_scene(); fn()
+        lk = name.startswith('lk_')
+        CAM_H = Vector((0, -1, 0)) if lk else Vector((1, -1, 0)).normalized()   # half() poistaa kameran puoleisen puolen
+        sc, co = setup_scene(LK_ROT if lk else None); fn()
         if ax is None: frame_fit(sc, co, W, H)
-        else: frame_anchor(sc, co, W, H, ax, ay)
+        else: frame_anchor(sc, co, W, H, ax, ay, (LK_SH_PPM if name.startswith('lk_sieni') else LK_PPM) if lk else None)
         render_pair(sc, os.path.join(OUTDIR, name), 192 if name.startswith('tila') else 64)
         print('VALMIS', name, W, H)
