@@ -1,5 +1,5 @@
 // KOTI v1: sisältö ja luvut (ks. docs/kotipeli-v1.md). Luvut ovat lähtöarvoja.
-export const VERSION = 'KOTI-01 V1.3';
+export const VERSION = 'KOTI-01 V1.4';
 
 export const P = {
   bg0:'#0b1018', bg1:'#141c28', bg2:'#1f2a38', bg3:'#2c3a4a', bg4:'#46566a',
