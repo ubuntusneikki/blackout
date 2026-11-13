@@ -11,8 +11,10 @@ const isReady = (ctx, c) => ctx.G.waves ? ctx.G.waves(c) > 0 : !!c.ready;
 export function frameRecipes(ctx){ const { D } = ctx;
   if (!D.FRAME) return [{ key: 'kalvo', out: 'suodatin', need: D.DEVICES.kehikko.need }];
   return Object.entries(D.FRAME).map(([key, f]) => ({ key, out: f.tuote || f.out || f.product || f.id, need: f.need || 3 })); }
+// taulun tilaus: given on totuusarvo (koko tilaus kerralla) tai määrä
+const boardLeft = o => o.given === true ? 0 : (o.n || 0) - (o.given || 0);
 // torin taulun tarpeet tuotteittain (TP3)
-export function boardNeed(ctx){ const out = {}; for (const o of (ctx.S.board || [])){ const left = (o.n || 0) - (o.given || 0); if (left > 0) out[o.tuote] = (out[o.tuote] || 0) + left; } return out; }
+export function boardNeed(ctx){ const out = {}; for (const o of (ctx.S.board || [])){ const left = boardLeft(o); if (left > 0) out[o.tuote] = (out[o.tuote] || 0) + left; } return out; }
 const cells = ctx => ctx.ST.allCells();
 const vessels = ctx => cells(ctx).filter(o => o.c.kind === 'vessel');
 const devices = (ctx, type) => cells(ctx).filter(o => o.c.kind === 'device' && o.c.type === type);
@@ -140,7 +142,9 @@ export const MODULES = {
   // torin taulu (TP3): toimita heti, kun tuotteita on
   taulu: { act(ctx){ const { S, G } = ctx; let n = 0;
     if (!S.board || !G.deliverBoard) return 0;
-    for (const o of S.board.slice()){ if ((o.given || 0) < o.n && G.boardHave(o)){ const h0 = S.hopea; G.deliverBoard(o.id); if (S.hopea !== h0 || true) n++; } }
+    for (const o of S.board.slice()){ if (boardLeft(o) <= 0) continue;
+      const have = G.boardHave(o), ok = typeof have === 'number' ? have >= boardLeft(o) : !!have;
+      if (ok){ const h0 = S.hopea; G.deliverBoard(o.id); if (S.hopea !== h0 || boardLeft(o) <= 0) n++; } }
     return n; } },
 
   // myynti: myy kunnes yksikköhinta painuu alle kynnyksen; piikkituote kokonaan
