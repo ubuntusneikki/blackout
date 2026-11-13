@@ -48,8 +48,9 @@ module.exports = function(){
       else if(S.known.kalvo && !S.known.hoitaja && has('heltta')&&has('hamara')) G.startDish(h.c,'heltta','hamara'); }
     // kehikko
     const k=cells().find(o=>o.c.type==='kehikko'&&!o.c.busy); if(k){ if(!G.startFrame(k.c,'kalvo') && !S.flags.frame) G.startFrame(k.c,'heltta'); }
-    // testilöytö (hämäränuppi) kerran laboratorion jälkeen
-    if(S.flags.lab && !flags.retki){ S.retkiReady=0; G.retki(); flags.retki=1; ev('testilöytö'); }
+    // rihmaretki: ota löydöt vastaan, lähetä lyhyelle retkelle aina kun ovi on vapaa
+    const R=__R; if(R.status()&&R.status().back){ const res=R.collect(); ev('retki: '+res.loot.map(R.lootName).join(', ')); }
+    if(R.canStart('lyhyt')) R.start('lyhyt');
     if(S.flags.lab && !flags.lab){ flags.lab=1; ev('labra auki'); }
     if(S.known.kalvo && !flags.kalvo){ flags.kalvo=1; ev('kalvoheltta tunnettu'); }
     if(S.order && !flags.order){ flags.order=1; ev('tilaus'); }

@@ -5,6 +5,7 @@ import {VESSELS, DEVICES, STRAINS, RECIPES, MATCH_MULT, FIRST_GROW, MUTATION_P, 
 import {S, save, strain, neighbors, allCells, addInv, addSpore, vessel, device} from './state.js';
 
 import {emit} from './events.js';
+import * as retki from './retki.js';
 
 export function matchOf(vs, key){ const V=VESSELS[vs.type], T=strain(key); return (V.wet===T.wet?1:0)+(V.warm===T.warm?1:0); }
 function growTime(vs){ const T=strain(vs.strain); return vs.fast ? FIRST_GROW : T.grow; }
@@ -41,6 +42,7 @@ export function tick(dt){
       if (c.t>=1){ c.t=1; c.done=true; c.doneAt=Date.now(); emit('laite-valmis',{laite:c}); }
     }
   }
+  retki.tick(dt);
   marketTick(dt);
   boardTick(dt);
 }
@@ -167,6 +169,7 @@ export function buy(key){
 }
 export function checkUnlocks(){
   if (!S.flags.lab && S.sold>=LAB_UNLOCK_SOLD){ S.flags.lab=true; emit('avaus',{mita:'laboratorio', vihje:HINT.lab}); }
+  retki.checkOpen();
   if (S.flags.lab && !S.board.length){ fillBoard(); emit('avaus',{mita:'taulu', vihje:HINT.board}); }
 }
 function virhe(syy, viesti){ emit('virhe',{syy, viesti}); return false; }
@@ -243,18 +246,6 @@ export function rescue(){
   const growing=allCells().some(o=>o.c.kind==='vessel'&&o.c.strain);
   const anyHeltta=(S.spores.heltta||0)>0;
   if (!growing && !Object.keys(S.spores).length && !anyHeltta){ addSpore('heltta',1); emit('pelastus',{vihje:HINT.pocket}); save(); }
-}
-// testilöytö (simuloi ulkopeliä)
-export function retki(){
-  const now=Date.now(); if (now<S.retkiReady) return;
-  S.trips++; S.retkiReady=now+12000;
-  let r;
-  if (S.trips===1) r={kind:'strain',key:'hamara',n:2};
-  else if (S.trips===2) r={kind:'vessel',key:'akvaario'};
-  else { const pool=[{kind:'strain',key:'hamara',n:1},{kind:'strain',key:'heltta',n:2},{kind:'strain',key:'ruusu',n:1},{kind:'vessel',key:'akvaario'},{kind:'vessel',key:'palvelin'}];
-    r=pool[(Math.random()*pool.length)|0]; }
-  if (r.kind==='strain'){ addSpore(r.key,r.n); S.known[r.key]=1; } else S.vesselInv.push(r.key);
-  emit('testiloyto',{loyto:r, viesti:'TESTILÖYTÖ: '+(r.kind==='strain'?r.n+' × '+STRAINS[r.key].name+'-ITIÖ':VESSELS[r.key].name)}); save();
 }
 export function place(roomKey, i, kind, type){
   const cells=S.rooms[roomKey].cells; if (cells[i]) return;
