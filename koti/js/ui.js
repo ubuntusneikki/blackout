@@ -120,6 +120,7 @@ function drawVessel(t){
   panel(()=>{
     text(V.name+'  '+(V.wet?'KOSTEA':'KUIVA')+' / '+(V.warm?'LÄMMIN':'VIILEÄ')+(U.sel.r==='kellari'?'  KELLARI':''),5,278,P.uiD);
     text(T?T.name:'TYHJÄ',5,287,T?(T.mutant?AMB[2]:T.col[2]):P.ui3);
+    if (T && T.mutant) text(T.orig,9+tw(T.name),287,P.uiD);   // TP7: alkuperäinen kanta pienellä
   });
   text('KOSTEUS',5,297,P.ui3); bar(46,297,vs.moist, vs.moist<0.25?P.red:P.wa2);
   const w=sim.waves(vs);

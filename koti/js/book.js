@@ -135,7 +135,7 @@ function drawPage(k, t){
   shroom(k, 85, TOP + 172, 3, kn);
   let x = 162, y = TOP + 16;
   if (!kn){
-    textC('???', 85, TOP + 70, P.uiD, 3);
+    textC('???', 85, TOP + 70, P.uiD, 2);
     text('TUNTEMATON KANTA', x, y, P.uiD); y += LH + 10;
     wrap(hintOf(k), x, y, W - x - 20, P.ui3);
   } else {

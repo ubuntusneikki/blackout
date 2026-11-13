@@ -22,13 +22,14 @@ Pelaaja ei valmista esineitä vaan kasvattaa elävää rihmastoa: kantoja ristey
 ```
 index.html          aloitussivu: ohjaa suoraan kotipeliin
 ulko/index.html     ULKO-01 (JÄÄDYTETTY: ulkopeli ei kuulu tähän protoon, saaliit simuloidaan kotona)
-koti/index.html     KOTI-01 v1: kotipeli ES-moduuleina koti/js/ (data, gfx, events, state, sim, retki, retki-ui, room, iso, xsec, ui, main)
+koti/index.html     KOTI-01 v1: kotipeli ES-moduuleina koti/js/ (data, gfx, events, state, sim, retki, retki-ui, room, iso, xsec, ui, main,
+                    reveal = paljastus ja sen jono, book = kantakirja ja sukupuu, naming = mutaation nimikenttä, nat = natiivikoordinaattikääre)
                     iso.js = isometrinen päänäkymä (atlas koti/gfx/, 384 px kerros UI-puskurin alla, osumat, siirtymät)
 koti/pwa.js, sw.js  puhelinversio: asennus (manifest.webmanifest, ikonit/), offline, tallennuksen vienti/tuonti koodina
 iso/index.html      kokeilu (JÄÄDYTETTY): isometrinen 3D-kartta three.js r128:lla + pikselöintivarjostin
 blender/            Blender-skriptit (bpy): room.py (huone), kit.py (katupakkaus + talot), koti.py (kodin spritet), koti_atlas.py (atlas + esikatselu), pix.py (pikselöinti), sheet.py
 docs/               ydinvisio.md, kotipeli-v1.md (+ suunnitelma), prototyypin-tila.md, grafiikka-koti.md (kodin spritet ja atlas)
-tests/              Playwright-skriptit: v1-lapipeluu.js (botti pelaa tilaukseen asti), tallennukset.js, pwa.js
+tests/              Playwright-skriptit: v1-lapipeluu.js (botti pelaa tilaukseen asti), tallennukset.js, pwa.js, tp7-paljastus.js (kaikki paljastuksen tulokset, jono, kantakirja)
 ```
 
 Ei build-vaihetta: staattisia sivuja GitHub Pagesissa. Paikallisesti: `python3 -m http.server` repon juuressa.
@@ -41,7 +42,7 @@ Koti on ES-moduuleina (`koti/js/*.js`) ilman bundleria; se vaatii http-palvelime
 ## Yhteinen tallennus
 
 - `localStorage` avain **`solmu_yhteinen_v1`**, sama ulko- ja kotisivulla (toimii vain samassa origin-osoitteessa).
-- Kodin v1-skeema (`schema:1`): `speed, hopea, rooms{huone,kellari}{owned, cells[]}, cur, inv{raw:kanta, suodatin, villi, agar}, spores{kanta:n}, vesselInv[], deviceInv[], bought, sold, known{}, tried{}, market{sat, spike, nextSpike}, flags{}, order, retki{cur, n, deep}, kotiLast, board[], boardNext, boardSeq, boardDone, chain, made{}`. Rihmaretki (`retki.js`, TP5): `retki.cur = {type:'lyhyt'|'syva', t, back}`, ovi aukeaa ensimmäisestä myynnistä (`flags.retki`). Ulko käyttää: `spores, vesselInv, found, cells, memories, walked`.
+- Kodin v1-skeema (`schema:1`): `speed, hopea, rooms{huone,kellari}{owned, cells[]}, cur, inv{raw:kanta, suodatin, villi, agar}, spores{kanta:n}, vesselInv[], deviceInv[], bought, sold, known{}, tried{}, market{sat, spike, nextSpike}, flags{}, order, retki{cur, n, deep}, kotiLast, board[], boardNext, boardSeq, boardDone, chain, made{}, names{}, book{seen{}}`. TP7: `names['kanta~perk']` = pelaajan antama mutaation nimi (`strain()` käyttää sitä), `book.seen` = kantakirjassa nähdyt kannat (KANNAT hehkuu, kun uutta), `tried[pari]` = 1 (kesken/kontaminaatio), 'ok' tai 'fail' (hylätyt yliviivattuina hautomossa). Rihmaretki (`retki.js`, TP5): `retki.cur = {type:'lyhyt'|'syva', t, back}`, ovi aukeaa ensimmäisestä myynnistä (`flags.retki`). Ulko käyttää: `spores, vesselInv, found, cells, memories, walked`.
 - Ruutu on `{kind:'vessel', type, strain, growth, moist, ready, waves}` tai `{kind:'device', type, t, busy, done, dish|job}`. `waves` = kypsät satoaallot (≤3), kehikon `job` = syötekanta (`FRAME` data.js:ssä). Mutaatiokannan avain on `kanta~grow` tai `kanta~yield`.
 - Kuivausteline ja `dry:*`-tuotteet poistettiin (TP0): `ensure()` hyvittää ne hopeana (kuivattu 5, teline 40).
 - Tallennus ilman `schema`-kenttää on vanha (V0.2/V0.3): `state.js` `migrate()` muuntaa sen (sato, uute, mk, jalosteet ja tulikääpä → hopeaksi; hylly 3 sarakkeesta 4×4-ruudukkoon).
@@ -73,7 +74,7 @@ Koti on ES-moduuleina (`koti/js/*.js`) ilman bundleria; se vaatii http-palvelime
 
 - Selaintestit Playwrightilla (headless Chrome). WebGL: `--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader`.
 - URL-parametrit: koti `?reset` (uusi peli); ulko `?sim` (ei GPS:ää), `?demo` (demokaupunki ilman OSM:ää); iso `?demo`.
-- Debug-koukut: koti `window.__S()` (tila), `__sim(s)` (pelisekunteja eteenpäin), `__G` (pelilogiikka), `__R` (rihmaretki), `__U` (käyttöliittymä); ulko `window.DBG` (P, finds, S, collect), iso `window.DBG`.
+- Debug-koukut: koti `window.__S()` (tila), `__sim(s)` (pelisekunteja eteenpäin), `__G` (pelilogiikka), `__R` (rihmaretki), `__RV` (paljastus: openMalja, openRetki, queueOnOpen, state), `__U` (käyttöliittymä); ulko `window.DBG` (P, finds, S, collect), iso `window.DBG`.
 - Katso aina kuvakaappaus ennen kuin sanot jonkin visuaalisen asian olevan valmis.
 - Puhelinversio: `node tests/pwa.js` (oma palvelin). Service worker hakee verkosta ensin, joten uusi versio näkyy seuraavalla käynnistyksellä; tiedostolistaa ei tarvitse päivittää. Tallennuksen tuonti kulkee sessionStoragen (`solmu_tuonti`) kautta, ettei pelin oma save() ylikirjoita sitä.
 - Julkaisu: GitHub Pages. Käyttäjä ohittaa välimuistin lisäämällä `?v=N`; näytä versionumero käyttöliittymässä (`VERSION`).

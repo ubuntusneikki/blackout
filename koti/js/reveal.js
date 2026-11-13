@@ -181,7 +181,7 @@ function drawWait(c, t){
 }
 // rihmakimppu: symbiontin rihmat palaavat ovesta kerältä
 function bundle(cx, cy, t, glow){
-  halo(cx, cy, 90, 70, SYM, glow, 0.4);
+  halo(cx, cy, 90, 70, SYM, glow*0.6, 0);
   const r = rng(5);
   for (let n = 0; n < 40; n++){ let ang = r()*6.283, x = cx + Math.cos(ang)*6, y = cy + Math.sin(ang)*4; const len = 30 + r()*40;
     for (let i = 0; i < len; i++){ ang += (r() - 0.5)*0.5 + Math.sin(t*1.5 + n)*0.02; x += Math.cos(ang)*0.9; y += Math.sin(ang)*0.6;
@@ -196,6 +196,8 @@ function drawDish(c, a, t){
   const fail = res.kind === 'fail', villi = res.kind === 'villi';
   const RES = fail ? 3.2 : 3.4;                       // tuloksen hetki
   dim(1);
+  // tuloksen hohde kannan takana (piirretään ensin, ettei se peitä sientä)
+  if (T && a >= RES){ const pulse = 0.5 + 0.5*Math.sin(a*3); halo(CX, CY - 40, 130, 100, mut ? GOLD[2] : T.col[2], 0.35 + 0.3*pulse, 0); }
   text(A.short + ' × ' + B.short, 8, 8, P.uiD);
   const lid = clamp((a - 0.9)/0.7, 0, 1);
   const glowA = a < 0.9 ? 0.4 + 0.6*Math.abs(Math.sin(a*5)) : clamp(1.6 - a, 0, 1);
@@ -217,8 +219,7 @@ function drawDish(c, a, t){
   if (!c.said){ c.said = true; emit('paljastus-tulos', {lahde:c.lahde, tulos:res}); }
   const b = a - RES, rt = resultTitle(res);
   if (mut) goldBurst(CX, CY - 40, b);
-  if (T){ const pulse = 0.5 + 0.5*Math.sin(a*3); halo(CX, CY - 40, 120, 90, mut ? GOLD[2] : T.col[2], 0.5 + 0.5*pulse, 0.55); }
-  textC(rt.s, CX, 60, rt.col, 3);
+  textC(rt.s, CX, 60, rt.col, 2);
   let y = 370;
   if (T){
     const nm = (mut && c.nameDone && S.names[res.key]) ? S.names[res.key] : T.name;
@@ -226,7 +227,7 @@ function drawDish(c, a, t){
     if (mut){ textC(T.orig, CX, y, GOLD[1]); y += LH + 2; }
     textC('+' + res.n + ' ITIÖPUSSIA', CX, y + 2, P.ui3); y += LH + 8;
     if (res.first){ textC('UUSI KANTA KANTAKIRJAAN', CX, y, AMB[2]); bookFlash(W - 40, 54, b); y += LH + 4; }
-    if (res.hint && !mut) wrap(res.hint, 24, y + 4, W - 48, SYM);
+    if (res.hint && !mut && !res.first) wrap(res.hint, 24, y + 4, W - 48, SYM);
   } else if (fail){
     wrap('RIHMASTOT HYLKIVÄT TOISIAAN. ' + A.short + ' JA ' + B.short + ' EIVÄT SOVI YHTEEN. PARI MERKITTIIN HAUTOMOON YLIVIIVATTUNA.', 24, y, W - 48, P.ui3);
   } else {
@@ -249,7 +250,7 @@ function drawRetki(c, a, t){
   text(res.tyyppi === 'syva' ? 'SYVÄ RETKI' : 'LYHYT RETKI', 8, 8, P.uiD);
   bundle(CX, by, t, a < 0.9 ? 0.4 + 0.6*Math.abs(Math.sin(a*5)) : 0.5);
   const step = 0.9, RES = 1.0 + loot.length*step;
-  textC('SYMBIONTTI PALASI', CX, 60, SYM, 3);
+  textC('SYMBIONTTI PALASI', CX, 60, SYM, 2);
   loot.forEach((o, k) => {
     const s = clamp((a - 1.0 - k*step)/0.7, 0, 1); if (s <= 0) return;
     const n = loot.length, tx = CX + (k - (n - 1)/2)*120, ty = 220, x = CX + (tx - CX)*ease(s), y = by + (ty - by)*ease(s);
@@ -271,10 +272,10 @@ function drawRetki(c, a, t){
 function lootCol(o){ if (o.kind === 'spore'){ const T = strain(o.key); return T.mutant ? GOLD[2] : T.col[2]; }
   if (o.kind === 'item') return o.id === 'villi' ? WILD[2] : AGAR[2]; return P.gl3; }
 function lootIcon(o, x, y, s, a){
-  if (o.kind === 'spore'){ const T = strain(o.key); halo(x | 0, y | 0, 34, 30, T.mutant ? GOLD[2] : T.col[2], 0.6*s, 0.3);
+  if (o.kind === 'spore'){ const T = strain(o.key); halo(x | 0, y | 0, 34, 30, T.mutant ? GOLD[2] : T.col[2], 0.45*s, 0);
     drawFill(o.key, x, y + 24, s >= 1 ? clamp((a - 1)/0.6, 0.15, 1) : 0, 1, T.mutant); return; }
   const pal = o.kind === 'item' ? (o.id === 'villi' ? WILD : AGAR) : [P.gl1, P.gl2, P.gl3];
-  halo(x | 0, y | 0, 30, 26, pal[2], 0.5*s, 0.3);
+  halo(x | 0, y | 0, 30, 26, pal[2], 0.4*s, 0);
   if (o.kind === 'vessel'){ rect(x - 12, y - 16, 24, 32, pal[1]); rect(x - 10, y - 14, 20, 28, pal[0]); rect(x - 12, y - 16, 24, 2, pal[2]); }
   else { rect(x - 10, y - 6, 20, 12, pal[1]); rect(x - 8, y - 4, 16, 8, pal[2]); }
 }
@@ -283,7 +284,7 @@ function lootIcon(o, x, y, s, a){
 function drawDone(c, a, t){
   dim(1);
   for (let k = 0; k < 120; k++){ const ang = k*0.7 + a*0.3, rr = (a*80 + k*7) % 280; px(CX + Math.cos(ang)*rr, CY + Math.sin(ang)*rr*0.8, k % 3 ? SYM : AMB[2]); }
-  if (a > 0.8) textC('V1 LÄPÄISTY', CX, CY - 20, AMB[2], 3);
+  if (a > 0.8) textC('V1 LÄPÄISTY', CX, CY - 20, AMB[2], 2);
   if (a > 1.6) wrap('TORIN VÄKI SAI SUODATTIMENSA. +' + ORDER.reward + ' ' + CUR + '.', 40, CY + 30, W - 80, P.ui3);
   if (!c.said && a > 0.8){ c.said = true; emit('paljastus-tulos', {lahde:'tilaus', tulos:c.res}); }
   if (a > 2.2) button(CX - 70, 600, 140, 30, 'JATKA', () => finish(), 'a');
