@@ -2,7 +2,7 @@
 // Näkymä U.view==='book', alinäkymä U.book = {tab:'lista'|'puu', page:avain|null, p:sivunumero}.
 // Hehku = pelattavaa: KANNAT-nappi hehkuu vain, kun kirjassa on uutta (newCount() > 0).
 import {P, AMB, STRAINS, STRAIN_ORDER, ORIGIN_TXT, RECIPES, VESSELS, FRAME, PRODUCTS, SELL_BASE, CUR, MATCH_MULT} from './data.js';
-import {W, H, g, px, rect, text, textC, tw, wrap, wrapLines, button, hit, fmt, LH} from './gfx.js';
+import {W, H, g, px, rect, text, textC, tw, wrap, wrapLines, button, hit, fmt, LH, img} from './nat.js';
 import {S, save, strain} from './state.js';
 import {sprite} from './iso.js';
 import {U} from './ui.js';
@@ -43,10 +43,9 @@ const colOf = k => { const T = strain(k); return T.mutant ? GOLD[2] : T.col[2]; 
 // ---------- sienen kuva ----------
 function shroom(k, cx, by, sc, known){
   const s = sprite('sieni_' + k.split('~')[0] + '_kypsa'); if (!s) return;
-  g.imageSmoothingEnabled = false;
-  const w = s.w*sc, h = s.h*sc, x = Math.round(cx - w/2), y = Math.round(by - h);
-  if (!known){ g.globalAlpha = 1; g.drawImage(sil(s), x, y, w, h); return; }
-  g.drawImage(s.c, x, y, w, h);
+    const w = s.w*sc, h = s.h*sc, x = Math.round(cx - w/2), y = Math.round(by - h);
+  if (!known){ g.globalAlpha = 1; img(sil(s), x, y, w, h); return; }
+  img(s.c, x, y, w, h);
   if (k.includes('~')){ rect(x + w - 2, y, 4, 4, GOLD[2]); rect(x + w - 1, y + 1, 2, 2, GOLD[1]); }
 }
 function sil(s){ if (s.silBook) return s.silBook; const c = document.createElement('canvas'); c.width = s.w; c.height = s.h; const q = c.getContext('2d');

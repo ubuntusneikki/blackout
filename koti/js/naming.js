@@ -2,7 +2,7 @@
 // (puhelimella tavallinen näppäimistö), ja nimi piirretään pikselifontilla kankaalle.
 // Käyttävät paljastus (mutaation jälkeen) ja kantakirja (NIMEÄ UUDELLEEN).
 import {P, AMB} from './data.js';
-import {W, H, rect, text, textC, tw, button, hit, screen, LH} from './gfx.js';
+import {W, H, rect, text, textC, tw, button, hit, screen, LH, img} from './nat.js';
 import {S, strain} from './state.js';
 import * as sim from './sim.js';
 

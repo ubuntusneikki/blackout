@@ -12,7 +12,7 @@
 // Näytöksen vaiheet: himmennys → malja/rihmakimppu sykkii → kansi aukeaa ja itiöt pyörteilevät →
 // kannan siluetti täyttyy väreillä alhaalta ylös → nimi ja tulos (sointu). Napautus hyppää tulokseen.
 import {P, AMB, WILD, SYM, STRAINS, ORDER, CUR} from './data.js';
-import {W, H, g, px, rect, rng, BAYER, clamp, ease, text, textC, tw, wrap, wrapLines, button, hit, LH} from './gfx.js';
+import {W, H, g, px, rect, rng, BAYER, clamp, ease, text, textC, tw, wrap, wrapLines, button, hit, LH, img} from './nat.js';
 import {S, strain} from './state.js';
 import * as sim from './sim.js';
 import * as retki from './retki.js';
@@ -97,12 +97,11 @@ function shroomSprite(key){ const b = strain(key).base; return sprite('sieni_' +
 function drawFill(key, cx, by, f, k, gold){
   const s = shroomSprite(key); if (!s) return;
   const w = s.w*k, h = s.h*k, x = Math.round(cx - w/2), y = Math.round(by - h);
-  g.imageSmoothingEnabled = false;
-  if (gold) g.drawImage(silhouette(s, GOLD[2]), x - k, y, w, h), g.drawImage(silhouette(s, GOLD[2]), x + k, y, w, h),
-            g.drawImage(silhouette(s, GOLD[2]), x, y - k, w, h), g.drawImage(silhouette(s, GOLD[2]), x, y + k, w, h);
-  g.drawImage(silhouette(s, '#120d18'), x, y, w, h);
+    if (gold) img(silhouette(s, GOLD[2]), x - k, y, w, h), img(silhouette(s, GOLD[2]), x + k, y, w, h),
+            img(silhouette(s, GOLD[2]), x, y - k, w, h), img(silhouette(s, GOLD[2]), x, y + k, w, h);
+  img(silhouette(s, '#120d18'), x, y, w, h);
   const rows = Math.round(s.h*clamp(f, 0, 1));
-  if (rows > 0) g.drawImage(s.c, 0, s.h - rows, s.w, rows, x, y + h - rows*k, w, rows*k);
+  if (rows > 0) img(s.c, 0, s.h - rows, s.w, rows, x, y + h - rows*k, w, rows*k);
   // täyttymisen reuna hohtaa
   if (f > 0 && f < 1){ const ey = y + h - rows*k; rect(x, ey, w, 1, strain(key).col[2]); }
 }
