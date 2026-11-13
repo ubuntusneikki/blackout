@@ -22,7 +22,7 @@ for n, s in meta['sprites'].items():
     ax, ay = (s['ax'], s['ay']) if s['ax'] is not None else (s['w'] // 2, s['h'] // 2)
     if n.startswith('tila_') or n.startswith('ikoni_'): bb = (0, 0, im.width, im.height)   # tilat ja kuvakkeet täysikokoisina
     spr[n] = {'im': im.crop(bb), 'ax': ax - bb[0], 'ay': ay - bb[1]}
-    if n in ('astia_terraario', 'astia_lasipurkki'):
+    if n.startswith('astia_') and not n.endswith('_etu') and n in meta['plant_dy']:
         spr[n]['plant'] = {'x': spr[n]['ax'], 'y': spr[n]['ay'] - meta['plant_dy'][n]}
 
 # --- hyllypakkaus: korkeimmat ensin, leveys 1024
@@ -63,7 +63,8 @@ huone = room('tila_huone', [(3, 0, 'astia_terraario', 'sieni_heltta_kypsa'), (2,
                             (1, 1, 'astia_lasipurkki', 'sieni_hoitaja_kypsa'), (3, 2, 'astia_terraario', 'sieni_hamara_nuori')])
 kellari = room('tila_kellari', [(1, 0, 'astia_lasipurkki', 'sieni_kalvo_kypsa'), (2, 0, 'astia_terraario', 'sieni_hoitaja_kypsa'),
                                 (3, 0, 'astia_lasipurkki', 'sieni_kalvo_nuori'), (2, 1, 'laite_kehikko_suodatin_kasvaa_2', None),
-                                (1, 2, 'laite_kehikko_lamporihma_valmis', None)])
+                                (1, 2, 'laite_kehikko_lamporihma_valmis', None), (0, 0, 'astia_palvelin', 'sieni_verkko_kypsa'),
+                                (3, 2, 'astia_akvaario', 'sieni_yoruusu_kypsa')])
 try: font = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf', 15)
 except Exception: font = ImageFont.load_default()
 S = 2; bg = (11, 16, 24)

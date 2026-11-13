@@ -408,7 +408,86 @@ def astia_lasipurkki(part='taka'):
         rod((math.cos(a) * J_R, math.sin(a) * J_R, z0 + 0.15), (math.cos(a) * J_R, math.sin(a) * J_R, z0 + J_H - 0.1), 0.008,
             mat('heijastus', '#9fd3d6', 0.3, emit='#9fd3d6', estr=0.6), 4)
 
-PLANT = {'astia_terraario': SOIL_TOP + 0.01, 'astia_lasipurkki': J_BASE + 0.13}
+A_W, A_D, A_H, A_WATER = 0.86, 0.62, 0.5, 0.34
+def astia_akvaario(part='taka'):
+    """Akvaario (harvinainen löytö): matala, leveä lasiallas teräsjalustalla, hillitty teal-vesi ja kivet.
+    Sieni kasvaa sammaloituneella kivisaarekkeella veden pinnan yläpuolella."""
+    m = M(); w, d, h = A_W, A_D, A_H; z0 = BASE_H; t = 0.035
+    water = mat('akvaariovesi', '#103540', 0.1, emit='#1d6a78', estr=0.5)
+    surf = mat('vedenpinta', '#5fc7d0', 0.1, emit='#1d6a78', estr=0.8)
+    if part == 'taka':
+        box((0, 0, z0 / 2 + 0.03), (w + 0.04, d + 0.04, z0 - 0.06), m['steelD'])
+        box((0, 0, z0 - 0.02), (w + 0.08, d + 0.08, 0.04), m['steel'])
+        box((0, 0, 0.02), (w - 0.06, d - 0.06, 0.04), m['rubber'])
+        box((0, 0, z0 + 0.03), (w, d, 0.06), mat('hiekka', '#8a7d68', 0.9))
+        box((0, 0, z0 + 0.06 + (A_WATER - 0.06) / 2), (w - 0.01, d - 0.01, A_WATER - 0.06), water)
+        box((0, 0, z0 + A_WATER), (w - 0.01, d - 0.01, 0.006), surf)
+        # kivisaareke keskellä ja pienet kivet
+        sphere((0.02, 0.04, z0 + 0.2), 0.2, m['steelD'], (1.2, 1, 0.75), 10)
+        sphere((0.02, 0.04, z0 + A_WATER - 0.0), 0.17, m['moss'], (1.15, 1, 0.3), 10)
+        rnd = random.Random(61)
+        for i in range(5):
+            sphere((rnd.uniform(-0.35, 0.35), rnd.uniform(-0.22, 0.22), z0 + 0.08), rnd.uniform(0.03, 0.06), m['steelD'], (1, 1, 0.7), 6)
+        for i in range(6):                                                        # vesikasvit
+            x = rnd.uniform(-0.38, 0.38); y = rnd.uniform(0.0, 0.25)
+            rod((x, y, z0 + 0.06), (x + rnd.uniform(-0.04, 0.04), y, z0 + rnd.uniform(0.2, 0.32)), 0.012, m['leafD'], 4)
+        box((-w / 2, 0, z0 + h / 2), (0.01, d, h), m['glassB'])
+        box((0, d / 2, z0 + h / 2), (w, 0.01, h), m['glassB'])
+        for (sx, sy) in ((-1, -1), (-1, 1), (1, 1)):
+            box((sx * w / 2, sy * d / 2, z0 + h / 2), (t, t, h), m['steel'])
+        for z in (z0, z0 + h):
+            box((-w / 2, 0, z), (t, d + t, t), m['steel']); box((0, d / 2, z), (w + t, t, t), m['steel'])
+        rod((0.25, d / 2 - 0.04, z0 + h + 0.02), (0.25, d / 2 + 0.12, z0 + h + 0.02), 0.018, m['tube'], 8)
+        rod((0.25, d / 2 - 0.04, z0 + h + 0.02), (0.25, d / 2 - 0.04, z0 + 0.15), 0.012, m['tube'], 6)
+    else:
+        box((w / 2, -d / 2, z0 + h / 2), (t, t, h), m['steel'])
+        for z in (z0, z0 + h):
+            box((w / 2, 0, z), (t, d + t, t), m['steel']); box((0, -d / 2, z), (w + t, t, t), m['steel'])
+        # vedenpinnan viiva etulaseissa ja heijastus
+        box((0, -d / 2 - 0.004, z0 + A_WATER), (w, 0.006, 0.012), surf)
+        box((w / 2 + 0.004, 0, z0 + A_WATER), (0.006, d, 0.012), surf)
+        hl = mat('heijastus', '#9fd3d6', 0.3, emit='#9fd3d6', estr=0.6)
+        rod((w / 2 - 0.07, -d / 2 - 0.006, z0 + 0.1), (w / 2 - 0.07, -d / 2 - 0.006, z0 + h - 0.06), 0.006, hl, 4)
+
+P_W, P_D, P_H, P_SHELF = 0.62, 0.62, 1.45, 0.62
+def astia_palvelin(part='taka'):
+    """Palvelinkaappi (harvinainen löytö): vanha, ruostunut räkkikaappi ilman ovea ja kylkeä. Johdot roikkuvat,
+    keskimmäiselle hyllylle on kerätty multaa ja sammalta, ja sieni kasvaa siinä. Ei näyttöjä eikä valoja."""
+    m = M(); w, d, h = P_W, P_D, P_H; t = 0.045
+    rust = wmat('ruoste', '#5e321e', '#3c4239', 4.0, 0.9, 0.3, cut=0.55)
+    if part == 'taka':
+        box((0, d / 2 - 0.02, h / 2), (w, 0.04, h), rust)                                     # takaseinä
+        box((-w / 2 + 0.02, 0, h / 2), (0.04, d, h), rust)                                    # vasen kylki
+        box((0, 0, h - 0.03), (w, d, 0.06), m['steelD']); box((0, 0, 0.04), (w, d, 0.08), m['steelD'])
+        for z in (0.32, P_SHELF, 1.0):                                                        # hyllyt
+            box((0, 0, z), (w - 0.06, d - 0.06, 0.03), m['steelD'])
+        for y in (-d / 2 + 0.06, d / 2 - 0.08):                                               # räkkikiskot
+            for x in (-w / 2 + 0.06, w / 2 - 0.06):
+                box((x, y, h / 2), (0.03, 0.02, h - 0.1), m['steel'])
+        for z in (0.12, 0.2, 0.36, 1.04, 1.1, 1.16):                                          # vanhat laitelevyt
+            box((0, 0.04, z + 0.02), (w - 0.14, d - 0.2, 0.05), rust)
+        # multa ja sammal keskihyllyllä
+        box((0, 0, P_SHELF + 0.05), (w - 0.1, d - 0.1, 0.07), m['soil'])
+        box((0, 0, P_SHELF + 0.09), (w - 0.12, d - 0.12, 0.012), m['moss'])
+        rnd = random.Random(71)
+        for i in range(8):
+            box((rnd.uniform(-0.22, 0.22), rnd.uniform(-0.22, 0.22), P_SHELF + 0.1), (0.05, 0.05, 0.015 + rnd.random() * 0.02), m['moss'])
+        # roikkuvat johdot ja sammal hyllyjen reunoilta
+        for i in range(5):
+            x = rnd.uniform(-0.25, 0.2); y = rnd.uniform(-0.1, 0.2); zt = h - 0.06
+            rod((x, y, zt), (x + rnd.uniform(-0.05, 0.05), y, zt - rnd.uniform(0.15, 0.3)), 0.01, m['rubber'] if i % 2 else m['copper'], 4)
+        for i in range(6):
+            box((rnd.uniform(-0.25, 0.25), -d / 2 + 0.05, P_SHELF - 0.03 - rnd.random() * 0.06), (0.06, 0.02, 0.06), m['moss'])
+        vine(-w / 2 + 0.03, 0.1, h - 0.05, 0.5, (1, 0), 72, m)
+        rod((0.12, d / 2 - 0.06, h), (0.12, d / 2 + 0.12, h + 0.02), 0.018, m['tube'], 8)       # kostutusletku
+    else:
+        for (sx, sy) in ((1, -1), (-1, -1), (1, 1)):
+            box((sx * w / 2, sy * d / 2, h / 2), (t, t, h), m['steelD'])
+        for z in (0.06, h - 0.03):
+            box((0, -d / 2, z), (w + t, t, t), m['steelD']); box((w / 2, 0, z), (t, d + t, t), m['steelD'])
+
+PLANT = {'astia_terraario': SOIL_TOP + 0.01, 'astia_lasipurkki': J_BASE + 0.13,
+         'astia_akvaario': BASE_H + A_WATER + 0.04, 'astia_palvelin': P_SHELF + 0.1}
 
 # =================== LAITTEET ===================
 def laite_hautomo(state='kaynnissa'):
@@ -852,6 +931,10 @@ SPRITES = {
     'astia_terraario_etu': (lambda: astia_terraario('etu'), 96, 160, 48, 136),
     'astia_lasipurkki':    (lambda: astia_lasipurkki('taka'), 96, 160, 48, 136),
     'astia_lasipurkki_etu':(lambda: astia_lasipurkki('etu'), 96, 160, 48, 136),
+    'astia_akvaario':      (lambda: astia_akvaario('taka'), 112, 160, 56, 136),
+    'astia_akvaario_etu':  (lambda: astia_akvaario('etu'), 112, 160, 56, 136),
+    'astia_palvelin':      (lambda: astia_palvelin('taka'), 96, 176, 48, 152),
+    'astia_palvelin_etu':  (lambda: astia_palvelin('etu'), 96, 176, 48, 152),
 }
 for k, (nimi, fn) in KANNAT.items():
     for st in STAGES:
