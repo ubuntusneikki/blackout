@@ -101,7 +101,7 @@ function tapSpot(id){
   else if (id==='ovi') emit('ovi',{});
 }
 // ovi avaa rihmaretken (TP5), kun ensimmäinen myynti on tehty
-on('ovi',()=>{ if (retki.retkiOpen()) U.modal={type:'retki'}; else toast('OVI JOHTAA ULOS RIHMASTOON. RETKI AVAUTUU ENSIMMÄISEN MYYNNIN JÄLKEEN.'); });
+on('ovi',()=>{ if (retki.retkiOpen() || retki.status()) U.modal={type:'retki'}; else toast('OVI JOHTAA ULOS RIHMASTOON. RETKI AVAUTUU ENSIMMÄISEN MYYNNIN JÄLKEEN.'); });
 // oven hehku: 'amb' = symbiontti palasi (tee tämä nyt), true = ovi auki ja vapaa
 function doorGlow(){ const rs=retki.status(); return rs&&rs.back ? 'amb' : (!rs && retki.retkiOpen() ? true : false); }
 function tapCell(r,i){
