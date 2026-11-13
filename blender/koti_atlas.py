@@ -12,6 +12,12 @@ from pix import process
 
 D = sys.argv[1].rstrip('/') + '/'; OUT = sys.argv[2]; PREV = sys.argv[3] if len(sys.argv) > 3 else None
 meta = json.load(open(D + 'koti.json'))
+# lähikuvan spritet (lk_*) omaan atlakseen lahikuva.png/json: python3 koti_atlas.py <render> <atlas-kansio> --lk
+LKMODE = PREV == '--lk'
+if LKMODE: PREV = None
+NAME = 'lahikuva' if LKMODE else 'atlas'
+meta['sprites'] = {n: s for n, s in meta['sprites'].items() if n.startswith('lk_') == LKMODE}
+if LKMODE: meta['plant_dy'] = meta.get('plant_dy_lk', {})
 os.makedirs(OUT, exist_ok=True)
 
 # --- käsittele ja rajaa
@@ -22,7 +28,7 @@ for n, s in meta['sprites'].items():
     ax, ay = (s['ax'], s['ay']) if s['ax'] is not None else (s['w'] // 2, s['h'] // 2)
     if n.startswith('tila_') or n.startswith('ikoni_'): bb = (0, 0, im.width, im.height)   # tilat ja kuvakkeet täysikokoisina
     spr[n] = {'im': im.crop(bb), 'ax': ax - bb[0], 'ay': ay - bb[1]}
-    if n.startswith('astia_') and not n.endswith('_etu') and n in meta['plant_dy']:
+    if (n.startswith('astia_') or n.startswith('lk_astia_')) and not n.endswith('_etu') and n in meta['plant_dy']:
         spr[n]['plant'] = {'x': spr[n]['ax'], 'y': spr[n]['ay'] - meta['plant_dy'][n]}
 
 # --- hyllypakkaus: korkeimmat ensin, leveys 1024
@@ -34,12 +40,12 @@ for n in order:
 H = y + rowh
 atlas = Image.new('RGBA', (W, H), (0, 0, 0, 0))
 for n in order: atlas.paste(spr[n]['im'], (spr[n]['x'], spr[n]['y']))
-atlas.save(os.path.join(OUT, 'atlas.png'), optimize=True)
+atlas.save(os.path.join(OUT, NAME + '.png'), optimize=True)
 out = {'meta': {k: meta[k] for k in ('tile', 'rooms', 'kannat', 'tuotteet')},
        'sprites': {n: {k: v for k, v in spr[n].items() if k != 'im'} | {'w': spr[n]['im'].width, 'h': spr[n]['im'].height}
                    for n in sorted(spr)}}
-json.dump(out, open(os.path.join(OUT, 'atlas.json'), 'w'), indent=1, ensure_ascii=False)
-print('atlas', W, H, len(spr), 'spriteä')
+json.dump(out, open(os.path.join(OUT, NAME + '.json'), 'w'), indent=1, ensure_ascii=False)
+print(NAME, W, H, len(spr), 'spriteä')
 
 if not PREV: sys.exit()
 # --- esikatselu: kaksi koottua tilaa + kaikki spritet nimettyinä

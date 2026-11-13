@@ -1,0 +1,310 @@
+{
+ "meta": {
+  "tile": [
+   88,
+   44
+  ],
+  "rooms": {
+   "tila_huone": {
+    "n": [
+     4,
+     4
+    ],
+    "tile0": [
+     0,
+     -66
+    ],
+    "dc": [
+     44,
+     22
+    ],
+    "dr": [
+     -44,
+     22
+    ]
+   },
+   "tila_kellari": {
+    "n": [
+     4,
+     3
+    ],
+    "tile0": [
+     -22,
+     -55
+    ],
+    "dc": [
+     44,
+     22
+    ],
+    "dr": [
+     -44,
+     22
+    ]
+   }
+  },
+  "kannat": {
+   "heltta": "SINIHELTTA",
+   "ruusu": "RUUSUSIENI",
+   "hamara": "HÄMÄRÄNUPPI",
+   "kalvo": "KALVOHELTTA",
+   "hoitaja": "HOITAJASIENI",
+   "yoruusu": "YÖRUUSU",
+   "verkko": "VERKKOHELTTA"
+  },
+  "tuotteet": {
+   "valokalvo": "VALOKALVO",
+   "lamporihma": "LÄMPÖRIHMA",
+   "suodatin": "ITIÖSUODATIN"
+  }
+ },
+ "sprites": {
+  "lk_astia_akvaario": {
+   "ax": 161,
+   "ay": 299,
+   "plant": {
+    "x": 161,
+    "y": 88
+   },
+   "x": 267,
+   "y": 517,
+   "w": 322,
+   "h": 323
+  },
+  "lk_astia_akvaario_etu": {
+   "ax": 153,
+   "ay": 284,
+   "x": 0,
+   "y": 859,
+   "w": 306,
+   "h": 232
+  },
+  "lk_astia_lasipurkki": {
+   "ax": 123,
+   "ay": 410,
+   "plant": {
+    "x": 123,
+    "y": 301
+   },
+   "x": 723,
+   "y": 0,
+   "w": 246,
+   "h": 439
+  },
+  "lk_astia_lasipurkki_etu": {
+   "ax": 110,
+   "ay": 337,
+   "x": 590,
+   "y": 517,
+   "w": 220,
+   "h": 303
+  },
+  "lk_astia_palvelin": {
+   "ax": 106,
+   "ay": 496,
+   "plant": {
+    "x": 106,
+    "y": 258
+   },
+   "x": 0,
+   "y": 0,
+   "w": 212,
+   "h": 516
+  },
+  "lk_astia_palvelin_etu": {
+   "ax": 114,
+   "ay": 496,
+   "x": 213,
+   "y": 0,
+   "w": 228,
+   "h": 516
+  },
+  "lk_astia_terraario": {
+   "ax": 140,
+   "ay": 430,
+   "plant": {
+    "x": 140,
+    "y": 301
+   },
+   "x": 442,
+   "y": 0,
+   "w": 280,
+   "h": 459
+  },
+  "lk_astia_terraario_etu": {
+   "ax": 133,
+   "ay": 388,
+   "x": 0,
+   "y": 517,
+   "w": 266,
+   "h": 341
+  },
+  "lk_sieni_hamara_itu": {
+   "ax": 53,
+   "ay": 50,
+   "x": 641,
+   "y": 1254,
+   "w": 104,
+   "h": 64
+  },
+  "lk_sieni_hamara_kypsa": {
+   "ax": 54,
+   "ay": 142,
+   "x": 260,
+   "y": 1092,
+   "w": 115,
+   "h": 156
+  },
+  "lk_sieni_hamara_nuori": {
+   "ax": 53,
+   "ay": 93,
+   "x": 0,
+   "y": 1254,
+   "w": 104,
+   "h": 107
+  },
+  "lk_sieni_heltta_itu": {
+   "ax": 44,
+   "ay": 38,
+   "x": 746,
+   "y": 1254,
+   "w": 84,
+   "h": 46
+  },
+  "lk_sieni_heltta_kypsa": {
+   "ax": 84,
+   "ay": 174,
+   "x": 482,
+   "y": 859,
+   "w": 187,
+   "h": 192
+  },
+  "lk_sieni_heltta_nuori": {
+   "ax": 47,
+   "ay": 97,
+   "x": 105,
+   "y": 1254,
+   "w": 110,
+   "h": 107
+  },
+  "lk_sieni_hoitaja_itu": {
+   "ax": 42,
+   "ay": 67,
+   "x": 216,
+   "y": 1254,
+   "w": 88,
+   "h": 73
+  },
+  "lk_sieni_hoitaja_kypsa": {
+   "ax": 87,
+   "ay": 190,
+   "x": 307,
+   "y": 859,
+   "w": 174,
+   "h": 196
+  },
+  "lk_sieni_hoitaja_nuori": {
+   "ax": 57,
+   "ay": 124,
+   "x": 376,
+   "y": 1092,
+   "w": 114,
+   "h": 130
+  },
+  "lk_sieni_kalvo_itu": {
+   "ax": 52,
+   "ay": 56,
+   "x": 425,
+   "y": 1254,
+   "w": 107,
+   "h": 65
+  },
+  "lk_sieni_kalvo_kypsa": {
+   "ax": 55,
+   "ay": 159,
+   "x": 670,
+   "y": 859,
+   "w": 130,
+   "h": 168
+  },
+  "lk_sieni_kalvo_nuori": {
+   "ax": 52,
+   "ay": 104,
+   "x": 491,
+   "y": 1092,
+   "w": 118,
+   "h": 113
+  },
+  "lk_sieni_ruusu_itu": {
+   "ax": 40,
+   "ay": 52,
+   "x": 305,
+   "y": 1254,
+   "w": 59,
+   "h": 67
+  },
+  "lk_sieni_ruusu_kypsa": {
+   "ax": 69,
+   "ay": 146,
+   "x": 0,
+   "y": 1092,
+   "w": 129,
+   "h": 161
+  },
+  "lk_sieni_ruusu_nuori": {
+   "ax": 59,
+   "ay": 95,
+   "x": 729,
+   "y": 1092,
+   "w": 104,
+   "h": 110
+  },
+  "lk_sieni_verkko_itu": {
+   "ax": 52,
+   "ay": 56,
+   "x": 533,
+   "y": 1254,
+   "w": 107,
+   "h": 65
+  },
+  "lk_sieni_verkko_kypsa": {
+   "ax": 55,
+   "ay": 159,
+   "x": 801,
+   "y": 859,
+   "w": 130,
+   "h": 168
+  },
+  "lk_sieni_verkko_nuori": {
+   "ax": 52,
+   "ay": 104,
+   "x": 610,
+   "y": 1092,
+   "w": 118,
+   "h": 113
+  },
+  "lk_sieni_yoruusu_itu": {
+   "ax": 40,
+   "ay": 52,
+   "x": 365,
+   "y": 1254,
+   "w": 59,
+   "h": 67
+  },
+  "lk_sieni_yoruusu_kypsa": {
+   "ax": 69,
+   "ay": 146,
+   "x": 130,
+   "y": 1092,
+   "w": 129,
+   "h": 161
+  },
+  "lk_sieni_yoruusu_nuori": {
+   "ax": 59,
+   "ay": 95,
+   "x": 834,
+   "y": 1092,
+   "w": 104,
+   "h": 110
+  }
+ }
+}
