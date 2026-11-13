@@ -1,10 +1,9 @@
 // pelilogiikka: kasvu, laitteet, laboratorio, markkina
 import {VESSELS, DEVICES, STRAINS, RECIPES, MATCH_MULT, FIRST_GROW, MUTATION_P, CONTAM_P, CELLAR,
-  SELL_BASE, PRICE_DROP, SAT_HALF, SPIKE_EVERY, SPIKE_LEN, SPIKE_MULT, SHOP, LAB_UNLOCK_SOLD, ORDER, SAY, CUR} from './data.js';
+  SELL_BASE, PRICE_DROP, SAT_HALF, SPIKE_EVERY, SPIKE_LEN, SPIKE_MULT, SHOP, LAB_UNLOCK_SOLD, ORDER, HINT, CUR} from './data.js';
 import {S, save, strain, neighbors, allCells, addInv, addSpore, vessel, device} from './state.js';
 
-// käyttöliittymä kytkee nämä (viesti, symbiontin repliikki, ääni)
-export const fx = {toast(){}, say(){}, sound(){}, reveal(){}};
+import {emit} from './events.js';
 
 export function matchOf(vs, key){ const V=VESSELS[vs.type], T=strain(key); return (V.wet===T.wet?1:0)+(V.warm===T.warm?1:0); }
 function growTime(vs){ const T=strain(vs.strain); return vs.fast ? FIRST_GROW : T.grow; }
@@ -28,7 +27,7 @@ export function tick(dt){
       }
     } else if (c.busy && !c.done){
       c.t += dt/DEVICES[c.type].time;
-      if (c.t>=1){ c.t=1; c.done=true; c.doneAt=Date.now(); }
+      if (c.t>=1){ c.t=1; c.done=true; c.doneAt=Date.now(); emit('laite-valmis',{laite:c}); }
     }
   }
   marketTick(dt);
@@ -38,23 +37,23 @@ export function tick(dt){
 export function plant(vs,key){
   vs.strain=key; vs.growth=0; vs.ready=false; vs.moist=Math.max(vs.moist,0.6);
   vs.fast = !S.flags.firstHarvest && !allCells().some(o=>o.c.fast);
-  addSpore(key,-1); fx.toast(strain(key).name+' ISTUTETTU'); save();
+  addSpore(key,-1); emit('istutus',{astia:vs, kanta:key, viesti:strain(key).name+' ISTUTETTU'}); save();
 }
 function yieldOf(vs){ const T=strain(vs.strain); return Math.max(1, Math.round(T.yield*VESSELS[vs.type].size*MATCH_MULT[matchOf(vs,vs.strain)])); }
 export function harvest(vs){
   const T=strain(vs.strain), n=yieldOf(vs);
   addInv('raw:'+T.base, n); vs.ready=false; vs.growth=0.35; vs.fast=false;
-  fx.toast('+'+n+' × '+STRAINS[T.base].name); fx.sound('harvest');
-  if (!S.flags.firstHarvest){ S.flags.firstHarvest=true; fx.say(SAY.firstHarvest); }
+  const first=!S.flags.firstHarvest; S.flags.firstHarvest=true;
+  emit('korjuu',{astia:vs, kanta:vs.strain, n, viesti:'+'+n+' × '+STRAINS[T.base].name, vihje:first?HINT.firstHarvest:null});
   save();
 }
 export function takeSpores(vs){
   const T=strain(vs.strain); addSpore(vs.strain,1); vs.ready=false; vs.growth=0.35; vs.fast=false;
   if (!S.flags.firstHarvest){ S.flags.firstHarvest=true; }
-  fx.toast('+1 ITIÖPUSSI: '+T.name); fx.sound('harvest'); save();
+  emit('itiot',{astia:vs, kanta:vs.strain, viesti:'+1 ITIÖPUSSI: '+T.name}); save();
 }
-export function mist(vs){ vs.moist=1; fx.toast(vs.strain&&vs.growth<1&&false?'':'SUMUTETTU'); save(); }
-export function clearVessel(vs){ vs.strain=null; vs.growth=0; vs.ready=false; vs.fast=false; save(); }
+export function mist(vs){ vs.moist=1; emit('sumutus',{astia:vs, viesti:'SUMUTETTU'}); save(); }
+export function clearVessel(vs){ vs.strain=null; vs.growth=0; vs.ready=false; vs.fast=false; emit('komposti',{astia:vs, viesti:'ASTIA ON TYHJÄ'}); save(); }
 
 // ---------- laboratorio ----------
 export function recipeFor(a,b){ const A=a.split('~')[0], B=b.split('~')[0];
@@ -71,7 +70,7 @@ export function startDish(dev,a,b){
   else res={kind:'new', key:rec.out, n:2};
   dev.dish={a,b,res}; dev.busy=true; dev.done=false; dev.t=0; dev.seen=false;
   S.tried[[a.split('~')[0],b.split('~')[0]].sort().join('+')]=1;
-  fx.toast('MALJA HAUTOMOSSA. KYPSYY 8 H'); save(); return true;
+  emit('malja-alku',{laite:dev, a, b, viesti:'MALJA HAUTOMOSSA. KYPSYY 8 H'}); save(); return true;
 }
 // maljan avaus: palauttaa tuloksen paljastusta varten
 export function openDish(dev){
@@ -81,31 +80,26 @@ export function openDish(dev){
     res.first=first; }
   if (res.kind==='villi') addInv('villi',1);
   dev.dish=null; dev.busy=false; dev.done=false; dev.t=0;
-  if (res.kind==='new' && !S.flags.firstCross){ S.flags.firstCross=true; res.say=SAY.firstCross; }
-  else if (res.kind==='new' && res.key.includes('~') && !S.flags.mutation){ S.flags.mutation=true; res.say=SAY.mutation; }
-  save(); return {...res, a:d.a, b:d.b};
+  if (res.kind==='new' && !S.flags.firstCross){ S.flags.firstCross=true; res.hint=HINT.firstCross; }
+  else if (res.kind==='new' && res.key.includes('~') && !S.flags.mutation){ S.flags.mutation=true; res.hint=HINT.mutation; }
+  const out={...res, a:d.a, b:d.b}; emit('malja-auki',{laite:dev, tulos:out}); save(); return out;
 }
 
-// ---------- kuivausteline ja kehikko ----------
-export function startDry(dev, base){
-  const have=S.inv['raw:'+base]||0; if (!have) return;
-  const n=Math.min(have, DEVICES.kuivain.batch); addInv('raw:'+base,-n);
-  dev.job=base; dev.n=n; dev.busy=true; dev.done=false; dev.t=0; fx.toast(n+' × '+STRAINS[base].name+' KUIVUMAAN'); save();
-}
+// ---------- kehikko ----------
 export function startFrame(dev){
   if ((S.inv['raw:kalvo']||0)<DEVICES.kehikko.need) return;
-  addInv('raw:kalvo',-DEVICES.kehikko.need); dev.busy=true; dev.done=false; dev.t=0; fx.toast('KALVOHELTTA KASVAA KEHIKKOON'); save();
+  addInv('raw:kalvo',-DEVICES.kehikko.need); dev.busy=true; dev.done=false; dev.t=0; emit('laite-alku',{laite:dev, viesti:'KALVOHELTTA KASVAA KEHIKKOON'}); save();
 }
 export function collectDevice(dev){
   if (!dev.done) return;
-  if (dev.type==='kuivain'){ addInv('dry:'+dev.job, dev.n); fx.toast('+'+dev.n+' × KUIVATTU '+STRAINS[dev.job].name); dev.job=null; dev.n=0; }
-  if (dev.type==='kehikko'){ addInv('suodatin',1); fx.toast('+1 ITIÖSUODATIN. ELÄVÄ HENGITYSKALVO.'); }
-  dev.busy=false; dev.done=false; dev.t=0; fx.sound('harvest'); save();
+  let viesti='';
+  if (dev.type==='kehikko'){ addInv('suodatin',1); viesti='+1 ITIÖSUODATIN. ELÄVÄ HENGITYSKALVO.'; }
+  dev.busy=false; dev.done=false; dev.t=0; emit('laite-keruu',{laite:dev, viesti}); save();
 }
 
 // ---------- markkina ----------
 export function prodName(id){ const [k,s]=id.split(':');
-  if (k==='raw') return STRAINS[s].name; if (k==='dry') return 'KUIVATTU '+STRAINS[s].name;
+  if (k==='raw') return STRAINS[s].name;
   if (k==='itio') return strain(s).short+'-ITIÖ'; if (k==='suodatin') return 'ITIÖSUODATIN'; if (k==='villi') return 'VILLI NÄYTE'; return id; }
 export function basePrice(id){ return SELL_BASE[id.split(':')[0]]; }
 export function unitPrice(id, extra){ const M=S.market, sat=(M.sat[id]||0)+(extra||0);
@@ -122,7 +116,7 @@ export function sell(id,n){
   const got=quote(id,n); const [k,s]=id.split(':');
   if (k==='itio') addSpore(s,-n); else addInv(id,-n);
   S.hopea+=got; S.market.sat[id]=(S.market.sat[id]||0)+n; S.sold+=n;
-  fx.toast('MYIT '+n+' × '+prodName(id)+' +'+Math.round(got*10)/10+' '+CUR); fx.sound('coin');
+  emit('myynti',{tuote:id, n, hopea:got, viesti:'MYIT '+n+' × '+prodName(id)+' +'+Math.round(got*10)/10+' '+CUR});
   checkUnlocks(); save();
 }
 function marketTick(dt){
@@ -132,37 +126,38 @@ function marketTick(dt){
   M.nextSpike-=dt;
   if (M.nextSpike<=0){ M.nextSpike=SPIKE_EVERY;
     const pool=['raw:heltta','raw:ruusu'];
-    for (const k in S.known){ if (k.includes('~')||!STRAINS[k]||STRAINS[k].auto) continue; pool.push('raw:'+k,'dry:'+k); }
+    for (const k in S.known){ if (k.includes('~')||!STRAINS[k]||STRAINS[k].auto) continue; pool.push('raw:'+k); }
     if (S.known.kalvo) pool.push('suodatin');
     M.spike={id:pool[(Math.random()*pool.length)|0], left:SPIKE_LEN};
-    fx.toast('KYSYNTÄPIIKKI: '+prodName(M.spike.id)+' ×2 KOLMEN TUNNIN AJAN');
+    emit('kysyntapiikki',{tuote:M.spike.id, viesti:'KYSYNTÄPIIKKI: '+prodName(M.spike.id)+' ×2 KOLMEN TUNNIN AJAN'});
   }
 }
 export function buy(key){
-  const it=SHOP[key], p=it.price(S); if (S.hopea<p) return;
-  S.hopea-=p;
-  if (it.kind==='vessel'){ S.bought[key]++; S.vesselInv.push(key); fx.toast('OSTIT: '+it.name+'. NAPAUTA VAPAATA RUUTUA'); }
-  else if (it.kind==='device'){ S.deviceInv.push(key); fx.toast('OSTIT: '+it.name+'. NAPAUTA VAPAATA RUUTUA');
-    if (key==='kehikko' && !S.order){ S.order={need:ORDER.need, given:0}; fx.say(SAY.order); } }
-  else if (it.kind==='item'){ addInv(key,1); fx.toast('+1 '+it.name); }
-  else if (it.kind==='room'){ S.rooms[key].owned=true; fx.toast('KELLARI ON NYT KÄYTÖSSÄ. VAIHDA TILAA YLHÄÄLTÄ.'); }
-  fx.sound('coin'); save();
+  const it=SHOP[key]; if (!it || (it.need && !it.need(S))) return; const p=it.price(S); if (S.hopea<p) return;
+  S.hopea-=p; let viesti='';
+  if (it.kind==='vessel'){ S.bought[key]++; S.vesselInv.push(key); viesti='OSTIT: '+it.name+'. NAPAUTA VAPAATA RUUTUA'; }
+  else if (it.kind==='device'){ S.deviceInv.push(key); viesti='OSTIT: '+it.name+'. NAPAUTA VAPAATA RUUTUA'; }
+  else if (it.kind==='item'){ addInv(key,1); viesti='+1 '+it.name; }
+  else if (it.kind==='room'){ S.rooms[key].owned=true; viesti='KELLARI ON NYT KÄYTÖSSÄ. VAIHDA TILAA ALHAALTA.'; }
+  emit('osto',{tuote:key, hinta:p, viesti});
+  if (key==='kehikko' && !S.order){ S.order={need:ORDER.need, given:0}; emit('tilaus-uusi',{tilaus:S.order, vihje:HINT.order}); }
+  save();
 }
 export function checkUnlocks(){
-  if (!S.flags.lab && S.sold>=LAB_UNLOCK_SOLD){ S.flags.lab=true; fx.say(SAY.lab); }
+  if (!S.flags.lab && S.sold>=LAB_UNLOCK_SOLD){ S.flags.lab=true; emit('avaus',{mita:'laboratorio', vihje:HINT.lab}); }
 }
 export function deliver(){
   const o=S.order; if (!o||o.given>=o.need||!(S.inv.suodatin>0)) return;
   const n=Math.min(S.inv.suodatin, o.need-o.given); addInv('suodatin',-n); o.given+=n;
-  if (o.given>=o.need && !S.flags.done){ S.flags.done=true; S.hopea+=ORDER.reward; if(!S.memories.includes(10)) S.memories.push(10); fx.reveal({kind:'done'}); }
-  else fx.toast('TILAUS: '+o.given+' / '+o.need+' SUODATINTA');
-  fx.sound('coin'); save();
+  if (o.given>=o.need && !S.flags.done){ S.flags.done=true; S.hopea+=ORDER.reward; emit('tilaus-valmis',{tilaus:o, palkkio:ORDER.reward}); }
+  else emit('toimitus',{tilaus:o, n, viesti:'TILAUS: '+o.given+' / '+o.need+' SUODATINTA'});
+  save();
 }
 // pelastusrengas: ei umpikujia, jos itiöt ja kasvustot loppuvat kokonaan
 export function rescue(){
   const growing=allCells().some(o=>o.c.kind==='vessel'&&o.c.strain);
   const anyHeltta=(S.spores.heltta||0)>0;
-  if (!growing && !Object.keys(S.spores).length && !anyHeltta){ addSpore('heltta',1); fx.say(SAY.pocket); save(); }
+  if (!growing && !Object.keys(S.spores).length && !anyHeltta){ addSpore('heltta',1); emit('pelastus',{vihje:HINT.pocket}); save(); }
 }
 // testilöytö (simuloi ulkopeliä)
 export function retki(){
@@ -174,13 +169,15 @@ export function retki(){
   else { const pool=[{kind:'strain',key:'hamara',n:1},{kind:'strain',key:'heltta',n:2},{kind:'strain',key:'ruusu',n:1},{kind:'vessel',key:'akvaario'},{kind:'vessel',key:'palvelin'}];
     r=pool[(Math.random()*pool.length)|0]; }
   if (r.kind==='strain'){ addSpore(r.key,r.n); S.known[r.key]=1; } else S.vesselInv.push(r.key);
-  fx.toast('TESTILÖYTÖ: '+(r.kind==='strain'?r.n+' × '+STRAINS[r.key].name+'-ITIÖ':VESSELS[r.key].name)); save();
+  emit('testiloyto',{loyto:r, viesti:'TESTILÖYTÖ: '+(r.kind==='strain'?r.n+' × '+STRAINS[r.key].name+'-ITIÖ':VESSELS[r.key].name)}); save();
 }
 export function place(roomKey, i, kind, type){
   const cells=S.rooms[roomKey].cells; if (cells[i]) return;
   const list = kind==='vessel'?S.vesselInv:S.deviceInv; const k=list.indexOf(type); if (k<0) return;
-  list.splice(k,1); cells[i] = kind==='vessel'?vessel(type):device(type); save(); return cells[i];
+  list.splice(k,1); cells[i] = kind==='vessel'?vessel(type):device(type);
+  emit('sijoitus',{huone:roomKey, ruutu:i, esine:cells[i], viesti:(kind==='vessel'?VESSELS[type].name:DEVICES[type].name)+' ASETETTU'}); save(); return cells[i];
 }
 export function move(fromR, fi, toR, ti){
-  const a=S.rooms[fromR].cells, b=S.rooms[toR].cells; if (b[ti]) { const t=b[ti]; b[ti]=a[fi]; a[fi]=t; } else { b[ti]=a[fi]; a[fi]=null; } save();
+  const a=S.rooms[fromR].cells, b=S.rooms[toR].cells; if (b[ti]) { const t=b[ti]; b[ti]=a[fi]; a[fi]=t; } else { b[ti]=a[fi]; a[fi]=null; }
+  emit('siirto',{mista:[fromR,fi], minne:[toR,ti], viesti:'SIIRRETTY'}); save();
 }

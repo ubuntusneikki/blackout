@@ -1,12 +1,12 @@
 // tallennus ja tila. Avain on yhteinen ulkosivun kanssa (CLAUDE.md: Yhteinen tallennus).
-import {STRAINS, ROOMS, SELL_BASE, SPIKE_FIRST} from './data.js';
+import {STRAINS, ROOMS, SELL_BASE, SPIKE_FIRST, LEGACY} from './data.js';
 export const SAVE_KEY = 'solmu_yhteinen_v1';
 
 let uid = 1;
 export function newId(){ return uid++; }
 export function vessel(type){ return {id:newId(), kind:'vessel', type, strain:null, growth:0, moist:1, ready:false}; }
 export function device(type){ const d={id:newId(), kind:'device', type, t:0, busy:false, done:false};
-  if (type==='hautomo'){ d.dish=null; } if (type==='kuivain'){ d.job=null; d.n=0; } return d; }
+  if (type==='hautomo'){ d.dish=null; } return d; }
 function emptyRoom(r){ return {owned:r==='huone', cells:new Array(ROOMS[r].w*ROOMS[r].h).fill(null)}; }
 
 export function newGame(){
@@ -20,8 +20,7 @@ export function newGame(){
     known:{heltta:1, ruusu:1}, tried:{},
     market:{sat:{}, spike:null, nextSpike:SPIKE_FIRST},
     flags:{firstHarvest:false, lab:false, firstCross:false, mutation:false, done:false},
-    order:null, trips:0, retkiReady:0, kotiLast:Date.now(),
-    found:{}, cells:{}, memories:[], walked:0
+    order:null, trips:0, retkiReady:0, kotiLast:Date.now()
   };
 }
 
@@ -42,8 +41,7 @@ function migrate(s){
   huone.cells.forEach(c=>{ if(c&&c.strain) known[c.strain]=1; });
   const out={...d, speed:s.speed||60, hopea:Math.max(hopea,d.hopea), rooms:{huone, kellari:d.rooms.kellari}, inv, spores, known,
     vesselInv:(s.vesselInv||[]).slice(), bought:{purkki:(s.bought||{}).purkki||0, terraario:(s.bought||{}).terraario||0},
-    kotiLast:s.kotiLast||Date.now(), found:s.found||{}, cells:s.cells||{}, memories:s.memories||[], walked:s.walked||0,
-    trips:s.trips||0, retkiReady:0};
+    kotiLast:s.kotiLast||Date.now(), trips:s.trips||0, retkiReady:0};
   out.flags.firstHarvest=!!s.firstHarvest;
   return out;
 }
@@ -55,6 +53,7 @@ export function ensure(s){
   for (const k in d.flags) if (s.flags[k]===undefined) s.flags[k]=d.flags[k];
   for (const k in d.market) if (s.market[k]===undefined) s.market[k]=d.market[k];
   for (const r in d.rooms) if (!s.rooms[r]) s.rooms[r]=d.rooms[r];
+  dropDrying(s);
   // ulkosivu voi tuoda vanhoja kenttiä; ne eivät haittaa
   return s;
 }
@@ -71,6 +70,15 @@ export const KOTI_OWNS = ['rooms','cur','hopea','inv','deviceInv','bought','sold
 export function mergeIncoming(inc){ const keep={}; for (const k of KOTI_OWNS) keep[k]=S[k];
   const n=ensure(inc); for (const k of KOTI_OWNS) n[k]=keep[k]; replaceState(n); }
 
+// TP0: kuivausteline ja kuivatut sienet poistettiin. Vanhat kuivatut ja telineet hyvitetään hopeana.
+function dropDrying(s){
+  for (const id of Object.keys(s.inv)) if (id.startsWith('dry:')){ s.hopea += s.inv[id]*LEGACY.dry; delete s.inv[id]; }
+  for (const id of Object.keys(s.market.sat)) if (id.startsWith('dry:')) delete s.market.sat[id];
+  if (s.market.spike && s.market.spike.id.startsWith('dry:')) s.market.spike=null;
+  const keep=[]; for (const t of s.deviceInv){ if (t==='kuivain') s.hopea+=LEGACY.kuivain; else keep.push(t); } s.deviceInv=keep;
+  for (const r in s.rooms) s.rooms[r].cells.forEach((c,i)=>{ if (c && c.type==='kuivain'){
+    s.hopea += LEGACY.kuivain + (c.busy ? (c.n||0)*LEGACY.dry : 0); s.rooms[r].cells[i]=null; } });
+}
 // apurit
 export function strain(key){ if(!key) return null; const [base,perk]=key.split('~'); const T=STRAINS[base]; if(!T) return null;
   if (!perk) return {...T, key, base, short:T.name};

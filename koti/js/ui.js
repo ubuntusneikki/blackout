@@ -3,13 +3,14 @@ import {P, AMB, WILD, SYM, VESSELS, DEVICES, STRAINS, STRAIN_ORDER, ORIGIN_TXT, 
 import {W, H, g, px, rect, rng, BAYER, clamp, ease, text, textC, tw, wrap, wrapLines, fmt, button, hit, bar, vitalRect, HIT, resetHit} from './gfx.js';
 import {S, save, strain, replaceState, newGame} from './state.js';
 import * as sim from './sim.js';
+import {on} from './events.js';
 import {CELL, cellXY, cellAt, drawRoomBg, drawCells, vesselV} from './room.js';
 import {staticFor, drawContents, drawWater, INNER, SOIL, TY0, ORIGIN} from './xsec.js';
 
 export const U = {view:'room', sel:null, modal:null, build:false, pick:null, msg:'', msgT:-1e9, msgCol:P.ui3, rev:null, burst:null};
 const now=()=>performance.now();
 export function toast(m){ U.msg=m; U.msgT=now(); U.msgCol=P.ui3; }
-export function say(m){ U.msg=m; U.msgT=now()+4000; U.msgCol=SYM; }     // symbiontin repliikki näkyy pidempään
+export function say(m){ U.msg=m; U.msgT=now()+4000; U.msgCol=SYM; }     // symbiontin vihje näkyy pidempään
 // ---------- ääni ----------
 let AC=null;
 export function audioInit(){ if(AC) return; try { AC=new (window.AudioContext||window.webkitAudioContext)(); } catch(e){} }
@@ -21,7 +22,11 @@ export function sound(kind){ if(!AC) return; const t=AC.currentTime;
   else if (kind==='harvest'){ [659,880].forEach((f,k)=>tone(f,t+k*0.08,0.5,0.05)); }
   else if (kind==='reveal'){ [392,523,659,784,1047].forEach((f,k)=>tone(f,t+k*0.11,1.2,0.05)); }
   else if (kind==='fail'){ [330,277].forEach((f,k)=>tone(f,t+k*0.15,0.6,0.04,'triangle')); } }
-sim.fx.toast=toast; sim.fx.say=say; sim.fx.sound=sound; sim.fx.reveal=r=>startReveal(r);
+// tapahtumaväylän kuuntelijat: viesti paneeliin, symbiontin vihje ja ääni
+on('*',(d)=>{ if (d.vihje) say(d.vihje); else if (d.viesti) toast(d.viesti); });
+const SOUND_OF = {korjuu:'harvest', itiot:'harvest', 'laite-keruu':'harvest', myynti:'coin', osto:'coin', toimitus:'coin'};
+on('*',(d,name)=>{ if (SOUND_OF[name]) sound(SOUND_OF[name]); });
+on('tilaus-valmis',()=>startReveal({kind:'done'}));
 
 export function startReveal(res){ U.rev={res, t0:now()}; U.modal=null; U.view='reveal'; sound(res.kind==='fail'?'fail':'reveal'); }
 export function openHautomo(dev){ const res=sim.openDish(dev); if(res) startReveal(res); }
@@ -51,7 +56,7 @@ function hint(){
   if (S.vesselInv.length||S.deviceInv.length) return 'UUSI ESINE ODOTTAA. NAPAUTA VAPAATA RUUTUA.';
   const sp=S.market.spike; if (sp && sim.owned(sp.id)>0) return 'KYSYNTÄPIIKKI: '+sim.prodName(sp.id)+' ×2. AVAA MARKKINA.';
   if (S.order && !S.flags.done) return 'TILAUS: '+S.order.given+' / '+S.order.need+' ITIÖSUODATINTA TORIN VÄELLE.';
-  if (Object.keys(S.inv).some(k=>k.startsWith('raw:'))) return 'SATO ODOTTAA VARASTOSSA. MYY SE TAI KUIVAA ARVOKKAAMMAKSI.';
+  if (Object.keys(S.inv).some(k=>k.startsWith('raw:'))) return 'SATO ODOTTAA VARASTOSSA. MYY SE MARKKINALLA.';
   if (!S.flags.lab) return 'MYY SATOA MARKKINALLA ('+S.sold+' / 10). SYMBIONTTI MUISTAA JOTAIN.';
   return 'RISTEYTÄ KANTOJA HAUTOMOSSA. KANTAKIRJA KERTOO, MITÄ PUUTTUU.';
 }
@@ -65,15 +70,14 @@ function drawRoom(t){
   const n=ROOMS[r].w*ROOMS[r].h;
   for(let i=0;i<n;i++){ const [x,y]=cellXY(r,i); hit(x,y,CELL,CELL,()=>tapCell(r,i)); }
   panel(()=>wrap(hint(),5,278,182,P.uiD));
-  const cellar=S.rooms.kellari.owned, bw=cellar?36:45, gap=cellar?2:2;
+  const cellar=S.rooms.kellari.owned, bw=cellar?45:60, gap=2;
   let bx=4;
   const spikeOwned = S.market.spike && sim.owned(S.market.spike.id)>0;
   const orderReady = S.order && !S.flags.done && (S.inv.suodatin||0)>0;
   button(bx,318,bw,14,'MARKKINA',()=>{ U.modal={type:'market',tab:orderReady?'order':'sell',page:0}; }, (spikeOwned||orderReady)?'a':'n'); bx+=bw+gap;
   button(bx,318,bw,14,'KANNAT',()=>{ U.view='book'; }); bx+=bw+gap;
   button(bx,318,bw,14,U.build?'VALMIS':'RAKENNA',()=>{ U.build=!U.build; U.pick=null; }, U.build?'g':'n'); bx+=bw+gap;
-  if (cellar){ button(bx,318,bw,14,r==='huone'?'KELLARI':'HUONE',()=>switchRoom()); bx+=bw+gap; }
-  button(bx,318,W-4-bx,14,'ULOS >',()=>{ save(); location.href='../ulko/'; });
+  if (cellar) button(bx,318,W-4-bx,14,r==='huone'?'KELLARI':'HUONE',()=>switchRoom());
 }
 export function switchRoom(){ if(!S.rooms.kellari.owned) return; S.cur = S.cur==='huone'?'kellari':'huone'; save(); }
 function tapCell(r,i){
@@ -156,8 +160,7 @@ function drawReveal(t){
   if (res.kind==='done'){ // tilaus täytetty
     for(let k=0;k<60;k++){ const r=rng(k)(); const ang=k*0.7+a*0.3, rr=(a*40+k*7)%140; px(cx+Math.cos(ang)*rr, cy+Math.sin(ang)*rr*0.8, k%3?SYM:AMB[2]); }
     if (a>0.8) textC('V1 LÄPÄISTY',cx,cy-10,AMB[2],2);
-    if (a>1.6){ wrap('TORIN VÄKI SAI SUODATTIMENSA JA LÄHTI ULOS. +'+ORDER.reward+' '+CUR+' JA UUSI MUISTO.',16,cy+20,160,P.ui3);
-      wrap('HE LÄHTIVÄT. ENSIMMÄISTÄ KERTAA PITKÄÄN AIKAAN JOKU KÄVELEE VILLIN LÄPI.',16,cy+52,160,SYM); }
+    if (a>1.6) wrap('TORIN VÄKI SAI SUODATTIMENSA. +'+ORDER.reward+' '+CUR+'.',16,cy+20,160,P.ui3);
     if (a>2.2){ button(cx-34,290,68,14,'JATKA',()=>{ U.view='room'; U.rev=null; },'a'); }
     return;
   }
@@ -188,7 +191,7 @@ function drawReveal(t){
       wrapLines(T.name,180).forEach((l,i)=>textC(l,cx,182+i*14,T.mutant?AMB[2]:T.col[2],res.first?2:1));
       textC('+'+res.n+' ITIÖPUSSIA',cx,214,P.ui3);
       if (T.mutant) textC(T.perk==='grow'?'MUTAATIO: KASVU +25%':'MUTAATIO: SATO +1',cx,224,AMB[1]);
-      if (res.say) wrap(res.say,10,240,172,SYM);
+      if (res.hint) wrap(res.hint,10,240,172,SYM);
     } else if (fail){
       textC('EI TULOSTA',cx,30,P.uiD,2);
       wrap('RIHMASTOT HYLKIVÄT TOISIAAN. '+A.name+' JA '+B.name+' EIVÄT SOVI YHTEEN. KOKEILE TOISTA PARIA.',10,182,172,P.ui3);
@@ -233,7 +236,7 @@ function drawModal(t){
     y+=10;
     if (m.tab==='sell'){
       const ids=sim.sellables();
-      if (!ids.length) wrap('EI MYYTÄVÄÄ. KORJAA SATOA, KUIVAA SITÄ TAI KASVATA SUODATTIMIA.',X+10,y,154,P.uiD);
+      if (!ids.length) wrap('EI MYYTÄVÄÄ. KORJAA SATOA TAI KASVATA SUODATTIMIA.',X+10,y,154,P.uiD);
       const first=pager(ids.length,8);
       ids.slice(first,first+8).forEach(id=>{
         const n=sim.owned(id), up=sim.unitPrice(id), nx=sim.unitPrice(id,1), spike=sp&&sp.id===id;
@@ -252,7 +255,7 @@ function drawModal(t){
       const o=S.order;
       wrap(ORDER.txt,X+10,y,154,P.ui3); y+=28;
       text('TOIMITETTU: '+o.given+' / '+o.need,X+10,y,AMB[2]); y+=10;
-      text('PALKINTO: '+ORDER.reward+' '+CUR+' JA MUISTO',X+10,y,P.uiD); y+=12;
+      text('PALKINTO: '+ORDER.reward+' '+CUR,X+10,y,P.uiD); y+=12;
       if (S.flags.done) text('TILAUS TÄYTETTY.',X+10,y,SYM);
       else row('ANNA SUODATTIMET','× '+(S.inv.suodatin||0),'ITIÖSUODATIN KASVAA KEHIKOSSA',()=>sim.deliver(),(S.inv.suodatin||0)>0,null,null,AMB[2]);
     }
@@ -286,7 +289,6 @@ function drawModal(t){
       const left=(1-d.t)*D.time/S.speed, mins=Math.ceil(left/60);
       text(d.type==='hautomo'&&d.dish?strain(d.dish.a).name+' ×':'',X+10,y,P.ui3);
       if (d.type==='hautomo'&&d.dish) text(strain(d.dish.b).name,X+10,y+8,P.ui3);
-      if (d.type==='kuivain') text(d.n+' × '+STRAINS[d.job].name,X+10,y,P.ui3);
       if (d.type==='kehikko') text('KALVO KASVAA KEHIKKOON',X+10,y,P.ui3);
       y+=20; bar(X+10,y,d.t,AMB[1]); text(mins>=60?Math.floor(mins/60)+' H '+(mins%60)+' MIN':mins+' MIN',X+76,y,P.uiD); y+=12;
     } else if (d.type==='hautomo'){
@@ -304,10 +306,6 @@ function drawModal(t){
             if (!m.pickA){ m.pickA=k; m.page=0; return; }
             if (sim.startDish(d,m.pickA,k)) U.modal=null; }, true, null, null, T.mutant?AMB[2]:T.col[2]); });
       }
-    } else if (d.type==='kuivain'){
-      const raws=Object.keys(S.inv).filter(k=>k.startsWith('raw:'));
-      if (!raws.length) wrap('EI KUIVATTAVAA. KORJAA SATOA ENSIN.',X+10,y,154,P.uiD);
-      raws.forEach(id=>{ const b=id.slice(4); row(STRAINS[b].name,'× '+S.inv[id],'KUIVAA '+Math.min(S.inv[id],D.batch)+' KPL  ARVO '+SELL_BASE.dry+' H',()=>{ sim.startDry(d,b); U.modal=null; },true); });
     } else if (d.type==='kehikko'){
       const have=S.inv['raw:kalvo']||0;
       row('KASVATA SUODATIN',have+' / '+D.need,'KULUTTAA '+D.need+' KALVOHELTTAA',()=>{ sim.startFrame(d); U.modal=null; }, have>=D.need, null, null, AMB[2]);
@@ -317,6 +315,7 @@ function drawModal(t){
     title('ASETUKSET');
     row('NOPEUS', S.speed===60?'×60 TESTI':'×1 OIKEA','KASVU OIKEASSA AJASSA TAI 60X',()=>{ S.speed = S.speed===60?1:60; save(); },true);
     row('TESTILÖYTÖ', Date.now()>=S.retkiReady?'':'ODOTA','SIMULOI ULKOLÖYDÖN',()=>{ sim.retki(); U.modal=null; }, Date.now()>=S.retkiReady);
+    if (window.SOLMU_PWA) row('TALLENNUS JA ASENNUS','','VIENTI, TUONTI JA ASENNUSOHJE',()=>{ U.modal=null; window.SOLMU_PWA.open(); },true);
     row('UUSI PELI','','POISTAA TALLENNUKSEN',()=>{ U.modal={type:'confirmReset'}; },true);
     y+=4; text(VERSION,X+10,y,P.uiD);
   }

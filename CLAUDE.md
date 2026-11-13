@@ -20,11 +20,11 @@ Pelaaja ei valmista esineitä vaan kasvattaa elävää rihmastoa: kantoja ristey
 ## Rakenne
 
 ```
-index.html          aloitussivu: ohjaa suoraan kotipeliin (ulko/ ja iso/ jäädytetty tästä protosta)
-ulko/index.html     ULKO-01: 2D-pikselikartta OSM-datasta, GPS, syke, löydöt (yksi tiedosto)
-koti/index.html     KOTI-01 v1: kotipeli ES-moduuleina koti/js/ (data, gfx, state, sim, room, xsec, ui, main)
+index.html          aloitussivu: ohjaa suoraan kotipeliin
+ulko/index.html     ULKO-01 (JÄÄDYTETTY: ulkopeli ei kuulu tähän protoon, saaliit simuloidaan kotona)
+koti/index.html     KOTI-01 v1: kotipeli ES-moduuleina koti/js/ (data, gfx, events, state, sim, room, xsec, ui, main)
 koti/pwa.js, sw.js  puhelinversio: asennus (manifest.webmanifest, ikonit/), offline, tallennuksen vienti/tuonti koodina
-iso/index.html      kokeilu: isometrinen 3D-kartta three.js r128:lla + pikselöintivarjostin
+iso/index.html      kokeilu (JÄÄDYTETTY): isometrinen 3D-kartta three.js r128:lla + pikselöintivarjostin
 blender/            Blender-skriptit (bpy): room.py (huone), kit.py (katupakkaus + talot), pix.py (pikselöinti), sheet.py
 docs/               ydinvisio.md, kotipeli-v1.md (+ suunnitelma), prototyypin-tila.md
 tests/              Playwright-skriptit: v1-lapipeluu.js (botti pelaa tilaukseen asti), tallennukset.js, pwa.js
@@ -33,11 +33,16 @@ tests/              Playwright-skriptit: v1-lapipeluu.js (botti pelaa tilaukseen
 Ei build-vaihetta: staattisia sivuja GitHub Pagesissa. Paikallisesti: `python3 -m http.server` repon juuressa.
 Koti on ES-moduuleina (`koti/js/*.js`) ilman bundleria; se vaatii http-palvelimen (file:// ei toimi).
 
+**Tapahtumaväylä** (`koti/js/events.js`): pelilogiikka (`sim.js`) ei kutsu käyttöliittymää, vaan lähettää `emit('korjuu', {...})`. Äänet, efektit ja viestit kuunnellaan `on(nimi, fn)` tai `on('*', fn)`. Datan kenttä `viesti` näytetään paneelissa ja `vihje` symbiontin lyhyenä vihjeenä. Tapahtumien lista on events.js:n alussa.
+
+**Rajaukset (Juuso 13.11.2026):** ei ulkopeliä eikä muistoja/tarinaa tähän protoon; kuivaus poistettu kokonaan (pelin ydin on elävien kantojen muokkaus tehtäviin). Symbiontti antaa vain lyhyitä vihjeitä.
+
 ## Yhteinen tallennus
 
 - `localStorage` avain **`solmu_yhteinen_v1`**, sama ulko- ja kotisivulla (toimii vain samassa origin-osoitteessa).
-- Kodin v1-skeema (`schema:1`): `speed, hopea, rooms{huone,kellari}{owned, cells[]}, cur, inv{raw:kanta, dry:kanta, suodatin, villi, agar}, spores{kanta:n}, vesselInv[], deviceInv[], bought, sold, known{}, tried{}, market{sat, spike, nextSpike}, flags{}, order, kotiLast`. Ulko käyttää: `spores, vesselInv, found, cells, memories, walked`.
+- Kodin v1-skeema (`schema:1`): `speed, hopea, rooms{huone,kellari}{owned, cells[]}, cur, inv{raw:kanta, suodatin, villi, agar}, spores{kanta:n}, vesselInv[], deviceInv[], bought, sold, known{}, tried{}, market{sat, spike, nextSpike}, flags{}, order, kotiLast`. Ulko käyttää: `spores, vesselInv, found, cells, memories, walked`.
 - Ruutu on `{kind:'vessel', type, strain, growth, moist, ready}` tai `{kind:'device', type, t, busy, done, dish|job}`. Mutaatiokannan avain on `kanta~grow` tai `kanta~yield`.
+- Kuivausteline ja `dry:*`-tuotteet poistettiin (TP0): `ensure()` hyvittää ne hopeana (kuivattu 5, teline 40).
 - Tallennus ilman `schema`-kenttää on vanha (V0.2/V0.3): `state.js` `migrate()` muuntaa sen (sato, uute, mk, jalosteet ja tulikääpä → hopeaksi; hylly 3 sarakkeesta 4×4-ruudukkoon).
 - Koti omistaa kentät `KOTI_OWNS` (state.js). Kun toinen välilehti kirjoittaa (`storage`-tapahtuma), koti ottaa uuden tilan mutta pitää nämä omat arvonsa. Ulko tekee muutokset aina tuoreimpaan tallennukseen (`mutate`).
 - Kotiproton offline-kasvu käyttää `kotiLast`-kenttää (ei `last`).

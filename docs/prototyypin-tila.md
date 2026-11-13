@@ -2,7 +2,9 @@
 
 Huom: protot tehtiin ennen ydinvision v2:ta. Kartan parantaminen (HERÄTÄ, `places`, uute parannusaineena) on poistettu (tehtävät 1–2), ja uutteen tilalle tuli markkina ja jalosteet.
 
-## KOTI-01 v1.0 (kotipeli v1, ks. kotipeli-v1.md)
+## KOTI-01 v1.1 (kotipeli v1, ks. kotipeli-v1.md)
+
+TP0 (v1.1): tapahtumaväylä `events.js`, kuivausteline ja kuivatut sienet poistettu (vanhat hyvitetään hopeana), muistot ja symbiontin tarinarepliikit poistettu (vain lyhyet vihjeet), ULOS-nappi poistettu kodista. Ulko ja iso jäädytetty.
 
 Toteutuneet luvut. Ajat ovat pelinopeudella ×1; testinopeus ×60 on oletus.
 
@@ -19,10 +21,10 @@ Toteutuneet luvut. Ajat ovat pelinopeudella ×1; testinopeus ×60 on oletus.
 - Horros: kuivunut kanta pysähtyy ja jatkaa sumutuksesta. KOMPOSTI tyhjentää astian.
 - Huone 4×4, kellari 4×3 (astiat kuivuvat puolet hitaammin, kosteat kannat +20 %). Rakennustila siirtää ja vaihtaa esineitä myös tilojen välillä.
 - Hautomo 8 h, mutaatio 10 %, kontaminaatio 5 % (villi näyte). Tulos arvotaan maljaa aloittaessa ja paljastetaan avatessa. Valmis malja avautuu itsestään, kun koti avataan (aamupaljastus).
-- Kuivausteline 30 min, enintään 5 kpl kerralla. Kehikko 2 h, 3 kalvoheltan satoa → itiösuodatin.
-- Markkina (HOPEA): raaka 2, kuivattu 5, suodatin 45, villi näyte 25, itiöpussi 4. Jokainen myyty −4 % (0,96ⁿ), palautuu puoliintumisajalla 2 h. Kysyntäpiikki ×2 kolme tuntia: ensimmäinen 2 h kohdalla, sitten kerran vuorokaudessa.
-- Kauppa: lasipurkki 10 + 5n, terraario 30 + 10n, agar 3; kun 10 kpl myyty: kuivausteline 40, hautomo 60; kun kalvoheltta tunnettu: kehikko 120, kellari 300.
-- Tilaus syntyy kehikon ostosta: 5 suodatinta → 300 hopeaa, muisto #11 ja "V1 LÄPÄISTY".
+- Kehikko 2 h, 3 kalvoheltan satoa → itiösuodatin. (Kuivausteline poistettu v1.1:ssä.)
+- Markkina (HOPEA): raaka 2, suodatin 45, villi näyte 25, itiöpussi 4. Jokainen myyty −4 % (0,96ⁿ), palautuu puoliintumisajalla 2 h. Kysyntäpiikki ×2 kolme tuntia: ensimmäinen 2 h kohdalla, sitten kerran vuorokaudessa.
+- Kauppa: lasipurkki 10 + 5n, terraario 30 + 10n, agar 3; kun 10 kpl myyty: hautomo 60; kun kalvoheltta tunnettu: kehikko 120, kellari 300.
+- Tilaus syntyy kehikon ostosta: 5 suodatinta → 300 hopeaa ja "V1 LÄPÄISTY".
 - Pelastus: jos kasvustot ja itiöt loppuvat kokonaan, symbiontti antaa yhden siniheltan itiön.
 - **Läpipeluu** (`tests/v1-lapipeluu.js`, botti pelaa jatkuvasti ja optimoiden): tilaus täyttyy noin 19–22 pelitunnissa, eli testinopeudella noin 20 minuutissa. Hitain vaihe on hautomon 8 h.
 
