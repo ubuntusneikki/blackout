@@ -4,6 +4,8 @@ import {S, SAVE_KEY, save, mergeIncoming} from './state.js';
 import * as sim from './sim.js';
 import {U, render, audioInit, openHautomo, switchRoom} from './ui.js';
 import {STRAINS} from './data.js';
+import * as fx from './fx.js';
+import {play} from './audio.js';
 
 // offline-kasvu (enintään 8 h)
 function catchUp(){ const away=Math.min(8*3600,(Date.now()-(S.kotiLast||Date.now()))/1000)*S.speed; if (away>1) sim.simulate(away); }
@@ -21,14 +23,14 @@ function loop(ms){
   if (ms-lastSave>3000){ lastSave=ms; save(); sim.rescue(); }
   requestAnimationFrame(loop);
 }
-function draw(ms){ render(ms); sctx.imageSmoothingEnabled=false; sctx.drawImage(buf,0,0,W,H,0,0,screen.width,screen.height); }
+function draw(ms){ render(ms); fx.draw(ms); sctx.imageSmoothingEnabled=false; sctx.drawImage(buf,0,0,W,H,0,0,screen.width,screen.height); }
 function fit(){ const k=Math.max(1,Math.floor(Math.min(innerWidth/W,innerHeight/H))); screen.width=W*k; screen.height=H*k; }
 addEventListener('resize',fit); fit();
 let down=null;
 screen.addEventListener('pointerdown',e=>{ audioInit();
   const r=screen.getBoundingClientRect(), x=(e.clientX-r.left)/r.width*W, y=(e.clientY-r.top)/r.height*H;
   down={x,y,cx:e.clientX};
-  for(let i=HIT.length-1;i>=0;i--){ const h=HIT[i]; if(x>=h.x&&x<h.x+h.w&&y>=h.y&&y<h.y+h.h){ h.fn(); draw(performance.now()); return; } }
+  for(let i=HIT.length-1;i>=0;i--){ const h=HIT[i]; if(x>=h.x&&x<h.x+h.w&&y>=h.y&&y<h.y+h.h){ play('tap'); h.fn(); draw(performance.now()); return; } }
 });
 // pyyhkäisy vaihtaa tilaa
 screen.addEventListener('pointerup',e=>{ if(!down) return; const r=screen.getBoundingClientRect(), dx=(e.clientX-down.cx)/r.width*W;
