@@ -40,8 +40,8 @@ Koti on ES-moduuleina (`koti/js/*.js`) ilman bundleria; se vaatii http-palvelime
 ## Yhteinen tallennus
 
 - `localStorage` avain **`solmu_yhteinen_v1`**, sama ulko- ja kotisivulla (toimii vain samassa origin-osoitteessa).
-- Kodin v1-skeema (`schema:1`): `speed, hopea, rooms{huone,kellari}{owned, cells[]}, cur, inv{raw:kanta, suodatin, villi, agar}, spores{kanta:n}, vesselInv[], deviceInv[], bought, sold, known{}, tried{}, market{sat, spike, nextSpike}, flags{}, order, kotiLast`. Ulko käyttää: `spores, vesselInv, found, cells, memories, walked`.
-- Ruutu on `{kind:'vessel', type, strain, growth, moist, ready}` tai `{kind:'device', type, t, busy, done, dish|job}`. Mutaatiokannan avain on `kanta~grow` tai `kanta~yield`.
+- Kodin v1-skeema (`schema:1`): `speed, hopea, rooms{huone,kellari}{owned, cells[]}, cur, inv{raw:kanta, suodatin, villi, agar}, spores{kanta:n}, vesselInv[], deviceInv[], bought, sold, known{}, tried{}, market{sat, spike, nextSpike}, flags{}, order, kotiLast, board[], boardNext, boardSeq, boardDone, chain, made{}`. Ulko käyttää: `spores, vesselInv, found, cells, memories, walked`.
+- Ruutu on `{kind:'vessel', type, strain, growth, moist, ready, waves}` tai `{kind:'device', type, t, busy, done, dish|job}`. `waves` = kypsät satoaallot (≤3), kehikon `job` = syötekanta (`FRAME` data.js:ssä). Mutaatiokannan avain on `kanta~grow` tai `kanta~yield`.
 - Kuivausteline ja `dry:*`-tuotteet poistettiin (TP0): `ensure()` hyvittää ne hopeana (kuivattu 5, teline 40).
 - Tallennus ilman `schema`-kenttää on vanha (V0.2/V0.3): `state.js` `migrate()` muuntaa sen (sato, uute, mk, jalosteet ja tulikääpä → hopeaksi; hylly 3 sarakkeesta 4×4-ruudukkoon).
 - Koti omistaa kentät `KOTI_OWNS` (state.js). Kun toinen välilehti kirjoittaa (`storage`-tapahtuma), koti ottaa uuden tilan mutta pitää nämä omat arvonsa. Ulko tekee muutokset aina tuoreimpaan tallennukseen (`mutate`).

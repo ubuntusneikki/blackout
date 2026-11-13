@@ -51,3 +51,14 @@ Toteutuneet luvut. Ajat ovat pelinopeudella ×1; testinopeus ×60 on oletus.
 
 - Huonetesti (room.py) ja katupakkaus 1 (kit.py): penkki, katulamppu, bussikatos, kioski, auto, vesisäiliö, aita, sähkökaappi, pyöräteline, sienirengas + lamellitalo, pistetalo, kivitalo.
 - Heikoimmat: penkki (pieni, tumma), pyöräteline (epäselvä), lampun hehku.
+
+## KOTI-01 V1.2 (TP3: loopin syventäminen)
+
+- **Satoaallot:** kypsä kasvusto kerää enintään 3 aaltoa (uusi aalto alkaa 35 %:sta). Korjuu ottaa kaikki, OTA ITIÖT yhden aallon.
+- **Kannoille omat arvot:** siniheltta nopea ja halpa, ruususieni hidas ja arvokas, hämäränuppi harvinainen, kalvoheltta muottikanta. Hinta on kannan `price`.
+- **Kehikko yleismuottina** (60 HOPEAA, avautuu laboratorion myötä): SINIHELTTA → VALOKALVO, RUUSUSIENI → LÄMPÖRIHMA, KALVOHELTTA ja VERKKOHELTTA → ITIÖSUODATIN.
+- **Hoitajasieni:** naapurit eivät kuivu ja kasvavat +10 %.
+- **Torin taulu:** 3 tilausta tunnetuista tuotteista, yksi vaihtuu joka pelivuorokausi. Virstanpylväsketju (sato → myynti → hautomo → risteytys → taulu → kehikko) päättyy suodatintilaukseen.
+- **Lupausnäkymä:** SEURAAVAKSI-rivi huoneessa ja yhteenveto palatessa (`paluu`-tapahtuma).
+- **Uudet kannat** (Juuso hyväksyi nimet 13.11.): YÖRUUSU = ruususieni × hämäränuppi, VERKKOHELTTA = kalvoheltta × hämäränuppi.
+- Luvut ovat lähtöarvoja; ne mitoitetaan TP2:n simulaattorilla.
