@@ -183,7 +183,8 @@ function drawShroom(s, x, y, sway){
 // harvinaiset astiat ilman omia spritejä: terraario sävytettynä
 const RARE = { akvaario:['terraario', ['#3fb8d8', 0.35]], palvelin:['terraario', ['#4a2a36', 0.45]] };
 function vesselSprites(type, v){
-  const [base, tint] = RARE[type] || [type === 'purkki' ? 'lasipurkki' : 'terraario', null];
+  const own = type === 'purkki' ? 'lasipurkki' : type;
+  const [base, tint] = (hasSprite('astia_' + own) || ATL.state !== 'ok') ? [own, null] : (RARE[type] || ['terraario', null]);
   const n = 'astia_' + base;
   return [spriteV(n, v, tint), spriteV(n + '_etu', v, tint)];
 }

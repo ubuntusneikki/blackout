@@ -32,14 +32,17 @@ Muutokset alkuperäiseen listaan (prototyypin loppusuunnitelma 2026-11-13): kuiv
 
 **Astiat** (yksi ruutu, kaksi kerrosta, sieni piirretään väliin):
 - `astia_terraario` + `astia_terraario_etu`, `astia_lasipurkki` + `astia_lasipurkki_etu` (lasilieriö teräsjalustalla).
+- Harvinaiset löydöt: `astia_akvaario` + `_etu` (matala allas, sieni kivisaarekkeella veden yläpuolella) ja `astia_palvelin` + `_etu` (ruostunut räkkikaappi, sieni keskihyllyn mullassa, ei näyttöjä eikä valoja).
 
-**Sienet** `sieni_<kanta>_<itu|nuori|kypsa>`, kannat `heltta` (siniheltta), `ruusu` (ruususieni), `hamara` (hämäränuppi), `kalvo` (kalvoheltta, verkkomainen kalvohame), `hoitaja` (hoitajasieni, sivuille kurottavat rihmat ja sumupisarat). Kypsä sieni mahtuu molempiin astioihin.
+**Sienet** `sieni_<kanta>_<itu|nuori|kypsa>`, kannat `heltta` (siniheltta), `ruusu` (ruususieni), `hamara` (hämäränuppi), `kalvo` (kalvoheltta, verkkomainen kalvohame), `hoitaja` (hoitajasieni, sivuille kurottavat rihmat ja sumupisarat), `yoruusu` (yöruusu, ruususienen rypäsmuoto omin värein) ja `verkko` (verkkoheltta, kalvoheltan verkkomuoto omin värein). Kypsä sieni mahtuu molempiin astioihin. Uusien kantojen ja hoitajasienen värit on lisätty `pix.py`:n palettiin (rivi 6).
 
 **Laitteet** (yksi ruutu):
 - `laite_hautomo_<tyhja|kaynnissa|valmis>`.
 - `laite_kehikko_tyhja` ja `laite_kehikko_<tuote>_<kasvaa_1|kasvaa_2|valmis>`, tuotteet `valokalvo` (siniheltasta, elävä valaisin), `lamporihma` (ruususienestä), `suodatin` (itiösuodatin, kalvoheltasta). Kasvusto täyttää kehyksen alhaalta ylös; valmis = meripihkainen merkkivalo.
 
 **Kuvakkeet** 32×32: `ikoni_hopea`, `ikoni_agar`, `ikoni_villi`, `ikoni_itio_<kanta>` (itiöampulli), `ikoni_sato_<kanta>`, `ikoni_<tuote>`.
+
+**Moodboard-päätökset** (`docs/moodboard-biopunk.md`, Juuso 2026-11-13) on otettu atlakseen: ei näyttöjä, konsoleita eikä kylttejä (jalustoissa ravinnenesteen ikkuna, tila näkyy teal- tai meripihkaisesta itiökuplasta ja maljojen väristä), ei myrkynvihreää (merkkivalot ja putkien neste hillittyä tealia), valolista keskisävyssä, villiä violettia rihmastoa vähän kellarin takanurkassa ja seinän raossa, huone pysyy siistinä. Hautomo: tyhjä = tumma, käynnissä = maljoissa himmeät kantojen värit, valmis = meripihka.
 
 **Uuden kannan lisääminen:** lisää värit `STRAIN`-taulukkoon ja rivi `KANNAT`-taulukkoon (nimi ja muotofunktio; muodon voi lainata toiselta kannalta tai kirjoittaa uuden `muoto_*`-funktion). Spritet, kuvakkeet ja atlas-merkinnät syntyvät automaattisesti. Uusi kehikkotuote lisätään samoin `TUOTTEET`-taulukkoon ja `membrane()`-funktioon.
 
