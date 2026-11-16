@@ -98,5 +98,25 @@ Ensimmäinen vaihe toteutuspromptista "Solmu V2" (16.11.2026). Pelilogiikka, tal
 
 **Tiedossa, ei tehty tässä vaiheessa**
 - Pystytilassa pitkän näytön ylä- ja alareunaan jää tyhjää (asettelu on kiinteä 384×672).
-- Piirto on yhä noin 11 kuvaa sekunnissa (`main.js`, 90 ms:n väli). 60 fps:n mittaus ja sujuvammat siirtymät kuuluvat myöhempään vaiheeseen.
+- ~~Piirto on yhä noin 11 kuvaa sekunnissa (`main.js`, 90 ms:n väli).~~ Korjattu V2.1:ssä, ks. alla.
 - Vaakatilaa ei ole kokeiltu oikealla puhelimella (selaimen palkit, näppäimistö nimeämisessä).
+
+## KOTI-01 V2.1 (suorituskyky: nykimisen korjaus)
+
+Peli piirsi enintään 11 kuvaa sekunnissa, ja ikkunat (markkina ym.) pystyasennossa nykivät vielä pahemmin. Syyt ja korjaukset:
+
+- **Piirron rajoitin:** `main.js` piirsi tarkoituksella vain 90 ms:n välein. Nyt piirretään jokaisella näytön virkistyksellä, joten tilan vaihto (450 ms) ja lähikuvan zoomaus (260 ms) saavat noin 27 ja 16 kuvaa aiemman 5 ja 3 sijaan.
+- **Ikkunan himmennys:** `gfx.js veil()` piirsi shakkiruudun pikseli kerrallaan (noin 129 000 `fillRect`-kutsua kuvaa kohden). Nyt se on kerran tehty kuvio ja yksi täyttö.
+- **Kankaan koko:** kokonaislukukertoimella näytön kangas on natiivikokoinen (esim. 384×672) ja selain suurentaa sen (`image-rendering: pixelated`). Aiemmin joka kuva koottiin laitepikseleinä (esim. 1152×2016). Kangas kohdistetaan kokonaiseen laitepikseliin. Näytöillä, joilla kerroin ei ole kokonaisluku (esim. 412 px leveä, dpr 2,625), toiminta on ennallaan.
+
+Mittaus (`node tests/fps.js [hidastus]`, headless-Chrome ilman näytönohjainta, 390×844 dpr 3, huoneessa 12 kasvustoa ja hautomo; ms yhtä kuvaa kohden):
+
+| Näkymä | Ennen, ×1 | Jälkeen, ×1 | Ennen, CPU ×4 | Jälkeen, CPU ×4 |
+|---|---|---|---|---|
+| Huone | 8,0 ms | 4,1 ms | 58 ms | 21 ms |
+| Ikkuna auki (pysty) | 73 ms | 3,4 ms | 302 ms | 22 ms |
+| Toteutunut kuvataajuus | enintään 11 | 60 | enintään 11 (ikkunassa noin 3) | 30–60 |
+
+60 kuvaa sekunnissa vaatii alle 16,7 ms kuvaa kohden. Ilman hidastusta varaa on reilusti; neljä kertaa hidastetulla suorittimella jäädään huoneessa noin 20 ms:iin. Hidastettu headless-ajo piirtää kaiken ohjelmallisesti, joten se on puhelinta ankarampi kokoamisen osalta, mutta **oikealla puhelimella ei ole vielä mitattu.** Sitä varten osoitteeseen voi lisätä `?fps`: vasempaan alakulmaan tulee toteutunut kuvataajuus ja yhden kuvan piirtoaika.
+
+Jos puhelimella jäädään alle 60:n, seuraavat kohteet ovat huonekerroksen pikselisilmukat (`iso.js`: ikkunan lasi, hehkut) ja tekstin piirto pikseli kerrallaan (`gfx.js text()`).

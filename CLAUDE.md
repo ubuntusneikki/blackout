@@ -29,7 +29,7 @@ koti/pwa.js, sw.js  puhelinversio: asennus (manifest.webmanifest, ikonit/), offl
 iso/index.html      kokeilu (JÄÄDYTETTY): isometrinen 3D-kartta three.js r128:lla + pikselöintivarjostin
 blender/            Blender-skriptit (bpy): room.py (huone), kit.py (katupakkaus + talot), koti.py (kodin spritet), koti_atlas.py (atlas + esikatselu), pix.py (pikselöinti), sheet.py
 docs/               ydinvisio.md, kotipeli-v1.md (+ suunnitelma), prototyypin-tila.md, grafiikka-koti.md (kodin spritet ja atlas)
-tests/              Playwright-skriptit: v1-lapipeluu.js (botti pelaa tilaukseen asti), tallennukset.js, pwa.js, vaaka.js (vaakatila ja kierto), tp7-paljastus.js (kaikki paljastuksen tulokset, jono, kantakirja)
+tests/              Playwright-skriptit: v1-lapipeluu.js (botti pelaa tilaukseen asti), tallennukset.js, pwa.js, vaaka.js (vaakatila ja kierto), fps.js (piirtoajat), tp7-paljastus.js (kaikki paljastuksen tulokset, jono, kantakirja)
 ```
 
 Ei build-vaihetta: staattisia sivuja GitHub Pagesissa. Paikallisesti: `python3 -m http.server` repon juuressa.
@@ -76,7 +76,7 @@ Koti on ES-moduuleina (`koti/js/*.js`) ilman bundleria; se vaatii http-palvelime
 ## Testaus
 
 - Selaintestit Playwrightilla (headless Chrome). WebGL: `--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader`.
-- URL-parametrit: koti `?reset` (uusi peli); ulko `?sim` (ei GPS:ää), `?demo` (demokaupunki ilman OSM:ää); iso `?demo`.
+- URL-parametrit: koti `?reset` (uusi peli), `?fps` (kuvataajuus ja piirtoaika ruudulla; `node tests/fps.js` mittaa piirtoajat näkymittäin); ulko `?sim` (ei GPS:ää), `?demo` (demokaupunki ilman OSM:ää); iso `?demo`.
 - Debug-koukut: koti `window.__S()` (tila), `__sim(s)` (pelisekunteja eteenpäin), `__G` (pelilogiikka), `__R` (rihmaretki), `__RV` (paljastus: openMalja, openRetki, queueOnOpen, state), `__U` (käyttöliittymä); ulko `window.DBG` (P, finds, S, collect), iso `window.DBG`.
 - Katso aina kuvakaappaus ennen kuin sanot jonkin visuaalisen asian olevan valmis.
 - Puhelinversio: `node tests/pwa.js` (oma palvelin). Service worker hakee verkosta ensin, joten uusi versio näkyy seuraavalla käynnistyksellä; tiedostolistaa ei tarvitse päivittää. Tallennuksen tuonti kulkee sessionStoragen (`solmu_tuonti`) kautta, ettei pelin oma save() ylikirjoita sitä.

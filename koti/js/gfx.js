@@ -32,8 +32,12 @@ export function rect(x,y,w,h,col){ g.fillStyle=col; g.fillRect(q(x),q(y),q(w),q(
 // pistekuvion kynnys natiivipikselin kohdalla (x, y loogisina, 0,5:n askelin)
 export const bay=(x,y)=>BAYER[Math.floor(y*RES)&3][Math.floor(x*RES)&3];
 // koko näkymän himmennys natiivina shakkiruutuna
-export function veil(col){ g.save(); g.setTransform(1,0,0,1,0,0); g.fillStyle=col;
-  for(let y=0;y<H*RES;y++) for(let x=y&1;x<W*RES;x+=2) g.fillRect(x,y,1,1); g.restore(); }
+// (V2.1: shakkiruutu tehdään kerran kuvioksi; aiemmin jokainen pikseli oli oma fillRect, noin 129 000 kutsua kuvaa kohden)
+const VEIL={};
+export function veil(col){
+  let p=VEIL[col];
+  if(!p){ const c=document.createElement('canvas'); c.width=c.height=2; const x=c.getContext('2d'); x.fillStyle=col; x.fillRect(0,0,1,1); x.fillRect(1,1,1,1); p=VEIL[col]=g.createPattern(c,'repeat'); }
+  g.save(); g.setTransform(1,0,0,1,0,0); g.fillStyle=p; g.fillRect(0,0,W*RES,H*RES); g.restore(); }
 export function rng(seed){ return function(){ seed|=0; seed=seed+0x6D2B79F5|0;
   let t=Math.imul(seed^seed>>>15,1|seed); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
 export const BAYER=[[0,8,2,10],[12,4,14,6],[3,11,1,9],[15,7,13,5]];
