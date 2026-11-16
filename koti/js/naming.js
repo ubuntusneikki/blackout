@@ -30,7 +30,7 @@ export function open(key, suggest, done){
 }
 export function close(){ N = null; if (inp){ inp.blur(); inp.style.display = 'none'; } }
 function confirm(){ if (!N) return; const n = N; const v = inp.value.trim();
-  if (v){ if (sim.renameStrain(n.key, v) === null && S.names[n.key] !== v) return; }   // nimi varattu: kenttä jää auki
+  if (v){ if (sim.renameStrain(n.key, v) === null) return; }   // nimi varattu: kenttä jää auki
   close(); n.done && n.done(true); }
 function skip(){ if (!N) return; const n = N; close(); n.done && n.done(false); }
 // kentän paikka näytöllä: kankaan koordinaatit → sivun pikselit

@@ -1,5 +1,6 @@
 // tallennus ja tila. Avain on yhteinen ulkosivun kanssa (CLAUDE.md: Yhteinen tallennus).
-import {STRAINS, ROOMS, SELL_BASE, SPIKE_FIRST, LEGACY, CHAIN} from './data.js';
+import {STRAINS, BASE_GENES, ROOMS, SELL_BASE, SPIKE_FIRST, LEGACY, CHAIN} from './data.js';
+import * as GN from './genomi.js';
 export const SAVE_KEY = 'solmu_yhteinen_v1';
 
 let uid = 1;
@@ -26,7 +27,10 @@ export function newGame(){
     // TP8: aloitusopastus (opastus.js). vaihe = nykyinen askel, nahty = kerran opetetut asiat
     opastus:{vaihe:null, nahty:{}, pois:false},
     // TP7: mutaatioiden nimet (avain kanta~perk -> nimi) ja kantakirjan nähdyt sivut (hehku = uutta)
-    names:{}, book:{seen:{heltta:1, ruusu:1}}
+    names:{}, book:{seen:{heltta:1, ruusu:1}},
+    // V2.2: genomit. seed = pelaajan siemen (risteytysten arvonta), kannat = risteymien rekisteri (tunniste -> {g, seed, pa, pb,
+    // from, mut, stab, nimi}), tieto = tunnetut piirreryhmät (k = kyky, g = kasvu), crossN = maljojen määrä parista
+    seed:(Math.random()*4294967296)>>>0, kannat:{}, tieto:{heltta:{k:1, g:1}, ruusu:{k:1, g:1}}, crossN:{}
   };
 }
 
@@ -71,6 +75,7 @@ export function ensure(s){
   if (!s.names || typeof s.names!=='object') s.names={};
   dropDrying(s);
   upgradeV12(s);
+  upgradeV22(s);
   // ulkosivu voi tuoda vanhoja kenttiä; ne eivät haittaa
   return s;
 }
@@ -79,12 +84,12 @@ fixUid();
 function load(){ let s=null; try { s=JSON.parse(localStorage.getItem(SAVE_KEY)); } catch(e){}
   if (new URLSearchParams(location.search).has('reset')) s=null; return s; }
 export function fixUid(){ let m=0; for (const r in S.rooms) S.rooms[r].cells.forEach(c=>{ if(c&&c.id>m) m=c.id; }); uid=m+1; }
-export function replaceState(ns){ for (const k of Object.keys(S)) delete S[k]; Object.assign(S, ns); fixUid(); }
+export function replaceState(ns){ CACHE.clear(); for (const k of Object.keys(S)) delete S[k]; Object.assign(S, ns); fixUid(); }
 export function save(){ S.kotiLast=Date.now(); try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch(e){} }
 
 // koti omistaa nämä kentät: toisen välilehden tallennus ei ylikirjoita niitä
 export const KOTI_OWNS = ['rooms','cur','hopea','inv','deviceInv','bought','sold','known','tried','market','flags','order','retki','kotiLast','speed',
-  'board','boardNext','boardSeq','boardDone','chain','made','opastus','names','book'];
+  'board','boardNext','boardSeq','boardDone','chain','made','opastus','names','book','seed','kannat','tieto','crossN'];
 export function mergeIncoming(inc){ const keep={}; for (const k of KOTI_OWNS) keep[k]=S[k];
   const n=ensure(inc); for (const k of KOTI_OWNS) n[k]=keep[k]; replaceState(n); }
 
@@ -125,16 +130,68 @@ function upgradeV12(s){
     if (s.order) s.chain=CHAIN.findIndex(c=>c.id==='tilaus');
   }
 }
+// V2.2: genomit. Vanhat mutaatioavaimet (kanta~grow, kanta~yield) muunnetaan rekisterin kannoiksi ja nimet säilyvät.
+// Kaikki ennestään tunnetut kannat ovat kokonaan tunnettuja (ei kysymysmerkkejä vanhaan peliin). Ajetaan joka latauksella.
+function upgradeV22(s){
+  if (!s.kannat || typeof s.kannat!=='object') s.kannat={};
+  if (!s.tieto || typeof s.tieto!=='object'){ s.tieto={}; for (const k in s.known) s.tieto[k]={k:1, g:1}; }
+  if (!s.crossN || typeof s.crossN!=='object') s.crossN={};
+  if (!s.seed) s.seed=(Math.random()*4294967296)>>>0;
+  const map={};
+  const conv=k=>{ if (typeof k!=='string' || !k.includes('~')) return k; if (map[k]!==undefined) return map[k];
+    const [b,perk]=k.split('~'), r=STRAINS[b]&&GN.legacyMutant(b,perk);
+    if (!r) return (map[k]=STRAINS[b]?b:null);
+    if (!s.kannat[r.key]) s.kannat[r.key]={g:r.g, seed:r.seed, pa:r.pa, pb:null, from:r.from, mut:r.mut, stab:r.stab,
+      nimi:GN.autoName(r.g, r.mut, n=>takenIn(s,n))};
+    if (s.names[k]){ s.names[r.key]=s.names[k]; }
+    s.tieto[r.key]={k:1, g:1};
+    return (map[k]=r.key); };
+  const rekey=o=>{ if (!o) return; for (const k of Object.keys(o)) if (k.includes('~')){ const n=conv(k), v=o[k]; delete o[k];
+    if (n) o[n]=typeof v==='number' ? (o[n]||0)+v : v; } };
+  rekey(s.spores); rekey(s.known); rekey(s.book.seen);
+  for (const k of Object.keys(s.names)) if (k.includes('~')){ conv(k); delete s.names[k]; }
+  for (const r in s.rooms) s.rooms[r].cells.forEach(c=>{ if (!c) return;
+    if (c.kind==='vessel' && c.strain){ c.strain=conv(c.strain); if (!c.strain || !(STRAINS[c.strain]||s.kannat[c.strain])){ c.strain=null; c.growth=0; c.ready=false; c.waves=0; } }
+    if (c.type==='kehikko' && c.job) c.job=conv(c.job);
+    if (c.type==='hautomo' && c.dish && !c.dish.study){ const d=c.dish; d.a=conv(d.a); d.b=conv(d.b);
+      // kesken oleva vanha malja (resepti tai hylkiminen): tulos arvotaan uudelleen perinnöllisyydellä
+      if (!d.res || !d.res.g && d.res.kind!=='villi'){ if (d.a && d.b && d.a!==d.b){ const pk=[d.a,d.b].sort().join('+'); s.crossN[pk]=(s.crossN[pk]||0)+1;
+          d.res=GN.cross(s.kannat, d.a, d.b, s.seed, s.crossN[pk]); d.res.n=2; }
+        else { c.dish=null; c.busy=false; c.done=false; c.t=0; } } } });
+}
+function takenIn(s,n,except){ if (Object.values(STRAINS).some(T=>T.name===n)) return true;
+  for (const k in s.kannat) if (k!==except && s.kannat[k].nimi===n && !s.names[k]) return true;
+  return Object.keys(s.names).some(k=>k!==except && s.names[k]===n); }
+export const nameTaken=(n,except)=>takenIn(S,n,except);
+// uusi kanta rekisteriin (risteytyksen, retken tai tutkimuksen tulos genomi.js:stä). Palauttaa true, jos kanta on uusi.
+export function register(res){
+  if (STRAINS[res.key] || S.kannat[res.key]) return false;
+  S.kannat[res.key]={g:res.g, seed:res.seed, pa:res.pa, pb:res.pb, from:res.from, mut:res.mut||null, stab:res.stab,
+    nimi:GN.autoName(res.g, res.mut, n=>nameTaken(n))};
+  if (res.villi) S.kannat[res.key].villi=1;
+  CACHE.delete(res.key); return true;
+}
+// tunnetut piirreryhmät: k = kyky ja luonne, g = kasvu ja ilmasto (muoto näkyy aina)
+export function knows(key){ return (S.tieto && S.tieto[key]) || {}; }
+export function learn(key, grp){ const t=S.tieto[key]||(S.tieto[key]={}); if (t[grp]) return false; t[grp]=1; return true; }
 // apurit
-// kanta avaimella; mutaatiolla on pelaajan antama nimi (S.names) tai oletus "SINIHELTTA (MUTAATIO)".
-// orig = alkuperäinen kanta ja mutaatio pienellä ("SINIHELTTA, MUTAATIO: SATO +1").
-export const PERK_TXT = {grow:'KASVU +25%', yield:'SATO +1'};
-export function strain(key){ if(!key) return null; const [base,perk]=key.split('~'); const T=STRAINS[base]; if(!T) return null;
-  if (!perk) return {...T, key, base, short:T.name};
-  const own = S && S.names && S.names[key];
-  return {...T, key, base, perk, mutant:true, named:!!own, name: own || T.name+' (MUTAATIO)', short: own || T.name+' (M)',
-    orig: T.name+', MUTAATIO: '+PERK_TXT[perk],
-    grow: perk==='grow'?T.grow/1.25:T.grow, yield: perk==='yield'?T.yield+1:T.yield}; }
+// kanta tunnisteella: pohjakanta (data.js STRAINS) tai rekisterin risteymä. Palauttaa aina saman muotoisen olion:
+// name, short, col, style, wet, warm, grow, yield, price, base (muodon antaja = sprite), kyky, luonne, sato, nopeus,
+// auto (ei satoa), tends (HOIDA: hoitaa naapureita), tint (väri poikkeaa spritestä), mutant, mut, orig, pa, pb, from.
+const CACHE=new Map();
+export function strain(key){ if(!key) return null;
+  let d=CACHE.get(key);
+  if (!d){
+    if (STRAINS[key]){ const T=STRAINS[key]; d={...GN.describe(GN.baseGenes(key)), ...T, key, base:key, short:T.name, gen:0}; }
+    else { const R=S && S.kannat && S.kannat[key]; if (!R) return null;
+      d={...GN.describe(R.g,R), key, nimi:R.nimi, mutant:!!R.mut, mut:R.mut, pa:R.pa, pb:R.pb, from:R.from, villi:!!R.villi, stab:R.stab,
+        orig:R.mut ? 'MUTAATIO: '+R.mut.txt : null,
+        txt:R.villi ? 'VILLI LINJA' : R.mut ? 'MUTAATIO' : 'RISTEYMÄ'}; }
+    CACHE.set(key,d);
+  }
+  if (STRAINS[key]) return d;
+  const own=S.names[key];
+  return {...d, name:own||d.nimi, short:own||d.nimi, named:!!own}; }
 export function roomOf(r){ return S.rooms[r]; }
 export function neighbors(r,i){ const {w,h}={w:4,h:r==='kellari'?3:4}; const c=i%w, y=(i/w)|0, out=[];
   if(c>0) out.push(i-1); if(c<w-1) out.push(i+1); if(y>0) out.push(i-w); if(y<h-1) out.push(i+w); return out; }

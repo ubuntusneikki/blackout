@@ -27,7 +27,7 @@ let flash = null;                 // lyhyt selitys ilman kohdetta: {id, text, un
 const say = (id, txt, ms) => { if (!seen(id)){ mark(id); flash = {id, text:txt, until:performance.now() + (ms||6000)}; } };
 on('myynti', () => { if (enabled()) say('hinta', 'HINTA LASKEE JOKAISESTA MYYDYSTÄ JA NOUSEE TAAS PARISSA TUNNISSA.'); });
 on('sumutus', () => mark('sumutus'));
-on('istutus', d => { if (d.kanta && d.kanta.split('~')[0] === 'ruusu') mark('ruusu'); });
+on('istutus', d => { if (d.kanta === 'ruusu') mark('ruusu'); });
 on('korjuu', d => { mark('korjaa'); if ((d.aallot||0) >= 2) mark('aallot'); });
 on('retki-alku', () => mark('retki'));
 on('laite-alku', d => { if (d.resepti) mark('kehikko'); });
@@ -84,7 +84,7 @@ function inGame(gs){ const s = gs/S.speed; return s >= 5400 ? Math.round(s/3600)
 const FIRST = [
   // horros ja sumutus: keskeyttää muun, kerran
   U => { if (seen('sumutus')) return null;
-    const v = vessels().find(({c}) => c.strain && VESSELS[c.type].dry > 0 && !(strain(c.strain)||{}).auto && c.moist < 0.35); if (!v) return null;
+    const v = vessels().find(({c}) => c.strain && VESSELS[c.type].dry > 0 && !(strain(c.strain)||{}).tends && c.moist < 0.35); if (!v) return null;
     return {id:'sumutus', text: v.c.moist < 0.1 ? 'KUIVUNUT SIENI NUKKUU. SE HERÄÄ, KUN SUMUTAT.' : 'ASTIA KUIVUU. SUMUTA SE, NIIN KASVU JATKUU.',
       keys: toCell(U, v.r, v.i, ['btn:SUMUTA'])}; },
   U => { if (seen('korjaa')) return null; const v = vessels().find(({c}) => isReady(c)); if (!v) return null;
@@ -126,9 +126,9 @@ const LATER = [
     if (U.modal && U.modal.type === 'market' && U.modal.tab === 'board') return {id:'taulu', text:'TILAUKSET MAKSAVAT PAREMMIN KUIN MYYNTI. YKSI VAIHTUU JOKA AAMU.', keys:[], show:5000};
     return {id:'taulu', text:'TORIN TAULULLA ON TILAUKSIA. NE MAKSAVAT PAREMMIN KUIN MYYNTI.', keys: toMarket(U, 'board', [])}; },
   U => { if (seen('kehikko') || !S.flags.lab || !seen('lab')) return null; return frameStep(U); },
-  U => { if (seen('hoitaja')) return null; const h = vessels().find(({c}) => c.strain && (strain(c.strain)||{}).auto); if (!h) return null;
+  U => { if (seen('hoitaja')) return null; const h = vessels().find(({c}) => c.strain && (strain(c.strain)||{}).tends); if (!h) return null;
     const keys = U.view === 'room' && !U.modal && S.cur === h.r ? neighbors(h.r, h.i).map(j => (S.rooms[h.r].cells[j] ? 'cell:' : 'floor:') + h.r + ':' + j) : [];
-    return {id:'hoitaja', text:'HOITAJASIENI PITÄÄ NELJÄ NAAPURIAAN KOSTEINA JA KASVATTAA NIITÄ. ASETA ASTIAT SEN VIEREEN.', keys, show:12000}; },
+    return {id:'hoitaja', text:'TÄMÄ KANTA HOITAA: SE PITÄÄ NELJÄ NAAPURIAAN KOSTEINA JA KASVATTAA NIITÄ. ASETA ASTIAT SEN VIEREEN.', keys, show:12000}; },
   U => { if (seen('kellari') || !SHOP.kellari.need(S) || S.hopea < SHOP.kellari.price(S)) return null;
     return {id:'kellari', text:'KELLARI ON MYYNNISSÄ. SIELLÄ ON KOSTEAA JA VIILEÄÄ, JA ASTIAT KUIVUVAT HITAAMMIN.', keys: toShop(U, 'kellari')}; },
   U => { if (seen('kellari-mene') || !S.rooms.kellari.owned) return null; if (S.cur === 'kellari'){ mark('kellari-mene'); return null; }
@@ -163,10 +163,10 @@ function labStep(U){
   const pair = S.spores.heltta > 0 && S.spores.ruusu > 0 && !S.tried['heltta+ruusu'] ? ['heltta', 'ruusu'] : kinds.slice(0, 2);
   const m = U.modal, inDev = m && m.type === 'device' && m.c === d;
   const pick = inDev && m.pickA ? pair.find(k => k !== m.pickA) || kinds.find(k => k !== m.pickA) : pair[0];
-  return {id:'lab-malja', text: inDev ? 'VALITSE KAKSI KANTAA. ' + strain(pair[0]).short + ' JA ' + strain(pair[1]).short + ' VOIVAT SOPIA YHTEEN.' : 'NAPAUTA HAUTOMOA JA ALOITA ENSIMMÄINEN RISTEYTYS.',
+  return {id:'lab-malja', text: inDev ? 'VALITSE KAKSI KANTAA. ' + strain(pair[0]).short + ' JA ' + strain(pair[1]).short + '. JÄLKELÄINEN PERII PIIRTEET MOLEMMILTA.' : 'NAPAUTA HAUTOMOA JA ALOITA ENSIMMÄINEN RISTEYTYS.',
     keys: inDev ? ['row:' + strain(pick).short] : toCell(U, hau.r, hau.i, null, 'device')};
 }
-const LAB_TXT = 'NYT VOIT RISTEYTTÄÄ KANTOJA. HAUTOMO KYPSYTTÄÄ AGAR-MALJAN, JOLLA KAHDEN KANNAN RIHMASTOT KASVAVAT YHDESSÄ. KUN MALJA AUKEAA, NÄET MITÄ SYNTYI: UUSI KANTA, EI MITÄÄN TAI VILLI ITIÖ.';
+const LAB_TXT = 'NYT VOIT RISTEYTTÄÄ KANTOJA. HAUTOMO KYPSYTTÄÄ AGAR-MALJAN, JOLLA KAHDEN KANNAN RIHMASTOT KASVAVAT YHDESSÄ. JÄLKELÄINEN PERII MUODON, KYVYN JA KASVUN VANHEMMILTAAN. JOSKUS MALJA MUTATOITUU TAI VILLI ITIÖ VALTAA SEN.';
 function frameStep(U){
   const ke = devCell('kehikko');
   if (!ke){
@@ -175,10 +175,10 @@ function frameStep(U){
     return {id:'keh-osta', text:'KEHIKKO KASVATTAA SADOSTA ELÄVÄN TUOTTEEN, JOKA ON ARVOKKAAMPI KUIN SATO.', keys: toShop(U, 'kehikko')};
   }
   const d = ke.c; if (d.busy || d.done) return null;
-  const ok = FRAME_ORDER.find(k => S.known[k] && (S.inv['raw:' + k]||0) >= FRAME[k].need); if (!ok) return null;
+  const ok = Object.keys(S.known).find(k => strain(k) && sim.frameOf(k) && (S.inv['raw:' + k]||0) >= sim.frameOf(k).need); if (!ok) return null;
   const m = U.modal, inDev = m && m.type === 'device' && m.c === d;
-  return {id:'keh-resepti', text: inDev ? 'VALITSE KANTA JA MUOTO. ' + STRAINS[ok].name + ' KASVAA ' + PRODUCTS[FRAME[ok].out].name + 'KSI.' : 'NAPAUTA KEHIKKOA JA VALITSE, MITÄ SIIHEN KASVATETAAN.',
-    keys: inDev ? ['row:' + PRODUCTS[FRAME[ok].out].name] : toCell(U, ke.r, ke.i, null, 'device')};
+  return {id:'keh-resepti', text: inDev ? 'VALITSE KANTA JA MUOTO. ' + strain(ok).short + ' KASVAA ' + PRODUCTS[sim.frameOf(ok).out].name + 'KSI.' : 'NAPAUTA KEHIKKOA JA VALITSE, MITÄ SIIHEN KASVATETAAN.',
+    keys: inDev ? ['row:' + PRODUCTS[sim.frameOf(ok).out].name] : toCell(U, ke.r, ke.i, null, 'device')};
 }
 
 // ---------- valinta ----------

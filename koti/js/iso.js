@@ -3,7 +3,7 @@
 // Huone piirretään omaan 384 px leveään kerrokseen (ISO) käyttöliittymäpuskurin (192 px, ×2) alle.
 // Koordinaatit: kerroksen piste (lx, ly) = käyttöliittymän piste (lx/2, (ly+IY)/2).
 import {P, AMB, STRAINS, ROOMS, CUR, SYM} from './data.js';
-import {vital, rng, BAYER, clamp, ease, W, H, RES, LAY, onLayout, tw, GUIDE_BOXES} from './gfx.js';
+import {vital, rng, BAYER, clamp, ease, W, H, RES, LAY, onLayout, tw, GUIDE_BOXES, tintPixels} from './gfx.js';
 import {S, strain, neighbors} from './state.js';
 import {XL} from './xsec.js';
 
@@ -70,6 +70,9 @@ export function sprite(name){
   return (BASE[name] = {c, w:d.w, h:d.h, ax:d.ax, ay:d.ay, plant:d.plant});
 }
 export const hasSprite = name => !!ATL.sprites[name];
+// kannan kypsä sieni kuvana (paljastus ja kantakirja): muodon antajan sprite, risteymällä omin värein
+export function strainSprite(key){ const T = strain(key); if (!T) return null; const n = 'sieni_' + T.base + '_kypsa';
+  return T.tint && ATL.state === 'ok' ? tinted(n, T.col) : sprite(n); }
 
 // elinvoimavälimuisti: 6 tasoa (0, 0.2 … 1), vital()-kaava kuten muualla pelissä
 const VC = {};
@@ -93,13 +96,8 @@ function tinted(name, tint){
   const b = sprite(name); if (!b) return null;
   const c = mk(b.w, b.h), g = c.getContext('2d'); g.drawImage(b.c, 0, 0);
   const img = g.getImageData(0, 0, b.w, b.h), d = img.data;
-  if (tint.length === 3){                       // kantaväri: korvaa kylläiset (sienen) pikselit
-    const cols = tint.map(hex);
-    for (let i = 0; i < d.length; i += 4){ if (!d[i+3]) continue;
-      const r = d[i], gg = d[i+1], bb = d[i+2], mx = Math.max(r, gg, bb), mn = Math.min(r, gg, bb);
-      if (mx - mn < 40) continue;                // jalka ja harmaat osat ennallaan
-      const l = (0.3*r + 0.59*gg + 0.11*bb)/255, k = l < 0.35 ? 0 : l < 0.65 ? 1 : 2;
-      d[i] = cols[k][0]; d[i+1] = cols[k][1]; d[i+2] = cols[k][2]; }
+  if (tint.length === 3){                       // kantaväri: kylläiset (sienen) pikselit kannan väreihin, varjostus säilyy
+    tintPixels(d, tint);
   } else {                                      // [väri, määrä]
     const col = hex(tint[0]), a = tint[1];
     for (let i = 0; i < d.length; i += 4){ if (!d[i+3]) continue;
@@ -226,13 +224,14 @@ function vesselSprites(type, v){
   const n = 'astia_' + base;
   return [spriteV(n, v, tint), spriteV(n + '_etu', v, tint)];
 }
-const JOB_PROD = {heltta:'valokalvo', ruusu:'lamporihma', kalvo:'suodatin', verkko:'suodatin'};
+const JOB_PROD = {heltta:'valokalvo', ruusu:'lamporihma', kalvo:'suodatin', verkko:'suodatin', cap:'valokalvo', cluster:'lamporihma', web:'suodatin'};
 const isReady = c => !!(c.ready || c.waves > 0);
 function shroomSprite(key, vs, v){
-  const base = key.split('~')[0], T = strain(key);
+  const T = strain(key), base = T ? T.base : key;
   const stage = (isReady(vs) || vs.growth >= 0.999) ? 'kypsa' : vs.growth >= 0.4 ? 'nuori' : 'itu';
   const own = 'sieni_' + base + '_' + stage;
-  if (hasSprite(own) || ATL.state !== 'ok') return [spriteV(own, v), stage];
+  // V2.2: risteymä käyttää muotonsa antaneen pohjakannan spriteä omin värein (proseduraalinen ulkonäkö tulee vaiheessa 3)
+  if (hasSprite(own) || ATL.state !== 'ok') return [spriteV(own, v, T && T.tint && ATL.state === 'ok' ? T.col : null), stage];
   return [spriteV('sieni_heltta_' + stage, v, T ? T.col : null), stage];   // uusi kanta: lainattu muoto omin värein
 }
 function deviceSprite(d){
@@ -241,7 +240,7 @@ function deviceSprite(d){
     if (!d.busy && !d.done) return 'laite_kehikko_tyhja';
     // TP3: d.job = syötekanta (heltta, ruusu, kalvo, verkko); tuotteen nimi kelpaa myös
     const job = typeof d.job === 'string' ? d.job : (d.job && (d.job.out || d.job.kanta)) || 'kalvo';
-    const prod = JOB_PROD[job.split('~')[0]] || job;
+    const jt = strain(job), prod = JOB_PROD[job] || (jt && JOB_PROD[jt.style]) || job;
     const p = hasSprite('laite_kehikko_' + prod + '_valmis') ? prod : 'suodatin';
     return 'laite_kehikko_' + p + '_' + (d.done ? 'valmis' : d.t < 0.5 ? 'kasvaa_1' : 'kasvaa_2');
   }
@@ -284,7 +283,7 @@ function drawRoomAt(r, t, opt, ox, oy){
     if (opt.pick && opt.pick.r === r && opt.pick.i === i) diamond(x, y, AMB[2], false);
   }
   // hoitajan rihmayhteydet lattiaa pitkin
-  cells.forEach((c, i) => { if (!c || c.kind !== 'vessel' || !c.strain) return; const T = strain(c.strain); if (!T || !T.auto) return;
+  cells.forEach((c, i) => { if (!c || c.kind !== 'vessel' || !c.strain) return; const T = strain(c.strain); if (!T || !T.tends) return;
     const [x0, y0] = cellAnchor(r, i, ox, oy);
     neighbors(r, i).forEach(j => { if (!cells[j] || cells[j].kind !== 'vessel') return; const [x1, y1] = cellAnchor(r, j, ox, oy);
       for (let k = 8; k < 36; k += 4){ const f = k/44; px(x0 + (x1 - x0)*f, y0 + (y1 - y0)*f + 2, T.col[1]); } }); });

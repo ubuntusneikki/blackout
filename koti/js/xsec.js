@@ -2,7 +2,7 @@
 // samaan tarkkuuteen kuin isometrinen huone. Kerros kootaan näytölle iso.js:n composite()-funktiolla.
 // Tyyli: docs/moodboard-biopunk.md (tumma teräs, hillitty teal-lasi, lämmin valolista, elävä hehku).
 import {P, AMB, STRAINS} from './data.js';
-import {rng, BAYER, clamp, ease, vital} from './gfx.js';
+import {rng, BAYER, clamp, ease, vital, tintPixels} from './gfx.js';
 import {strain} from './state.js';
 
 export const XW = 384, XH = 516;
@@ -36,12 +36,14 @@ const LK_ANCHOR_Y = {terraario:438, lasipurkki:438, akvaario:438, palvelin:496};
 const LK_INNER = {terraario:[66,318], lasipurkki:[90,294], akvaario:[46,338], palvelin:[86,298]};   // lasin sisäreunat (T_W, J_R, A_W, P_W × 340 px/m)
 const LKC = {};
 // spriten kangas elinvoimatasolla (0…5), välimuistissa
-function lk(name, v){
+// tint = kannan kolme väriä (V2.2: risteymä käyttää muotonsa antajan spriteä omin värein)
+function lk(name, v, tint){
   if (LKA.state !== 'ok') return null; const d = LKA.sprites[name]; if (!d) return null;
-  const lv = v == null ? 5 : clamp(Math.round(v*5), 0, 5), key = name + '@' + lv; if (LKC[key]) return LKC[key];
+  const lv = v == null ? 5 : clamp(Math.round(v*5), 0, 5), key = name + '@' + lv + (tint ? tint.join('') : ''); if (LKC[key]) return LKC[key];
   const c = document.createElement('canvas'); c.width = d.w; c.height = d.h; const g = c.getContext('2d');
   g.drawImage(LKA.img, d.x, d.y, d.w, d.h, 0, 0, d.w, d.h);
-  if (lv < 5){ const img = g.getImageData(0, 0, d.w, d.h), D = img.data; for (let i = 0; i < D.length; i += 4) if (D[i+3]) vital(D, i, lv/5); g.putImageData(img, 0, 0); }
+  if (lv < 5 || tint){ const img = g.getImageData(0, 0, d.w, d.h), D = img.data; if (tint) tintPixels(D, tint);
+    if (lv < 5) for (let i = 0; i < D.length; i += 4) if (D[i+3]) vital(D, i, lv/5); g.putImageData(img, 0, 0); }
   return (LKC[key] = {c, w:d.w, h:d.h, ax:d.ax, ay:d.ay, plant:d.plant});
 }
 export const lkReady = () => LKA.state === 'ok';
@@ -299,7 +301,7 @@ export function drawXsec(vs, t, v, opt){
     if (glow > 0){ halo(cx, ground + 2, 70*s + 14, 6, vcol(T.col[1], v), 0.4*glow*br, [x0 + 2, x1 - 2, 0, XH]);
       halo(cx, ground - 60*s, 80*s + 12, 60*s + 8, vcol(T.col[0], v), 0.18*glow*br, [x0 + 3, x1 - 3, TY0 + 2, ground]); }
     topY = SHAPE[style](cx, ground, s, c, sc, {sway: dry ? 0 : Math.round(Math.sin(t*0.9)*1.5), droop: dry ? 3 : 0, glow}, t);
-    if (T.auto){ // hoitajan rihmat kulkevat ulos astiasta naapureihin
+    if (T.tends){ // hoitajan rihmat kulkevat ulos astiasta naapureihin
       for (let k = 0; k < 3; k++){ const yy = BASE + 22 + k*7, ph = (t*40 + k*31) % (XW + 40);
         for (let x = 0; x < XW; x++) if (((x + k*3) % 5) === 0 && (x < x0 - 16 || x > x1 + 16)) px(x, yy, sc[0]);
         px(ph - 20, yy, c[4]); px(ph - 19, yy, c[4]); } }
@@ -325,7 +327,7 @@ function drawLk(vs, t, v, opt, type, lt, back, front, T){
   if (T){
     const dry = vs.moist < 0.1, glow = dry ? 0 : clamp(v*1.2 - 0.2, 0, 1), br = 0.6 + 0.4*Math.sin(t*1.3);
     const ready = vs.ready || vs.waves > 0, stage = (ready || vs.growth >= 0.999) ? 'kypsa' : vs.growth >= 0.4 ? 'nuori' : 'itu';
-    const base = String(vs.strain).split('~')[0], sh = lk('lk_sieni_' + base + '_' + stage, v);
+    const base = T.base, sh = lk('lk_sieni_' + base + '_' + stage, v, T.tint ? T.col : null);
     const s = (0.18 + 0.82*ease(vs.growth))*1.3;
     if (glow > 0){ halo(gx, gy + 2, 64*s + 14, 6, vcol(T.col[1], v), 0.4*glow*br, [x0, x1, 0, XH]);
       halo(gx, gy - 60*s, 80*s + 12, 60*s + 8, vcol(T.col[0], v), 0.16*glow*br, [x0, x1, oy + 10, gy]); }
@@ -337,7 +339,7 @@ function drawLk(vs, t, v, opt, type, lt, back, front, T){
       const style = SHAPE[T.style] ? T.style : (STYLE_ALIAS[T.style] || 'cap');
       topY = SHAPE[style](gx, gy, s*(SCALE[style] || 1.3)*0.75, strainCols(T, v), stemCols(T, v), {sway: dry ? 0 : Math.round(Math.sin(t*0.9)*1.5), droop: dry ? 3 : 0, glow}, t);
     }
-    if (T.auto){ const sc = stemCols(T, v), c4 = vcol(T.col[2], v);   // hoitajan rihmat kulkevat ulos astiasta naapureihin
+    if (T.tends){ const sc = stemCols(T, v), c4 = vcol(T.col[2], v);   // hoitajan rihmat kulkevat ulos astiasta naapureihin
       for (let k = 0; k < 3; k++){ const yy = 478 + k*7, ph = (t*40 + k*31) % (XW + 40);
         for (let x = 0; x < XW; x++) if (((x + k*3) % 5) === 0 && (x < x0 - 30 || x > x1 + 30)) px(x, yy, sc[0]);
         px(ph - 20, yy, c4); px(ph - 19, yy, c4); } }

@@ -1,6 +1,6 @@
 // KOTI v1: silmukka, syöte ja synkronointi
 import {W, H, RES, LAY, setLayout, screen, sctx, buf, HIT, rect, text, tw, fmt} from './gfx.js';
-import {S, SAVE_KEY, save, mergeIncoming} from './state.js';
+import {S, SAVE_KEY, save, mergeIncoming, strain} from './state.js';
 import * as sim from './sim.js';
 import {U, render, audioInit, openHautomo, switchRoom} from './ui.js';
 import {STRAINS, P, AMB} from './data.js';
@@ -24,7 +24,7 @@ function catchUp(){ const real=(Date.now()-(S.kotiLast||Date.now()))/1000, away=
   const h=real/3600, aika=h>=1?Math.floor(h)+' H':Math.max(1,Math.round(real/60))+' MIN';
   emit('paluu',{poissa:real, ...b, viesti: parts.length ? 'POISSA '+aika+': '+parts.join(', ')+'.' : null}); }
 // itiöt voivat tulla myös testilöydöistä tai vanhasta tallennuksesta: kanta on silloin tunnettu
-function syncKnown(){ for (const k in S.spores){ const b=k.split('~')[0]; if (STRAINS[b]) S.known[b]=1; } }
+function syncKnown(){ for (const k in S.spores){ if (strain(k)){ S.known[k]=1; if (!S.tieto[k]) S.tieto[k]=STRAINS[k]&&(k==='heltta'||k==='ruusu')?{k:1,g:1}:{}; } else delete S.spores[k]; } }
 // aamupaljastus (TP7): poissa ollessa valmistuneet maljat ja retki odottavat jonossa; pelaaja avaa ne napautuksella
 function morningReveal(){ reveal.queueOnOpen(); }
 catchUp(); syncKnown(); sim.checkUnlocks(); sim.progressChain(); sim.rescue(); morningReveal(); save();
