@@ -1,18 +1,22 @@
 // pelilogiikka: kasvu, laitteet, laboratorio, markkina
-import {VESSELS, DEVICES, STRAINS, RECIPES, MATCH_MULT, FIRST_GROW, MUTATION_P, CONTAM_P, CELLAR,
+import {VESSELS, DEVICES, STRAINS, MATCH_MULT, FIRST_GROW, CELLAR, STUDY_TIME, MUT_NAME,
   SELL_BASE, PRICE_DROP, SAT_HALF, SPIKE_EVERY, SPIKE_LEN, SPIKE_MULT, SHOP, LAB_UNLOCK_SOLD, ORDER, HINT, CUR,
   WAVES, REGROW, TENDER, FRAME, PRODUCTS, BOARD, CHAIN} from './data.js';
-import {S, save, strain, neighbors, allCells, addInv, addSpore, vessel, device} from './state.js';
+import {S, save, strain, neighbors, allCells, addInv, addSpore, vessel, device, register, knows, learn, nameTaken} from './state.js';
+import * as GN from './genomi.js';
 
 import {emit} from './events.js';
 import * as retki from './retki.js';
 
 export function matchOf(vs, key){ const V=VESSELS[vs.type], T=strain(key); return (V.wet===T.wet?1:0)+(V.warm===T.warm?1:0); }
 function growTime(vs){ const T=strain(vs.strain); return vs.fast ? FIRST_GROW : T.grow; }
-export function devTime(d){ return d.type==='kehikko' ? FRAME[d.job||'kalvo'].time : DEVICES[d.type].time; }
-// hoitajasienen naapurit (ruutuindeksit huoneittain)
+export const frameOf=key=>GN.frameOf(S.kannat,key);
+export function devTime(d){ return d.type==='kehikko' ? (frameOf(d.job||'kalvo')||FRAME.kalvo).time : (d.dish&&d.dish.study ? STUDY_TIME : DEVICES[d.type].time); }
+// HOIDA-kykyisen kannan naapurit (ruutuindeksit huoneittain): arvo = hoitajan luonne (vahvin voittaa)
 export function tended(){ const out={}; for (const {c,r,i} of allCells()){ const T=c.kind==='vessel'&&strain(c.strain);
-  if (T && T.auto) neighbors(r,i).forEach(j=>{ out[r+':'+j]=1; }); } return out; }
+  if (T && T.tends && c.moist>0.1) neighbors(r,i).forEach(j=>{ out[r+':'+j]=Math.max(out[r+':'+j]||0, T.luonne||1); }); } return out; }
+// hoidon kasvulisä luonteesta: luonne 3 = TENDER.grow (+10 %)
+export const tendGrow=l=>1+(TENDER.grow-1)*l/3;
 
 export function simulate(dt){ while (dt>0){ const step=Math.min(dt,5); dt-=step; tick(step); } }
 export function tick(dt){
@@ -22,14 +26,14 @@ export function tick(dt){
     if (c.kind==='vessel'){
       const V=VESSELS[c.type], T=strain(c.strain), care=tend[r+':'+i];
       const was=c.moist;
-      if (V.dry>0 && !care && !(T&&T.auto)) c.moist=Math.max(0, c.moist - dt/(V.dry/(cellar?CELLAR.dry:1))); else c.moist=1;
+      if (V.dry>0 && !care && !(T&&T.tends)) c.moist=Math.max(0, c.moist - dt/(V.dry/(cellar?CELLAR.dry:1))); else c.moist=1;
       if (T && was>0.1 && c.moist<=0.1) emit('horros',{astia:c});
       if (T && was<=0.1 && c.moist>0.1) emit('herasi',{astia:c});
       // horros: kuivunut kanta ei kuole, se vain pysähtyy. Kypsä kasvusto kerää satoaaltoja (enintään WAVES).
       if (T && (c.waves||0)<WAVES && c.moist>0.1){
         let rate = MATCH_MULT[matchOf(c,c.strain)] / growTime(c);
         if (cellar && T.wet) rate *= CELLAR.wetGrow;
-        if (care) rate *= TENDER.grow;
+        if (care) rate *= tendGrow(care);
         c.growth += dt*rate;
         if (c.growth>=1){
           if (T.auto){ c.growth=1; }
@@ -52,7 +56,10 @@ export function plant(vs,key){
   if (!(S.spores[key]>0)) return virhe('ei-itioita','EI ITIÖITÄ');
   vs.strain=key; vs.growth=0; vs.ready=false; vs.waves=0; vs.moist=Math.max(vs.moist,0.6);
   vs.fast = !S.flags.firstHarvest && !allCells().some(o=>o.c.fast);
-  addSpore(key,-1); emit('istutus',{astia:vs, kanta:key, viesti:strain(key).name+' ISTUTETTU'}); save();
+  addSpore(key,-1); emit('istutus',{astia:vs, kanta:key, viesti:strain(key).name+' ISTUTETTU'});
+  // HOIDA näkyy heti toiminnasta: kyky selviää ilman tutkimusmaljaa
+  if (strain(key).tends && learn(key,'k')) emit('tieto',{kanta:key, ryhma:'k', viesti:strain(key).name+' HOITAA NAAPUREITAAN. KYKY SELVISI: '+GN.kykyTxt(strain(key))});
+  save();
 }
 function yieldOf(vs){ const T=strain(vs.strain); return Math.max(1, Math.round(T.yield*VESSELS[vs.type].size*MATCH_MULT[matchOf(vs,vs.strain)])); }
 export function waves(vs){ return vs.waves||(vs.ready?1:0); }
@@ -60,77 +67,76 @@ export function waves(vs){ return vs.waves||(vs.ready?1:0); }
 export function harvest(vs){
   const w=waves(vs); if (!w) return;
   const T=strain(vs.strain), n=yieldOf(vs)*w;
-  addInv('raw:'+T.base, n); takeWaves(vs,w);
+  addInv('raw:'+T.key, n); takeWaves(vs,w); observe(T);
   const first=!S.flags.firstHarvest; S.flags.firstHarvest=true;
-  emit('korjuu',{astia:vs, kanta:vs.strain, n, aallot:w, viesti:'+'+n+' × '+STRAINS[T.base].name+(w>1?'  ('+w+' AALTOA)':''), vihje:first?HINT.firstHarvest:null});
+  emit('korjuu',{astia:vs, kanta:vs.strain, n, aallot:w, viesti:'+'+n+' × '+T.short+(w>1?'  ('+w+' AALTOA)':''), vihje:first?HINT.firstHarvest:null});
   progressChain(); save();
 }
 // itiöt: yksi aalto antaa yhden itiöpussin
 export function takeSpores(vs){
   if (!waves(vs)) return;
-  const T=strain(vs.strain); addSpore(vs.strain,1); takeWaves(vs,1);
+  const T=strain(vs.strain); addSpore(vs.strain,1); takeWaves(vs,1); observe(T);
   if (!S.flags.firstHarvest){ S.flags.firstHarvest=true; }
   emit('itiot',{astia:vs, kanta:vs.strain, viesti:'+1 ITIÖPUSSI: '+T.name}); progressChain(); save();
 }
+// ensimmäinen korjuu paljastaa kannan kasvupiirteet (sato, nopeus, ilmasto)
+function observe(T){ if (learn(T.key,'g')) emit('tieto',{kanta:T.key, ryhma:'g', viesti:'KASVU SELVISI: '+GN.kasvuTxt(T)+', '+GN.climateTxt(T)}); }
 function takeWaves(vs,w){ const full=waves(vs)>=WAVES; vs.waves=waves(vs)-w; vs.ready=vs.waves>0; vs.fast=false;
   if (full) vs.growth=REGROW; }
 export function mist(vs){ vs.moist=1; emit('sumutus',{astia:vs, viesti:'SUMUTETTU'}); save(); }
 export function clearVessel(vs){ vs.strain=null; vs.growth=0; vs.ready=false; vs.waves=0; vs.fast=false; emit('komposti',{astia:vs, viesti:'ASTIA ON TYHJÄ'}); save(); }
 
 // ---------- laboratorio ----------
-export function recipeFor(a,b){ const A=a.split('~')[0], B=b.split('~')[0];
-  return RECIPES.find(r=>(r.a===A&&r.b===B)||(r.a===B&&r.b===A)); }
+// V2.2: ei reseptejä. Jälkeläinen perii geeniryhmänsä vanhemmilta ja voi mutatoitua; tulos arvotaan siemenestä
+// (genomi.js cross) heti ja paljastetaan, kun malja kypsyy.
+export function pairKey(a,b){ return [a,b].sort().join('+'); }
 export function startDish(dev,a,b){
   if ((S.inv.agar||0)<1 || a===b || !S.spores[a] || !S.spores[b]){ virhe('malja','TARVITSET AGAR-MALJAN JA KAHDEN KANNAN ITIÖT'); return false; }
   addInv('agar',-1); addSpore(a,-1); addSpore(b,-1);
-  // tulos arvotaan heti ja paljastetaan, kun malja kypsyy
-  let res;
-  const rec=recipeFor(a,b);
-  if (Math.random()<CONTAM_P) res={kind:'villi'};
-  else if (!rec) res={kind:'fail'};
-  else if (Math.random()<MUTATION_P) res={kind:'new', key:rec.out+'~'+(Math.random()<0.5?'grow':'yield'), n:2};
-  else res={kind:'new', key:rec.out, n:2};
+  const pk=pairKey(a,b); S.crossN[pk]=(S.crossN[pk]||0)+1;
+  const res=GN.cross(S.kannat, a, b, S.seed, S.crossN[pk]); res.n=2;
   dev.dish={a,b,res}; dev.busy=true; dev.done=false; dev.t=0; dev.seen=false;
-  if (!S.tried[pairKey(a,b)]) S.tried[pairKey(a,b)]=1;
+  if (!S.tried[pk]) S.tried[pk]=1;
   emit('malja-alku',{laite:dev, a, b, viesti:'MALJA HAUTOMOSSA. KYPSYY 8 H'}); save(); return true;
 }
+// tutkimusmalja: yksi itiöpussi ja agar-malja, 2 h. Paljastaa kannan kyvyn ja kasvun.
+export function startStudy(dev,key){
+  if ((S.inv.agar||0)<1 || !S.spores[key]){ virhe('malja','TARVITSET AGAR-MALJAN JA ITIÖPUSSIN'); return false; }
+  addInv('agar',-1); addSpore(key,-1);
+  dev.dish={a:key, b:key, study:true, res:{kind:'study', key}}; dev.busy=true; dev.done=false; dev.t=0; dev.seen=false;
+  emit('malja-alku',{laite:dev, a:key, b:key, tutkimus:true, viesti:'TUTKIMUSMALJA HAUTOMOSSA. VALMIS 2 H'}); save(); return true;
+}
+// tarvitseeko kanta tutkimista (jokin piirreryhmä on vielä kysymysmerkki)
+export const unknownTraits=key=>{ const t=knows(key); return !t.k || !t.g; };
 // maljan avaus: palauttaa tuloksen paljastusta varten
 export function openDish(dev){
   const d=dev.dish; if (!d||!dev.done) return null; const res=d.res;
-  if (res.kind==='new'){ addSpore(res.key,res.n); const base=res.key.split('~')[0], first=!S.known[base]; S.known[base]=1;
-    if (res.key.includes('~')) S.known[res.key]=1;
-    res.first=first; }
+  if (res.kind==='study'){ const uusi=[]; if (learn(res.key,'k')) uusi.push('k'); if (learn(res.key,'g')) uusi.push('g'); res.uusi=uusi; }
+  if (res.kind==='new'){
+    const fresh=register(res); addSpore(res.key,res.n); res.first=!S.known[res.key]; S.known[res.key]=1; res.fresh=fresh;
+    // peritty ryhmä on tunnettu, jos se oli tunnettu antajallaan; mutatoitunut ryhmä näytetään heti
+    const ta=knows(d.a), tb=knows(d.b), t=S.tieto[res.key]||(S.tieto[res.key]={});
+    for (const [grp,f] of [['k','K'],['g','G']]) if ((res.from[f]==='a'?ta:tb)[grp] || (res.mut && res.mut.grp===f)) t[grp]=1;
+    if (res.mut && res.first) res.suggest=strain(res.key).nimi; }
   if (res.kind==='villi') addInv('villi',1);
-  // kokeiltu pari muistetaan tuloksen kanssa: 'ok' | 'fail' (kontaminaatio ei kerro parista mitään)
-  const pair=pairKey(d.a,d.b); if (res.kind==='new') S.tried[pair]='ok'; else if (res.kind==='fail') S.tried[pair]='fail';
-  if (res.kind==='new' && res.key.includes('~')) res.suggest=suggestName(res.key);
+  const pair=pairKey(d.a,d.b); if (res.kind==='new') S.tried[pair]='ok';
   dev.dish=null; dev.busy=false; dev.done=false; dev.t=0;
-  if (res.kind==='new' && !S.flags.firstCross){ S.flags.firstCross=true; res.hint=HINT.firstCross; }
-  else if (res.kind==='new' && res.key.includes('~') && !S.flags.mutation){ S.flags.mutation=true; res.hint=HINT.mutation; }
+  if (res.kind==='new' && res.first && !S.flags.firstCross){ S.flags.firstCross=true; res.hint=HINT.firstCross; }
+  else if (res.kind==='new' && res.mut && !S.flags.mutation){ S.flags.mutation=true; res.hint=HINT.mutation; }
   const out={...res, a:d.a, b:d.b}; emit('malja-auki',{laite:dev, tulos:out}); progressChain(); save(); return out;
 }
 
-export function pairKey(a,b){ return [a.split('~')[0],b.split('~')[0]].sort().join('+'); }
-// hylätty pari (paljastettu): näytetään hautomossa yliviivattuna
-export function failedPair(a,b){ return S.tried[pairKey(a,b)]==='fail'; }
-
-// ---------- mutaation nimeäminen (TP7) ----------
-export const NAME_MAX = 14;
-const NAME_PREFIX = {grow:'PIKA', yield:'KULTA'};
-const NAME_STEM = {heltta:'HELTTA', ruusu:'RUUSU', hamara:'NUPPI', kalvo:'KALVO', hoitaja:'HOITAJA', yoruusu:'YÖRUUSU', verkko:'VERKKO'};
+// ---------- kannan nimeäminen (TP7; V2.2: kaikki risteymät ja mutaatiot) ----------
+export const NAME_MAX = GN.NAME_MAX;
 // sallitut merkit: pikselifontin kirjaimet A–Ö, numerot, välilyönti ja viiva
 export function cleanName(str){ return String(str||'').toUpperCase().replace(/[^A-ZÄÖ0-9 \-]/g,'').replace(/ +/g,' ').trimStart().slice(0,NAME_MAX); }
-function nameTaken(n, except){ if (Object.values(STRAINS).some(T=>T.name===n)) return true;
-  return Object.keys(S.names).some(k=>k!==except && S.names[k]===n); }
-export function suggestName(key){ const [b,perk]=key.split('~');
-  const base=(NAME_PREFIX[perk]||'')+(NAME_STEM[b]||b.toUpperCase()); let n=base.slice(0,NAME_MAX), i=2;
-  while (nameTaken(n,key)) n=(base.slice(0,NAME_MAX-2)+' '+(i++));
-  return n; }
+export function suggestName(key){ const T=strain(key); return T ? (T.nimi||T.name) : ''; }
 // palauttaa uuden nimen tai null (tyhjä nimi palauttaa oletusnimen)
 export function renameStrain(key, str){
-  if (!key.includes('~') || !STRAINS[key.split('~')[0]]) return null;
+  if (!S.kannat[key]) return null;
   const n=cleanName(str).trim();
   if (!n){ delete S.names[key]; save(); return null; }
+  if (n===S.kannat[key].nimi){ delete S.names[key]; save(); return n; }   // oletusnimi kelpaa sellaisenaan
   if (nameTaken(n,key)){ virhe('nimi','NIMI ON JO KÄYTÖSSÄ'); return null; }
   const old=S.names[key]||null; S.names[key]=n;
   emit('nimeys',{kanta:key, nimi:n, vanha:old, viesti:'KANTA NIMETTY: '+n}); save(); return n;
@@ -138,24 +144,24 @@ export function renameStrain(key, str){
 
 // ---------- kehikko: elävä muotti ----------
 export function startFrame(dev, key){
-  key=key||'kalvo'; const F=FRAME[key]; if (!F || dev.busy) return false;
-  if ((S.inv['raw:'+key]||0)<F.need){ virhe('kehikko','TARVITSET '+F.need+' × '+STRAINS[key].name); return false; }
+  key=key||'kalvo'; const F=frameOf(key); if (!F || dev.busy) return false;
+  if ((S.inv['raw:'+key]||0)<F.need){ virhe('kehikko','TARVITSET '+F.need+' × '+strain(key).short); return false; }
   addInv('raw:'+key,-F.need); dev.job=key; dev.busy=true; dev.done=false; dev.t=0;
-  emit('laite-alku',{laite:dev, resepti:key, tuote:F.out, n:1, viesti:STRAINS[key].name+' KASVAA KEHIKKOON: '+PRODUCTS[F.out].name}); save(); return true;
+  emit('laite-alku',{laite:dev, resepti:key, tuote:F.out, n:1, viesti:strain(key).short+' KASVAA KEHIKKOON: '+PRODUCTS[F.out].name}); save(); return true;
 }
 export function collectDevice(dev){
   if (!dev.done) return;
   let viesti='', extra={};
-  if (dev.type==='kehikko'){ const key=dev.job||'kalvo', out=FRAME[key].out; addInv(out,1); S.flags.frame=true;
+  if (dev.type==='kehikko'){ const key=dev.job||'kalvo', out=(frameOf(key)||FRAME.kalvo).out; addInv(out,1); S.flags.frame=true;
     viesti='+1 '+PRODUCTS[out].name+'. '+PRODUCTS[out].txt; extra={resepti:key, tuote:out, n:1}; dev.job=null; }
   dev.busy=false; dev.done=false; dev.t=0; emit('laite-keruu',{laite:dev, ...extra, viesti}); progressChain(); save();
 }
 
 // ---------- markkina ----------
 export function prodName(id){ const [k,s]=id.split(':');
-  if (k==='raw') return STRAINS[s].name;
+  if (k==='raw') return strain(s)?strain(s).short:s;
   if (k==='itio') return strain(s).short+'-ITIÖ'; if (PRODUCTS[k]) return PRODUCTS[k].name; if (k==='villi') return 'VILLI NÄYTE'; return id; }
-export function basePrice(id){ const [k,s]=id.split(':'); return k==='raw' ? STRAINS[s].price : SELL_BASE[k]; }
+export function basePrice(id){ const [k,s]=id.split(':'); return k==='raw' ? (strain(s)?strain(s).price:0) : SELL_BASE[k]; }
 export function unitPrice(id, extra){ const M=S.market, sat=(M.sat[id]||0)+(extra||0);
   const sp = M.spike && M.spike.id===id ? SPIKE_MULT : 1; return basePrice(id)*sp*Math.pow(PRICE_DROP, sat); }
 export function quote(id,n){ let s=0; for(let i=0;i<n;i++) s+=unitPrice(id,i); return s; }
@@ -180,7 +186,7 @@ function marketTick(dt){
   M.nextSpike-=dt;
   if (M.nextSpike<=0){ M.nextSpike=SPIKE_EVERY;
     const pool=['raw:heltta','raw:ruusu'];
-    for (const k in S.known){ if (k.includes('~')||!STRAINS[k]||STRAINS[k].auto) continue; pool.push('raw:'+k); }
+    for (const k in S.known){ const T=strain(k); if (!T||T.auto||k==='heltta'||k==='ruusu'||!alive(k)) continue; pool.push('raw:'+k); }
     for (const p in PRODUCTS) if (S.made[p]) pool.push(p);
     M.spike={id:pool[(Math.random()*pool.length)|0], left:SPIKE_LEN};
     emit('kysyntapiikki',{tuote:M.spike.id, viesti:'KYSYNTÄPIIKKI: '+prodName(M.spike.id)+' ×2 KOLMEN TUNNIN AJAN'});
@@ -216,9 +222,11 @@ export function progressChain(){
     emit('tilaus-uusi',{tilaus:S.order, lahde:'torin vaki', vihje:HINT.order}); }
 }
 
+// risteymää pyydetään vain, jos pelaajalla on se yhä (itiöitä, kasvusto tai satoa); pohjakannat kelpaavat aina
+function alive(k){ return !!STRAINS[k] || (S.spores[k]||0)>0 || (S.inv['raw:'+k]||0)>0 || allCells().some(o=>o.c.strain===k); }
 // ---------- torin taulu ----------
 function boardPool(){ const ids=[];
-  for (const k in S.known){ const T=STRAINS[k]; if (!T||k.includes('~')||T.auto) continue; ids.push('raw:'+k); }
+  for (const k in S.known){ const T=strain(k); if (!T||T.auto||!alive(k)) continue; ids.push('raw:'+k); }
   for (const p in PRODUCTS) if (S.made[p]) ids.push(p);
   return ids; }
 function newBoardOrder(avoid){
@@ -250,7 +258,7 @@ export function deliverBoard(seq){
 export function upcoming(){
   const out=[];
   for (const {c} of allCells()){
-    if (c.kind==='device' && c.busy && !c.done) out.push({mita:c.type==='kehikko'?PRODUCTS[FRAME[c.job||'kalvo'].out].name:DEVICES[c.type].name, t:(1-c.t)*devTime(c)});
+    if (c.kind==='device' && c.busy && !c.done) out.push({mita:c.type==='kehikko'?PRODUCTS[(frameOf(c.job||'kalvo')||FRAME.kalvo).out].name:(c.dish&&c.dish.study?'TUTKIMUS':DEVICES[c.type].name), t:(1-c.t)*devTime(c)});
     if (c.kind==='vessel' && c.strain && waves(c)<WAVES && c.moist>0.1){ const T=strain(c.strain); if (T.auto) continue;
       const rate=MATCH_MULT[matchOf(c,c.strain)]/growTime(c); out.push({mita:waves(c)?'AALTO '+(waves(c)+1)+'/'+WAVES:'SATO', t:(1-c.growth)/rate, aalto:true}); }
   }

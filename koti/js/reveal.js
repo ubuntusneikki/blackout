@@ -11,13 +11,14 @@
 // Tapahtumat: paljastus-alku {lahde, tulos}, paljastus-tulos {lahde, tulos} (äänet), paljastus-loppu {lahde, tulos}.
 // Näytöksen vaiheet: himmennys → malja/rihmakimppu sykkii → kansi aukeaa ja itiöt pyörteilevät →
 // kannan siluetti täyttyy väreillä alhaalta ylös → nimi ja tulos (sointu). Napautus hyppää tulokseen.
-import {P, AMB, WILD, SYM, STRAINS, ORDER, CUR} from './data.js';
+import {P, AMB, WILD, SYM, STRAINS, ORDER, CUR, MUT_NAME} from './data.js';
+import {traitRows} from './genomi.js';
 import {W, H, LAY, g, px, rect, rng, BAYER, clamp, ease, text, textC, tw, wrap, wrapLines, button, hit, LH, img} from './nat.js';
-import {S, strain} from './state.js';
+import {S, strain, knows} from './state.js';
 import * as sim from './sim.js';
 import * as retki from './retki.js';
 import {emit} from './events.js';
-import {sprite} from './iso.js';
+import {strainSprite} from './iso.js';
 import {U} from './ui.js';
 import * as naming from './naming.js';
 
@@ -28,7 +29,7 @@ const GOLD = ['#7a4a14', '#e8a02a', '#ffe08a', '#fff6d0'];
 // ja otsikko, tulos, nimeäminen ja napit oikealla 384 leveässä palstassa.
 // cx, cy = maljan keskipiste, tx = tekstipalstan keskikohta, tw = tekstin leveys, loput = rivien y-paikat.
 function lay(){
-  if (!LAY.land) return {land:false, cx:W/2, cy:270, tx:W/2, tw:W - 48, title:60, wait:120, cnt:156, tap:400, info:370, btn:600, name:470, nx:0, flash:54};
+  if (!LAY.land) return {land:false, cx:W/2, cy:270, tx:W/2, tw:W - 48, title:60, wait:120, cnt:156, tap:400, info:366, btn:600, name:486, nx:0, flash:54};
   const sw = W - 384, cy = Math.round(H/2) + 36;
   return {land:true, cx:Math.round(sw/2), cy, tx:sw + 192, tw:336, title:22, wait:Math.round(H/2) - 40, cnt:Math.round(H/2) - 6, tap:Math.min(H - 18, cy + 84), info:66, btn:H - 44, name:H - 164, nx:sw, flash:8};
 }
@@ -64,7 +65,7 @@ function begin(){
 }
 function start(lahde, res){
   // tuttu kanta: lyhyempi näytös
-  const short = res.kind === 'new' && !res.first && !String(res.key).includes('~');
+  const short = (res.kind === 'new' && !res.first) || res.kind === 'study';
   RV.cur = {...(RV.cur || {}), lahde, res, wait:false, t0:now(), sp:short ? 1.7 : 1, said:false, nameDone:false};
   U.modal = null; U.view = 'reveal';
   emit('paljastus-alku', {lahde, tulos:res});
@@ -99,7 +100,7 @@ function silhouette(s, col){ const key = s.c.width + 'x' + s.c.height + col + (s
   const c = document.createElement('canvas'); c.width = s.w; c.height = s.h; const q = c.getContext('2d');
   q.drawImage(s.c, 0, 0); q.globalCompositeOperation = 'source-in'; q.fillStyle = col; q.fillRect(0, 0, s.w, s.h);
   (s.sil = s.sil || {})[col] = c; return c; }
-function shroomSprite(key){ const b = strain(key).base; return sprite('sieni_' + b + '_kypsa'); }
+function shroomSprite(key){ return strainSprite(key); }
 // kannan sieni: siluetti tummana ja väri täyttyy alhaalta ylös (f 0..1). k = skaala.
 function drawFill(key, cx, by, f, k, gold){
   const s = shroomSprite(key); if (!s) return;
@@ -157,11 +158,24 @@ function bookFlash(x, y, a){ const on = a < 2 && Math.sin(a*12) > -0.2;
   for (let k = 0; k < 4; k++){ rect(x + 4, y + 6 + k*5, 5, 1, P.uiD); rect(x + 14, y + 6 + k*5, 5, 1, P.uiD); } }
 
 function resultTitle(res){
-  if (res.kind === 'fail') return {s:'EI TULOSTA', col:P.uiD};
   if (res.kind === 'villi') return {s:'KONTAMINAATIO', col:WILD[2]};
   const T = strain(res.key);
-  if (T.mutant) return {s:'MUTAATIO!', col:GOLD[2]};
-  return {s:res.first ? 'UUSI KANTA!' : 'ONNISTUI', col:T.col[2]};
+  if (res.kind === 'study') return {s:'TUTKITTU', col:SYM};
+  if (res.mut && res.first) return {s:MUT_NAME[res.mut.t] + '!', col:GOLD[2]};
+  return {s:res.first ? 'UUSI KANTA!' : 'TUTTU KANTA', col:T.col[2]};
+}
+// piirrerivit: perityn ryhmän väri kertoo antajan (A tai B), mutatoitunut ryhmä on kultainen, tuntematon kysymysmerkki
+function traits(res, T, A, B, x, y, w, b){
+  const tk = knows(res.key), rows = traitRows(T, tk);
+  rows.forEach(([lab, val, grp], k) => {
+    if (b < 0.25 + k*0.18) return;                  // rivit ilmestyvät yksi kerrallaan
+    const mutHere = res.mut && (res.mut.grp === grp || (res.mut.t === 'ainut' && grp === 'M')) && res.kind === 'new';
+    const donor = res.from ? (res.from[grp] === 'a' ? A : B) : T;
+    const col = val === '?' ? AMB[1] : mutHere ? GOLD[2] : donor.col[2];
+    text(lab, x, y + k*(LH + 3), P.uiD); text(val, x + 92, y + k*(LH + 3), col);
+    if (res.from && res.kind === 'new' && A.key !== B.key){ rect(x + 80, y + k*(LH + 3) + 1, 6, 6, mutHere ? GOLD[1] : donor.col[1]); }
+  });
+  return rows.length*(LH + 3);
 }
 
 // ---------- piirto ----------
@@ -196,25 +210,23 @@ function bundle(cx, cy, t, glow){
   rect(cx - 3, cy - 3, 7, 7, SYM); rect(cx - 2, cy - 2, 5, 5, '#e8fff0');
 }
 
-// maljan näytös: kansi → itiöt → siluetti → tulos
+// maljan näytös: kansi → itiöt → siluetti → tulos ja piirteet
 function drawDish(c, a, t){
   const res = c.res, A = strain(res.a), B = strain(res.b);
-  const T = res.kind === 'new' ? strain(res.key) : null, mut = T && T.mutant;
-  const fail = res.kind === 'fail', villi = res.kind === 'villi';
-  const RES = fail ? 3.2 : 3.4;                       // tuloksen hetki
+  const T = res.kind !== 'villi' ? strain(res.key) : null, mut = !!(T && res.mut && res.first && res.kind === 'new');
+  const villi = res.kind === 'villi', study = res.kind === 'study', ainut = mut && res.mut.t === 'ainut';
+  const RES = 3.4;                                    // tuloksen hetki
   const l = lay(), CX = l.cx, CY = l.cy;
   dim(1);
   // tuloksen hohde kannan takana (piirretään ensin, ettei se peitä sientä)
-  if (T && a >= RES){ const pulse = 0.5 + 0.5*Math.sin(a*3); halo(CX, CY - 40, 130, 100, mut ? GOLD[2] : T.col[2], 0.35 + 0.3*pulse, 0); }
-  text(A.short + ' × ' + B.short, 8, 8, P.uiD);
+  if (T && a >= RES){ const pulse = 0.5 + 0.5*Math.sin(a*3); halo(CX, CY - 40, ainut ? 160 : 130, ainut ? 120 : 100, mut ? GOLD[2] : T.col[2], 0.35 + 0.3*pulse, 0); }
+  text(study ? 'TUTKIMUS: ' + A.short : A.short + ' × ' + B.short, 8, 8, P.uiD);
   const lid = clamp((a - 0.9)/0.7, 0, 1);
   const glowA = a < 0.9 ? 0.4 + 0.6*Math.abs(Math.sin(a*5)) : clamp(1.6 - a, 0, 1);
   dish(CX, CY, lid, glowA, t);
   // rihmasto kasvaa
   const grow = clamp((a - 1.2)/1.2, 0, 1);
-  if (fail){ const back = clamp((a - 2.3)/0.8, 0, 1); mycel(CX - back*14, CY, A, B, grow*(1 - back*0.6), 'fail', t);
-    if (back > 0) mycel(CX + back*14, CY, B, A, 0, 'fail', t); }
-  else mycel(CX, CY, A, B, grow*(villi ? 1 : 1 - clamp((a - 2.2)/0.6, 0, 0.8)), villi ? 'villi' : 'ok', t);
+  mycel(CX, CY, A, B, grow*(villi ? 1 : 1 - clamp((a - 2.2)/0.6, 0, 0.8)), villi ? 'villi' : 'ok', t);
   if (villi) wildSpread(CX, CY, clamp((a - 2.0)/1.2, 0, 1), t);
   // itiöpyörre kannen auetessa
   if (lid > 0 && a < 3.6) swirl(CX, CY - 6, a - 0.9, villi ? [WILD[1], WILD[2], A.col[2]] : [A.col[2], B.col[2], '#e8fff0'], 70);
@@ -226,26 +238,29 @@ function drawDish(c, a, t){
   // ---- tulos ----
   if (!c.said){ c.said = true; emit('paljastus-tulos', {lahde:c.lahde, tulos:res}); }
   const b = a - RES, rt = resultTitle(res);
-  if (mut) goldBurst(CX, CY - 40, b);
+  if (mut){ goldBurst(CX, CY - 40, b); if (ainut) goldBurst(CX, CY - 40, b - 0.5); }
   const TX = l.tx, wx = TX - l.tw/2;
   textC(rt.s, TX, l.title, rt.col, 2);
   let y = l.info;
   if (T){
-    const nm = (mut && c.nameDone && S.names[res.key]) ? S.names[res.key] : T.name;
-    wrapLines(nm, l.tw/2).forEach(ln => { textC(ln, TX, y, mut ? GOLD[2] : T.col[2], 2); y += 2*LH + 2; });
-    if (mut){ textC(T.orig, TX, y, GOLD[1]); y += LH + 2; }
-    textC('+' + res.n + ' ITIÖPUSSIA', TX, y + 2, P.ui3); y += LH + 8;
-    if (res.first){ textC('UUSI KANTA KANTAKIRJAAN', TX, y, AMB[2]); bookFlash(W - 40, l.flash, b); y += LH + 4; }
-    if (res.hint && !mut && !res.first) wrap(res.hint, wx, y + 4, l.tw, SYM);
-  } else if (fail){
-    wrap('RIHMASTOT HYLKIVÄT TOISIAAN. ' + A.short + ' JA ' + B.short + ' EIVÄT SOVI YHTEEN. PARI ON NYT YLIVIIVATTU HAUTOMOSSA.', wx, y, l.tw, P.ui3);
+    const Tn = strain(res.key);
+    wrapLines(Tn.name, l.tw/2).forEach(ln => { textC(ln, TX, y, mut ? GOLD[2] : T.col[2], 2); y += 2*LH + 2; });
+    if (study) textC(res.uusi && res.uusi.length ? 'PIIRTEET SELVISIVÄT' : 'EI UUTTA TIETOA', TX, y + 2, P.ui3);
+    else textC('+' + res.n + ' ITIÖPUSSIA', TX, y + 2, P.ui3);
+    y += LH + 8;
+    const rx = l.land ? wx + 20 : wx + 40;
+    y += traits(res, T, A, B, rx, y, l.tw, study ? 9 : b) + 4;
+    if (res.mut && res.kind === 'new'){ textC(res.mut.txt, TX, y, GOLD[1]); y += LH + 3; }
+    if (ainut){ textC('KENELLÄKÄÄN MUULLA EI OLE TÄTÄ', TX, y, GOLD[2]); y += LH + 3; }
+    if (res.first){ bookFlash(W - 40, l.flash, b); if (!mut){ textC('UUSI KANTA KANTAKIRJAAN', TX, y, AMB[2]); y += LH + 4; } }
+    if (res.hint && !mut) wrap(res.hint, wx, y + 4, l.tw, SYM);
   } else {
     textC('+1 VILLI NÄYTE', TX, y, WILD[2], 2); y += 2*LH + 6;
     wrap('VILLI ITIÖ PÄÄSI MALJAAN JA VALTASI SEN. MARKKINA MAKSAA NÄYTTEESTÄ HYVIN.', wx, y, l.tw, P.ui3);
   }
   // mutaatio: nimeäminen ennen jatkamista
   if (mut && !c.nameDone){
-    if (b > 0.9){ if (!naming.isOpen()) naming.open(res.key, res.suggest || sim.suggestName(res.key), () => { c.nameDone = true; });
+    if (b > 1.2){ if (!naming.isOpen()) naming.open(res.key, res.suggest || sim.suggestName(res.key), () => { c.nameDone = true; });
       naming.draw(t, l.name, l.nx); }
     return;
   }
@@ -270,7 +285,7 @@ function drawRetki(c, a, t){
       wrapLines(retki.lootName(o), land ? 140 : 110).forEach(ln => { textC(ln, x, ly, lootCol(o)); ly += LH + 1; });
       if (o.first){ textC('UUSI KANTA!', x, ly + 2, AMB[2]); }
       else if (o.kind === 'vessel') textC('HARVINAINEN', x, ly + 2, P.uiD);
-      else if (o.kind === 'spore' && o.key.includes('~')) textC('MUTAATIOHERKKÄ', x, ly + 2, GOLD[1]); }
+      else if (o.kind === 'spore' && strain(o.key).villi) textC('VILLI LINJA', x, ly + 2, WILD[2]); }
   });
   if (a < RES + 0.3){ hit(0, 0, W, H, () => { c.t0 = now() - (RES + 0.35)*1000; }); return; }
   if (!c.said){ c.said = true; emit('paljastus-tulos', {lahde:'retki', tulos:res}); }

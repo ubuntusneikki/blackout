@@ -98,5 +98,68 @@ Ensimmäinen vaihe toteutuspromptista "Solmu V2" (16.11.2026). Pelilogiikka, tal
 
 **Tiedossa, ei tehty tässä vaiheessa**
 - Pystytilassa pitkän näytön ylä- ja alareunaan jää tyhjää (asettelu on kiinteä 384×672).
-- Piirto on yhä noin 11 kuvaa sekunnissa (`main.js`, 90 ms:n väli). 60 fps:n mittaus ja sujuvammat siirtymät kuuluvat myöhempään vaiheeseen.
+- ~~Piirto on yhä noin 11 kuvaa sekunnissa (`main.js`, 90 ms:n väli).~~ Korjattu V2.1:ssä, ks. alla.
 - Vaakatilaa ei ole kokeiltu oikealla puhelimella (selaimen palkit, näppäimistö nimeämisessä).
+
+## KOTI-01 V2.1 (suorituskyky: nykimisen korjaus)
+
+Peli piirsi enintään 11 kuvaa sekunnissa, ja ikkunat (markkina ym.) pystyasennossa nykivät vielä pahemmin. Syyt ja korjaukset:
+
+- **Piirron rajoitin:** `main.js` piirsi tarkoituksella vain 90 ms:n välein. Nyt piirretään jokaisella näytön virkistyksellä, joten tilan vaihto (450 ms) ja lähikuvan zoomaus (260 ms) saavat noin 27 ja 16 kuvaa aiemman 5 ja 3 sijaan.
+- **Ikkunan himmennys:** `gfx.js veil()` piirsi shakkiruudun pikseli kerrallaan (noin 129 000 `fillRect`-kutsua kuvaa kohden). Nyt se on kerran tehty kuvio ja yksi täyttö.
+- **Kankaan koko:** kokonaislukukertoimella näytön kangas on natiivikokoinen (esim. 384×672) ja selain suurentaa sen (`image-rendering: pixelated`). Aiemmin joka kuva koottiin laitepikseleinä (esim. 1152×2016). Kangas kohdistetaan kokonaiseen laitepikseliin. Näytöillä, joilla kerroin ei ole kokonaisluku (esim. 412 px leveä, dpr 2,625), toiminta on ennallaan.
+
+Mittaus (`node tests/fps.js [hidastus]`, headless-Chrome ilman näytönohjainta, 390×844 dpr 3, huoneessa 12 kasvustoa ja hautomo; ms yhtä kuvaa kohden):
+
+| Näkymä | Ennen, ×1 | Jälkeen, ×1 | Ennen, CPU ×4 | Jälkeen, CPU ×4 |
+|---|---|---|---|---|
+| Huone | 8,0 ms | 4,1 ms | 58 ms | 21 ms |
+| Ikkuna auki (pysty) | 73 ms | 3,4 ms | 302 ms | 22 ms |
+| Toteutunut kuvataajuus | enintään 11 | 60 | enintään 11 (ikkunassa noin 3) | 30–60 |
+
+60 kuvaa sekunnissa vaatii alle 16,7 ms kuvaa kohden. Ilman hidastusta varaa on reilusti; neljä kertaa hidastetulla suorittimella jäädään huoneessa noin 20 ms:iin. Hidastettu headless-ajo piirtää kaiken ohjelmallisesti, joten se on puhelinta ankarampi kokoamisen osalta, mutta **oikealla puhelimella ei ole vielä mitattu.** Sitä varten osoitteeseen voi lisätä `?fps`: vasempaan alakulmaan tulee toteutunut kuvataajuus ja yhden kuvan piirtoaika.
+
+Jos puhelimella jäädään alle 60:n, seuraavat kohteet ovat huonekerroksen pikselisilmukat (`iso.js`: ikkunan lasi, hehkut) ja tekstin piirto pikseli kerrallaan (`gfx.js text()`).
+
+## KOTI-01 V2.2 (Solmu V2, vaihe 2: genomi ja perinnöllinen risteytys)
+
+Kiinteät risteytysreseptit on poistettu. Jokaisella kannalla on genomi, ja jälkeläinen perii sen vanhemmiltaan. Suunnitteluvalinnat hyväksyi Juuso 16.11.2026 (dokumentti "Genomi ja perinnöllinen risteytys").
+
+**Genomi** (`koti/js/genomi.js`, puhdas moduuli ilman `Math.random`ia)
+- Kolme geeniryhmää, jotka periytyvät kokonaisina jommaltakummalta vanhemmalta: **MUOTO** (muoto + kolme väriä), **KYKY** (ei kykyä / HOIDA / TARTU / KULJETA / AISTI + luonne 1–5) ja **KASVU** (sato 1–5, nopeus 1–5, ilmasto). Lisäksi piilotettu **vakaus**, joka laskee joka risteytyksessä ja mutaatiossa; epävakaat vanhemmat nostavat mutaation todennäköisyyttä enintään kaksinkertaiseksi.
+- Sama geeniyhdistelmä on sama kanta (itiöt pinoutuvat). Risteymä saa automaattisen nimen (esim. SINIRUUSU, HÄMÄRÄHELTTA), jonka voi vaihtaa kantakirjassa. Hinta, kasvuaika ja sato lasketaan geeneistä.
+- **Mutaatiot** maljaa kohden: pieni 12 %, harvinainen 2 %, ainutlaatuinen 0,3 %; kontaminaatio 5 % kuten ennen. Tulos arvotaan siemenestä `hash(pelaajan siemen, vanhempien siemenet, parin maljan järjestysnumero)`, joten sama malja antaa aina saman tuloksen (valmius palvelimen tarkistukselle myöhemmin). 20 000 maljan otoksessa: 11,5 % / 2,0 % / 0,32 % / 4,9 %.
+- **Pohjakannat:** siniheltta ja ruususieni alussa, hämäränuppi ja kalvoheltta lyhyeltä retkeltä, hoitajasieni, verkkoheltta ja yöruusu syvältä retkeltä. Hoitajasieni ei siis enää synny risteytyksestä (aiempi päätös kumottu Juuson hyväksynnällä). Syvältä voi löytyä myös villi linja (pohjakannan muunnos).
+
+**Piirteiden paljastuminen**
+- MUOTO näkyy aina. KASVU (sato, nopeus, ilmasto) selviää ensimmäisestä sadosta. KYKY ja luonne selviävät **tutkimusmaljasta** (1 itiöpussi + 1 agar-malja hautomossa, 2 h).
+- Omassa risteymässä peritty ryhmä tunnetaan heti, jos se tunnettiin antajavanhemmassa; mutatoitunut ryhmä näytetään heti. Tuntemattomat piirteet ovat kysymysmerkkeinä paljastuksessa, kantakirjassa, astian lähikuvassa ja hautomon valinnassa.
+- Kantakirja: pohjakannat + omat kannat, sukupuu näyttää kannan vanhemmat ja isovanhemmat sekä sen, miltä vanhemmalta kukin ryhmä periytyi.
+
+**Mikä säilyi**
+- Kehikko, sen tuotteet ja suodatintilaus ovat ennallaan vaiheeseen 6 asti. Kehikko lukee kannan MUODON: lakki → valokalvo, ryväs → lämpörihma, verkko → itiösuodatin. Kellari aukeaa, kun tunnetaan verkkomuotoinen kanta.
+- Risteymä näyttää muodon antajan spriteltä omilla väreillään (väri sekoittuu 30 % kasvun antajan suuntaan). Proseduraalinen ulkonäkö on vaihe 3.
+
+**Tallennus** (`schema:1` säilyy): uudet kentät `seed`, `kannat` (risteymien rekisteri), `tieto` (tunnetut piirreryhmät), `crossN` (maljojen määrä parista). Vanhat tallennukset: kannat säilyvät pohjakantoina ja niiden piirteet tunnetaan; vanhat mutaatiot (`kanta~grow`, `kanta~yield`) muuttuvat pieniksi mutaatioiksi (nopeus +1 / sato +1) nimineen, myös varastossa, markkinassa, taulun tilauksissa, astioissa ja kehikossa; kesken ollut malja arvotaan uudelleen. Samalla korjattiin vanha vika: V0.3-tallennuksen tuntemattomat tuotteet tekivät hopeasta `NaN`.
+
+**Simulaattori** (`node tests/sim/run.js --profile kaikki --seeds 20`, raportti `tests/sim/raportit/v2-2-genomi.md`)
+
+| Profiili | tilaus täytetty | keskiarvo | mediaani | vaihtelu | V1.5 (ennen) |
+|---|---|---|---|---|---|
+| aktiivinen | 20/20 | 33,7 h | 32,5 h | 29,5 h – 2,0 vrk | 37,9 h |
+| 4 käyntiä/vrk | 20/20 | 6,2 vrk | 6,0 vrk | 4,6–8,4 vrk | 6,2 vrk |
+| 2 käyntiä/vrk | 16/20 | 11,4 vrk | 11,5 vrk | 9,5–13,5 vrk | 11,6 vrk (16/20) |
+
+Botti ei enää tunne reseptejä: se hakee verkkomuotoisen kannan retkeltä, tekee yhden risteytyksen ketjun askelta varten ja yrittää sitten risteyttää nopeammin kasvavan verkkomuotoisen kannan (verkkomuoto × siniheltta). Risteytyksiä 3,3 ja mutaatioita 0,4 per ajo (4/vrk).
+
+**Testit:** `tests/tp7-paljastus.js` (28 tarkistusta: periytyminen, kaikki mutaatiotasot, tutkimusmalja, sadon paljastama kasvu, determinismi, jono, kantakirja), `tests/tallennukset.js` (nyt tarkistaa tulokset: 17 tarkistusta, mukana V1.5-tallennus mutaatioineen), `v1-lapipeluu`, `opastus`, `vaaka`, `pwa`, `tp6-efektit` läpi. Kuvat: `docs/kuvat/v2-2/`.
+
+**Pelituntuma, rehelliset havainnot**
+- **Risteytys ei ole vielä pakollinen päätavoitteelle.** Kalvoheltta tulee nyt retkeltä, joten suodatintilauksen voi täyttää risteyttämättä kertaakaan (ketju vaatii yhden risteytyksen). Risteytyksellä saa nopeamman suodatinkannan, mutta peli ei kerro sitä. Vaiheen 6 välitavoiteketjun pitää antaa risteytykselle selvä syy.
+- **Kyvyillä ei ole vielä käyttöä** (paitsi HOIDA): TARTU, KULJETA ja AISTI näkyvät piirteinä, mutta laitteet tulevat vaiheessa 4. Tutkimusmalja voi siksi tuntua turhalta.
+- **Risteymät näyttävät liian samalta kuin vanhempansa.** Esimerkiksi HÄMÄRÄHELTTA (helttamuoto, hämäränupin kyky) on kuvassa lähes siniheltta. Korjautuu vaiheessa 3.
+- **Kantoja kertyy nopeasti** (kahdesta vanhemmasta jopa 6 eri yhdistelmää), ja automaattinimet toistuvat ("HÄMÄRÄHELTTA 2"). Kantakirja ja istutuslista pitenevät; tarvitaan pian suodatus tai kantojen hylkääminen.
+- **8 tunnin malja on pitkä odotus kokeiluun**, kun tulos on arpa: toivottu yhdistelmä osuu noin joka kolmannella maljalla.
+- Hoitajasienen KASVUN perinyt risteymä ei tuota satoa (sato 0), mikä voi hämmentää.
+- Kantakirjan sivun otsikko jää pystytilassa kaksirivisen opastusvihjeen alle (vanha vika, ei korjattu tässä).
+- Ei kokeiltu oikealla puhelimella.

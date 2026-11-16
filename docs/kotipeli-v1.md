@@ -1,5 +1,7 @@
 # Kotipeli v1 – suodatinputki
 
+> **V2.2 (16.11.2026):** risteytysreseptit ja hylkiminen on korvattu genomilla ja perinnöllisellä risteytyksellä. Kalvoheltta ja hoitajasieni löytyvät retkiltä. Ajantasainen kuvaus: docs/prototyypin-tila.md, kohta V2.2.
+
 Tämä on kotipelin ensimmäisen version määrittely. Se korvaa CLAUDE.md:n tehtävät 2–5. Luvut ovat lähtöarvoja, joita säädetään testauksen perusteella.
 
 ## Suunta: sienet ovat eläviä, eivät tavaroita

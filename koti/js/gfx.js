@@ -32,8 +32,12 @@ export function rect(x,y,w,h,col){ g.fillStyle=col; g.fillRect(q(x),q(y),q(w),q(
 // pistekuvion kynnys natiivipikselin kohdalla (x, y loogisina, 0,5:n askelin)
 export const bay=(x,y)=>BAYER[Math.floor(y*RES)&3][Math.floor(x*RES)&3];
 // koko näkymän himmennys natiivina shakkiruutuna
-export function veil(col){ g.save(); g.setTransform(1,0,0,1,0,0); g.fillStyle=col;
-  for(let y=0;y<H*RES;y++) for(let x=y&1;x<W*RES;x+=2) g.fillRect(x,y,1,1); g.restore(); }
+// (V2.1: shakkiruutu tehdään kerran kuvioksi; aiemmin jokainen pikseli oli oma fillRect, noin 129 000 kutsua kuvaa kohden)
+const VEIL={};
+export function veil(col){
+  let p=VEIL[col];
+  if(!p){ const c=document.createElement('canvas'); c.width=c.height=2; const x=c.getContext('2d'); x.fillStyle=col; x.fillRect(0,0,1,1); x.fillRect(1,1,1,1); p=VEIL[col]=g.createPattern(c,'repeat'); }
+  g.save(); g.setTransform(1,0,0,1,0,0); g.fillStyle=p; g.fillRect(0,0,W*RES,H*RES); g.restore(); }
 export function rng(seed){ return function(){ seed|=0; seed=seed+0x6D2B79F5|0;
   let t=Math.imul(seed^seed>>>15,1|seed); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
 export const BAYER=[[0,8,2,10],[12,4,14,6],[3,11,1,9],[15,7,13,5]];
@@ -150,3 +154,10 @@ export function vital(d,i,v){
 }
 export function vitalRect(x,y,w,h,v){ if(v>=1) return; x=Math.max(0,x|0)*RES; y=Math.max(0,y|0)*RES; w=Math.min(W*RES-x,(w|0)*RES); h=Math.min(H*RES-y,(h|0)*RES); if(w<=0||h<=0) return;
   const img=g.getImageData(x,y,w,h), d=img.data; for(let i=0;i<d.length;i+=4) vital(d,i,v); g.putImageData(img,x,y); }
+// kannan värit spriten pikseleihin (V2.2): kylläiset (sienen) pikselit saavat kannan kolme väriä kirkkautensa mukaan
+// liukuna tumma → keski → vaalea, joten varjostus säilyy. Harmaat osat (jalka, multa) jäävät ennalleen.
+const hexRgb=h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];
+export function tintPixels(d,cols){ const C=cols.map(hexRgb);
+  for(let i=0;i<d.length;i+=4){ if(!d[i+3]) continue; const r=d[i],gg=d[i+1],b=d[i+2],mx=Math.max(r,gg,b),mn=Math.min(r,gg,b); if(mx-mn<40) continue;
+    const l=Math.pow(clamp(((0.3*r+0.59*gg+0.11*b)/255-0.15)/0.8,0,1),1.5)*2, k=l<1?0:1, f=l-k;
+    for(let j=0;j<3;j++) d[i+j]=C[k][j]+(C[k+1][j]-C[k][j])*f; } }

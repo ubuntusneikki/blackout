@@ -1,9 +1,9 @@
 // KOTI v1: silmukka, syöte ja synkronointi
-import {W, H, RES, LAY, setLayout, screen, sctx, buf, HIT} from './gfx.js';
-import {S, SAVE_KEY, save, mergeIncoming} from './state.js';
+import {W, H, RES, LAY, setLayout, screen, sctx, buf, HIT, rect, text, tw, fmt} from './gfx.js';
+import {S, SAVE_KEY, save, mergeIncoming, strain} from './state.js';
 import * as sim from './sim.js';
 import {U, render, audioInit, openHautomo, switchRoom} from './ui.js';
-import {STRAINS} from './data.js';
+import {STRAINS, P, AMB} from './data.js';
 import * as fx from './fx.js';
 import {play} from './audio.js';
 import {loadAtlas, composite, zoomActive} from './iso.js';
@@ -24,16 +24,21 @@ function catchUp(){ const real=(Date.now()-(S.kotiLast||Date.now()))/1000, away=
   const h=real/3600, aika=h>=1?Math.floor(h)+' H':Math.max(1,Math.round(real/60))+' MIN';
   emit('paluu',{poissa:real, ...b, viesti: parts.length ? 'POISSA '+aika+': '+parts.join(', ')+'.' : null}); }
 // itiöt voivat tulla myös testilöydöistä tai vanhasta tallennuksesta: kanta on silloin tunnettu
-function syncKnown(){ for (const k in S.spores){ const b=k.split('~')[0]; if (STRAINS[b]) S.known[b]=1; } }
+function syncKnown(){ for (const k in S.spores){ if (strain(k)){ S.known[k]=1; if (!S.tieto[k]) S.tieto[k]=STRAINS[k]&&(k==='heltta'||k==='ruusu')?{k:1,g:1}:{}; } else delete S.spores[k]; } }
 // aamupaljastus (TP7): poissa ollessa valmistuneet maljat ja retki odottavat jonossa; pelaaja avaa ne napautuksella
 function morningReveal(){ reveal.queueOnOpen(); }
 catchUp(); syncKnown(); sim.checkUnlocks(); sim.progressChain(); sim.rescue(); morningReveal(); save();
 
-let lastMs=performance.now(), lastFrame=0, lastSave=0;
+// V2.1: piirretään jokaisella näytön virkistyksellä (aiemmin enintään 90 ms:n välein eli noin 11 kuvaa sekunnissa,
+// minkä takia siirtymät nykivät). FPS = toteutunut kuvataajuus; ?fps näyttää sen ja yhden kuvan piirtoajan ruudulla.
+let lastMs=performance.now(), lastSave=0;
+const FPS={show:/[?&]fps\b/.test(location.search), n:0, t0:performance.now(), fps:0, ms:0, acc:0, frames:0};
+window.__fps=FPS;
 function loop(ms){
   const dt=Math.min(1,(ms-lastMs)/1000); lastMs=ms;
   if (!U.modal && U.view!=='reveal') sim.tick(dt*S.speed);
-  if (ms-lastFrame>90){ lastFrame=ms; draw(ms); }
+  const a=performance.now(); draw(ms); FPS.acc+=performance.now()-a; FPS.n++; FPS.frames++;
+  if (ms-FPS.t0>=500){ FPS.fps=Math.round(FPS.n*1000/(ms-FPS.t0)); FPS.ms=FPS.acc/FPS.n; FPS.n=0; FPS.acc=0; FPS.t0=ms; }
   if (ms-lastSave>3000){ lastSave=ms; save(); sim.rescue(); }
   requestAnimationFrame(loop);
 }
@@ -42,7 +47,9 @@ function loop(ms){
 // K = kokonaislukukerroin laitepikseleinä; jos se jättäisi yli 15 % näytöstä tyhjäksi, venytetään näytön kokoon.
 const PORT=[384,672], LAND_MIN=[768,352], LAND_MAX=[1024,448];
 let K=1;
-function draw(ms){ render(ms); fx.draw(ms); composite(sctx, buf, K, U.view); }
+function draw(ms){ render(ms); fx.draw(ms);
+  if (FPS.show){ const s=FPS.fps+' FPS '+fmt(FPS.ms)+' MS'; rect(0,H-10,tw(s)+5,10,P.ui0); text(s,2,H-8,AMB[2]); }
+  composite(sctx, buf, K, U.view); }
 function fit(){
   const dpr=window.devicePixelRatio||1, dw=innerWidth*dpr, dh=innerHeight*dpr;
   const sP=Math.min(dw/PORT[0], dh/PORT[1]), sL=Math.min(dw/LAND_MIN[0], dh/LAND_MIN[1]), land=sL>sP;
@@ -51,11 +58,15 @@ function fit(){
   if (land){ nw=Math.min(LAND_MAX[0], Math.max(LAND_MIN[0], Math.floor(dw/use)&~1)); nh=Math.min(LAND_MAX[1], Math.max(LAND_MIN[1], Math.floor(dh/use)&~1)); }
   // Kun kokonaislukukerroin ei täytä näyttöä (esim. 412 px leveä näyttö, dpr 2,625), piirretään seuraavalla
   // kokonaisluvulla ja annetaan selaimen pienentää pehmeästi: pikselit pysyvät tasakokoisina (ei 2/3 px:n vaihtelua).
+  // V2.1: kokonaislukukertoimella kangas on natiivikokoinen ja selain suurentaa sen (image-rendering: pixelated):
+  // näytölle kootaan 384×672 pikseliä eikä esim. 1152×2016, mikä keventää jokaista kuvaa.
   const whole = use===n;
-  K=whole ? n : Math.max(1,Math.ceil(s)); screen.style.imageRendering = whole ? '' : 'auto';
+  K=whole ? 1 : Math.max(1,Math.ceil(s)); screen.style.imageRendering = whole ? '' : 'auto';
   if (nw!==buf.width || nh!==buf.height || land!==LAY.land) setLayout(nw, nh, land);
   if (screen.width!==nw*K || screen.height!==nh*K){ screen.width=nw*K; screen.height=nh*K; }
   screen.style.width=(nw*use/dpr)+'px'; screen.style.height=(nh*use/dpr)+'px';
+  // kangas kokonaisen laitepikselin kohdalle, jotta suurennetut pikselit pysyvät tasakokoisina
+  screen.style.position='fixed'; screen.style.left=Math.max(0,Math.round((dw-nw*use)/2))/dpr+'px'; screen.style.top=Math.max(0,Math.round((dh-nh*use)/2))/dpr+'px';
 }
 let fitT=0;
 function refit(){ fit(); draw(performance.now()); clearTimeout(fitT); fitT=setTimeout(()=>{ fit(); draw(performance.now()); },250); }   // kierto: koko asettuu vasta hetken päästä

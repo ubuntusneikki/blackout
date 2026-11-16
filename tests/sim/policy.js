@@ -4,13 +4,28 @@
 //
 // ctx: { G (sim.js), S (tila), D (data.js), ST (state.js), profile, metrics, now(), opt, plan }
 
-const base = k => k.split('~')[0];
+// V2.2 (genomi): kannat ryhmitellään tehtävän mukaan. 'kalvo' = mikä tahansa verkkomuotoinen kanta (kehikossa suodatin),
+// 'hoitaja' = HOIDA-kykyinen kanta, muut omalla avaimellaan. Botti ei tunne reseptejä: se tavoittelee piirteitä.
+let CTX = null;
+const base = k => { const T = CTX.ST.strain(k); if (!T) return k; if (T.tends) return 'hoitaja';
+  const F = CTX.G.frameOf(k); return F && F.out === 'suodatin' ? 'kalvo' : k; };
+const knowsWeb = ctx => Object.keys(ctx.S.known).some(k => base(k) === 'kalvo');
+const rate = (ctx, k) => { const T = ctx.ST.strain(k); return T.yield / T.grow; };
+// paras tunnettu verkkomuotoinen kanta (itiöinä, muuten mikä tahansa tunnettu)
+const webKey = ctx => sporeKey(ctx, 'kalvo') || Object.keys(ctx.S.known).filter(k => base(k) === 'kalvo').sort((x, y) => rate(ctx, y) - rate(ctx, x))[0] || 'kalvo';
+// seuraava risteytys: ensin mikä tahansa (ketjun askel), sitten verkkomuoto × siniheltta, kunnes verkkomuotoinen kanta kasvaa nopeasti
+const FAST = 5, WEB_TRIES = 6;
+export function wantCross(ctx){ const { S } = ctx;
+  if (!S.flags.firstCross) return ['heltta', 'ruusu'];
+  if (!knowsWeb(ctx) || S.flags.done || (ctx.plan.webTries || 0) >= WEB_TRIES) return null;
+  if (Object.keys(S.known).some(k => base(k) === 'kalvo' && ctx.ST.strain(k).nopeus >= FAST)) return null;
+  return ['kalvo', 'heltta']; }
 // TP3: satoaallot (G.waves) tai vanha ready-lippu
 const isReady = (ctx, c) => ctx.G.waves ? ctx.G.waves(c) > 0 : !!c.ready;
 // TP3: kehikon reseptit (D.FRAME: kanta -> {tuote|out, need, time}); vanha kehikko = kalvo -> suodatin
 export function frameRecipes(ctx){ const { D } = ctx;
-  if (!D.FRAME) return [{ key: 'kalvo', out: 'suodatin', need: D.DEVICES.kehikko.need }];
-  return Object.entries(D.FRAME).map(([key, f]) => ({ key, out: f.tuote || f.out || f.product || f.id, need: f.need || 3 })); }
+  return Object.keys(ctx.S.inv).filter(id => id.startsWith('raw:')).map(id => { const key = id.slice(4), f = ctx.G.frameOf(key);
+    return f && { key, out: f.out, need: f.need || 3 }; }).filter(Boolean); }
 // taulun tilaus: given on totuusarvo (koko tilaus kerralla) tai määrä
 const boardLeft = o => o.given === true ? 0 : (o.n || 0) - (o.given || 0);
 // torin taulun tarpeet tuotteittain (TP3)
@@ -20,7 +35,7 @@ const vessels = ctx => cells(ctx).filter(o => o.c.kind === 'vessel');
 const devices = (ctx, type) => cells(ctx).filter(o => o.c.kind === 'device' && o.c.type === type);
 const ownsDevice = (ctx, type) => devices(ctx, type).length + ctx.S.deviceInv.filter(t => t === type).length;
 const spores = (ctx, b) => Object.entries(ctx.S.spores).filter(([k]) => base(k) === b).reduce((a, [, n]) => a + n, 0);
-const sporeKey = (ctx, b) => Object.keys(ctx.S.spores).filter(k => base(k) === b && ctx.S.spores[k] > 0).sort((x, y) => (y.includes('~') - x.includes('~')))[0];
+const sporeKey = (ctx, b) => Object.keys(ctx.S.spores).filter(k => base(k) === b && ctx.S.spores[k] > 0).sort((x, y) => rate(ctx, y) - rate(ctx, x))[0];
 const freeCells = ctx => { const out = []; for (const r of ['kellari', 'huone']){ const R = ctx.S.rooms[r]; if (!R.owned) continue; R.cells.forEach((c, i) => { if (!c) out.push([r, i]); }); } return out; };
 
 // tuottoarvio: yksikköä per käyntiväli (kasvu jatkuu korjuun jälkeen kohdasta 0.35)
@@ -28,25 +43,23 @@ function yieldOf(ctx, vs, key){ const { D, G } = ctx, T = ctx.ST.strain(key), m 
   return Math.max(1, Math.round(T.yield * D.VESSELS[vs.type].size * m)); }
 function cycleSec(ctx, vs, key){ const { D, G } = ctx, T = ctx.ST.strain(key); return 0.65 * T.grow / D.MATCH_MULT[G.matchOf(vs, key)]; }
 // mitä kalvoheltta on arvoltaan, kun kehikko on: suodatin / tarve
-function unitValue(ctx, b){ const { D, S } = ctx;
-  if (b === 'kalvo' && kalvoNeed(ctx) > 0) return D.SELL_BASE.suodatin / D.DEVICES.kehikko.need;
-  return D.SELL_BASE.raw; }
+function unitValue(ctx, key){ const { D } = ctx;
+  if (base(key) === 'kalvo' && kalvoNeed(ctx) > 0) return D.SELL_BASE.suodatin / D.DEVICES.kehikko.need;
+  return ctx.ST.strain(key).price || 0; }
 function plantScore(ctx, vs, key){
   const gap = ctx.plan.gapSec, n = yieldOf(ctx, vs, key), cyc = Math.max(cycleSec(ctx, vs, key), gap);
-  return n * unitValue(ctx, base(key)) / cyc;
+  return n * unitValue(ctx, key) / cyc;
 }
 
 // risteytysten vanhemmat, joiden tulos on vielä tuntematon (tai kalvoheltta tarvitaan lisää)
-export function neededParents(ctx){ const { S, D } = ctx, out = new Set();
-  for (const r of D.RECIPES) if (!S.known[r.out]) { out.add(r.a); out.add(r.b); }
-  return [...out]; }
+export function neededParents(ctx){ return wantCross(ctx) || []; }
 // itiövaraus: montako itiötä kannasta pidetään (risteytykset ja kalvoheltan levitys)
 function reserve(ctx, b){
   const { S } = ctx;
-  if (!S.flags.lab) return (b === 'heltta' || b === 'ruusu' || (b === 'hamara' && !S.known.hoitaja)) ? 1 : 0;
+  if (b === 'kalvo' || b === 'hoitaja') return 99;   // verkkomuotoiset ja hoitajat istutetaan, ei myydä
+  if (!S.flags.lab) return (b === 'heltta' || b === 'ruusu') ? 1 : 0;
   if (b === 'heltta') return 2;
-  if (b === 'ruusu') return 1;
-  if (b === 'hamara') return S.known.hoitaja ? 0 : 1;
+  if (b === 'ruusu') return S.flags.firstCross ? 0 : 1;
   if (b === 'kalvo') return 99;      // kalvoheltan itiöt istutetaan, ei myydä
   if (b === 'hoitaja') return 99;
   return 0;
@@ -54,7 +67,7 @@ function reserve(ctx, b){
 function kalvoNeed(ctx){ // montako kalvohelttaa tilaus vielä tarvitsee (suodattimina)
   const { S, D } = ctx; if (S.flags.done) return 0;
   // tilaus tulee ketjun lopussa: kun kalvoheltta ja kehikko ovat, kalvohelttaa kasvatetaan jo valmiiksi (kuten pelaaja)
-  const order = S.order || (S.known.kalvo && ownsDevice(ctx, 'kehikko') ? { need: (D.ORDER && D.ORDER.need) || 5, given: 0 } : null);
+  const order = S.order || (knowsWeb(ctx) && ownsDevice(ctx, 'kehikko') ? { need: (D.ORDER && D.ORDER.need) || 5, given: 0 } : null);
   if (!order) return 0;
   const left = order.need - order.given - (S.inv.suodatin || 0) - devices(ctx, 'kehikko').filter(o => o.c.busy).length;
   return Math.max(0, left) * D.DEVICES.kehikko.need; }
@@ -63,10 +76,12 @@ function muottiReserve(ctx){ const { S, G, D } = ctx; if (!D.FRAME || !ownsDevic
   const st = G.chainStep && G.chainStep(); if (st && ['tilaus'].includes(st.id)) return null;
   return D.FRAME_ORDER ? D.FRAME_ORDER.find(k => S.known[k]) : 'heltta'; }
 function kalvoTarget(ctx){ // montako kalvohelttaa halutaan kasvamaan: kehikoiden tarve per käynti, ei enempää
-  const { S, D } = ctx; if (!S.known.kalvo || !ownsDevice(ctx, 'kehikko') || !kalvoNeed(ctx)) return 0;
-  const suitable = vessels(ctx).filter(o => ctx.G.matchOf(o.c, 'kalvo') >= 1).length;
-  return Math.min(suitable, Math.ceil(D.DEVICES.kehikko.need * ownsDevice(ctx, 'kehikko') / 3) + 1);
+  const { S, D } = ctx; if (!knowsWeb(ctx) || !ownsDevice(ctx, 'kehikko') || !kalvoNeed(ctx)) return 0;
+  const suitable = vessels(ctx).filter(o => ctx.G.matchOf(o.c, webKey(ctx)) >= 1).length;
+  return Math.min(Math.max(suitable, 2), Math.ceil(D.DEVICES.kehikko.need * ownsDevice(ctx, 'kehikko') / 3) + 3);
 }
+
+const webRaw = ctx => Object.keys(ctx.S.inv).filter(id => id.startsWith('raw:') && base(id.slice(4)) === 'kalvo').reduce((a, id) => a + ctx.S.inv[id], 0);
 
 export const MODULES = {
   // valmiit laitteet: malja auki, suodatin talteen
@@ -91,10 +106,10 @@ export const MODULES = {
 
   // kalvoheltta parempiin astioihin, kun kehikko on: kompostoi muut kannat pois
   vaihto: { act(ctx){ const { S, G } = ctx; let n = 0;
-    if (!S.known.kalvo || !ownsDevice(ctx, 'kehikko') || S.flags.done) return 0;
+    if (!knowsWeb(ctx) || !ownsDevice(ctx, 'kehikko') || S.flags.done) return 0;
     // parhaiten kalvoheltalle sopivat astiat ensin; valmis sato korjataan ennen vaihtoa
-    const cand = vessels(ctx).filter(o => o.c.strain && !['kalvo', 'hoitaja'].includes(base(o.c.strain)) && G.matchOf(o.c, 'kalvo') >= 1)
-      .sort((x, y) => G.matchOf(y.c, 'kalvo') - G.matchOf(x.c, 'kalvo') || ctx.D.VESSELS[y.c.type].size - ctx.D.VESSELS[x.c.type].size);
+    const cand = vessels(ctx).filter(o => o.c.strain && !['kalvo', 'hoitaja'].includes(base(o.c.strain)) && G.matchOf(o.c, webKey(ctx)) >= 1)
+      .sort((x, y) => G.matchOf(y.c, webKey(ctx)) - G.matchOf(x.c, webKey(ctx)) || ctx.D.VESSELS[y.c.type].size - ctx.D.VESSELS[x.c.type].size);
     for (const { c } of cand){
       const b0 = base(c.strain);
       if (neededParents(ctx).includes(b0) && vessels(ctx).filter(o => o.c.strain && base(o.c.strain) === b0).length <= 1) continue;
@@ -111,9 +126,16 @@ export const MODULES = {
     // emokanta: risteytykseen tarvittavaa kantaa pidetään kasvamassa yhdessä astiassa, jotta itiöitä saa lisää
     for (const b of neededParents(ctx)){
       if (vessels(ctx).some(o => o.c.strain && base(o.c.strain) === b) || !spores(ctx, b)) continue;
-      const free = vessels(ctx).filter(o => !o.c.strain).sort((x, y) => G.matchOf(y.c, b) - G.matchOf(x.c, b))[0];
-      if (free){ G.plant(free.c, sporeKey(ctx, b)); n++; }
+      const sk = sporeKey(ctx, b), free = vessels(ctx).filter(o => !o.c.strain).sort((x, y) => G.matchOf(y.c, sk) - G.matchOf(x.c, sk))[0];
+      if (free){ G.plant(free.c, sk); n++; }
     }
+    // verkkomuotoinen kanta ensin parhaiten sopiviin vapaisiin astioihin
+    { const wk = sporeKey(ctx, 'kalvo'); if (wk && !S.flags.done){
+        const free = vessels(ctx).filter(o => !o.c.strain).sort((x, y) => G.matchOf(y.c, wk) - G.matchOf(x.c, wk) || ctx.D.VESSELS[y.c.type].size - ctx.D.VESSELS[x.c.type].size);
+        for (const { c } of free){ const good = G.matchOf(c, wk) >= 1;   // huonossa astiassa kasvavia ei lasketa, jos tarjolla on hyvä astia
+          const growing = vessels(ctx).filter(o => o.c.strain && base(o.c.strain) === 'kalvo' && (!good || G.matchOf(o.c, o.c.strain) >= 1)).length;
+          if (!(S.spores[wk] > 0) || (ownsDevice(ctx, 'kehikko') && growing >= kalvoTarget(ctx)) || (!ownsDevice(ctx, 'kehikko') && growing >= 2)) break;
+          G.plant(c, wk); n++; } } }
     for (const { c } of vessels(ctx)){ if (c.strain) continue;
       const kalvoGrowing = vessels(ctx).filter(o => o.c.strain && base(o.c.strain) === 'kalvo').length;
       const opts = Object.keys(S.spores).filter(k => S.spores[k] > 0 && (spores(ctx, base(k)) > reserve(ctx, base(k)) || base(k) === 'hoitaja'
@@ -125,15 +147,12 @@ export const MODULES = {
       if (k){ G.plant(c, k); n++; } }
     return n; } },
 
-  // laboratorio: kalvoheltta ensin, sitten hoitaja, sitten lisää kalvohelttaa
+  // laboratorio: ensin yksi risteytys (ketjun askel), sitten verkkomuoto × siniheltta nopeamman suodatinkannan toivossa
   laboratorio: { act(ctx){ const { S, G } = ctx; let n = 0;
     for (const { c } of devices(ctx, 'hautomo')){ if (c.busy || !(S.inv.agar > 0)) continue;
-      let pair = null;
-      const has = b => spores(ctx, b) > 0;
-      if (!S.known.kalvo && has('heltta') && has('ruusu')) pair = ['heltta', 'ruusu'];
-      else if (!S.known.hoitaja && has('heltta') && has('hamara')) pair = ['heltta', 'hamara'];
-      else if (S.known.kalvo && !S.flags.done && spores(ctx, 'kalvo') === 0 && has('heltta') && has('ruusu')) pair = ['heltta', 'ruusu'];
-      if (pair && G.startDish(c, sporeKey(ctx, pair[0]), sporeKey(ctx, pair[1]))) n++; }
+      const pair = wantCross(ctx);
+      if (pair && spores(ctx, pair[0]) > 0 && spores(ctx, pair[1]) > 0 && G.startDish(c, sporeKey(ctx, pair[0]), sporeKey(ctx, pair[1]))){ n++;
+        if (pair[0] === 'kalvo') ctx.plan.webTries = (ctx.plan.webTries || 0) + 1; } }
     return n; } },
 
   // kehikko: suodatin tilaukseen ensin, sitten taulun tarvitsema tuote, sitten arvokkain resepti
@@ -145,7 +164,7 @@ export const MODULES = {
         score: (r.out === 'suodatin' && S.order && !S.flags.done ? 1000 : 0) + (bn[r.out] ? 500 : 0) + price(r.out) - r.need * (G.basePrice('raw:' + r.key) || 2) }))
         .filter(r => r.score > 0).sort((a, b) => b.score - a.score);
       if (!opts.length) continue;
-      const ok = D.FRAME ? G.startFrame(c, opts[0].key) : (G.startFrame(c), c.busy);
+      const ok = G.startFrame(c, opts[0].key);
       if (ok) n++; }
     return n; } },
 
@@ -161,13 +180,14 @@ export const MODULES = {
   myynti: { act(ctx){ const { S, G, D, opt } = ctx; let n = 0;
     for (const id of G.sellables()){
       const [k, s] = id.split(':');
-      if (id === 'raw:kalvo' && S.known.kalvo && !S.order) continue;   // kehikkoa odotetaan
+      const web = k === 'raw' && base(s) === 'kalvo';
+      if (web && !S.order) continue;   // kehikkoa odotetaan
       if (id === 'suodatin' && !S.flags.done) continue;
       let can = G.owned(id);
-      if (k === 'raw' && muottiReserve(ctx) === s) can = Math.max(0, can - D.FRAME[s].need);
+      if (k === 'raw' && muottiReserve(ctx) === s) can = Math.max(0, can - G.frameOf(s).need);
       if (k === 'itio') can = Math.max(0, spores(ctx, base(s)) - reserve(ctx, base(s)) - (S.flags.lab ? 1 : 0));
       if (k === 'itio') can = Math.min(can, S.spores[s] || 0);
-      if (id === 'raw:kalvo') can = Math.max(0, can - kalvoNeed(ctx));
+      if (web) can = Math.max(0, can - kalvoNeed(ctx));
       const bn = boardNeed(ctx); if (bn[id]) can = Math.max(0, can - bn[id]);
       if (id === 'suodatin' && !S.order && !S.flags.done) continue;
       const spike = S.market.spike && S.market.spike.id === id;
@@ -181,15 +201,15 @@ export const MODULES = {
     const tryBuy = k => { const it = D.SHOP[k]; if (!it || (it.need && !it.need(S))) return false; const p = it.price(S); if (S.hopea < p) return false;
       const h0 = S.hopea; G.buy(k); if (S.hopea < h0){ n++; return true; } return false; };
     if (S.flags.lab && !ownsDevice(ctx, 'hautomo')) tryBuy('hautomo');
-    if (ownsDevice(ctx, 'hautomo') && !(S.inv.agar > 0) && (!S.known.hoitaja || !S.flags.done)) tryBuy('agar');
-    if (!ownsDevice(ctx, 'kehikko') && (D.FRAME || S.known.kalvo)) tryBuy('kehikko');
+    if (ownsDevice(ctx, 'hautomo') && !(S.inv.agar > 0) && wantCross(ctx)) tryBuy('agar');
+    if (!ownsDevice(ctx, 'kehikko') && (D.FRAME || knowsWeb(ctx))) tryBuy('kehikko');
     // toinen kehikko, jos kalvohelttaa kertyy enemmän kuin yksi kehikko ehtii kasvattaa
     else if (ctx.opt.extraFrames && S.order && !S.flags.done && ownsDevice(ctx, 'kehikko') < 1 + ctx.opt.extraFrames
-      && (S.inv['raw:kalvo'] || 0) >= 2 * ctx.D.DEVICES.kehikko.need && kalvoNeed(ctx) > 2 * ctx.D.DEVICES.kehikko.need) tryBuy('kehikko');
+      && webRaw(ctx) >= 2 * ctx.D.DEVICES.kehikko.need && kalvoNeed(ctx) > 2 * ctx.D.DEVICES.kehikko.need) tryBuy('kehikko');
     // varaus seuraavaa pakollista hankintaa varten
     let keep = 0;
     if (!ownsDevice(ctx, 'hautomo')) keep = S.sold >= ctx.D.LAB_UNLOCK_SOLD - 4 ? D.SHOP.hautomo.price(S) : 0;
-    else if (!ownsDevice(ctx, 'kehikko')) keep = S.known.kalvo || devices(ctx, 'hautomo').some(o => o.c.busy) ? D.SHOP.kehikko.price(S) : 0;
+    else if (!ownsDevice(ctx, 'kehikko')) keep = knowsWeb(ctx) || devices(ctx, 'hautomo').some(o => o.c.busy) ? D.SHOP.kehikko.price(S) : 0;
     const devicesToCome = (ownsDevice(ctx, 'hautomo') ? 0 : 1) + (ownsDevice(ctx, 'kehikko') ? 0 : 1);
     const free = freeCells(ctx).length - S.vesselInv.length - S.deviceInv.length;
     // kellari, kun huone on täynnä
@@ -197,7 +217,7 @@ export const MODULES = {
     // astiat: paras tuotto per hinta, jos tilaa ja ylijäämää
     if (free - devicesToCome > 0){
       const opts = ['terraario', 'purkki'].map(k => { const p = D.SHOP[k].price(S); const probe = { type: k };
-        const best = Math.max(...Object.keys(S.known).filter(x => ctx.D.STRAINS[x] && !ctx.D.STRAINS[x].auto).map(x => plantScore(ctx, probe, x)));
+        const best = Math.max(...Object.keys(S.known).filter(x => ctx.ST.strain(x) && !ctx.ST.strain(x).auto).map(x => plantScore(ctx, probe, x)));
         return { k, p, roi: best / p }; }).sort((a, b) => b.roi - a.roi);
       const o = opts[0]; if (S.hopea - o.p >= keep) tryBuy(o.k);
     }
@@ -234,12 +254,12 @@ export function makePolicy({ order = DEFAULT_ORDER, opt = {} } = {}){
   const o = { ...DEFAULT_OPT, ...opt };
   return {
     name: 'ahne', order, opt: o,
-    create(base){
-      const hrs = base.profile.hours, gaps = hrs.slice(1).map((h, i) => (h - hrs[i]) * 3600);
-      const ctx = { ...base, opt: o, plan: { gapSec: gaps.length ? gaps.reduce((a, b) => a + b, 0) / gaps.length : 86400 } };
+    create(base0){
+      const hrs = base0.profile.hours, gaps = hrs.slice(1).map((h, i) => (h - hrs[i]) * 3600);
+      const ctx = { ...base0, opt: o, plan: { gapSec: gaps.length ? gaps.reduce((a, b) => a + b, 0) / gaps.length : 86400 } };
       return {
         // yksi kierros: moduulit järjestyksessä, toistetaan kunnes mitään ei tapahdu
-        act(){ let total = 0; for (let i = 0; i < 6; i++){ let n = 0; for (const k of order) n += MODULES[k].act(ctx); total += n; if (!n) break; } return total; }
+        act(){ CTX = ctx; let total = 0; for (let i = 0; i < 6; i++){ let n = 0; for (const k of order) n += MODULES[k].act(ctx); total += n; if (!n) break; } return total; }
       };
     }
   };

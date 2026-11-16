@@ -24,7 +24,7 @@ const SIZES=[[390,844,3],[844,390,3],[412,915,2.625],[915,412,2.625]];
     ok(i.r[2]<=i.iw+0.5 && i.r[3]<=i.ih+0.5, tag+': kangas mahtuu näytölle');
     ok(Math.max(i.r[2]/i.iw, i.r[3]/i.ih)>=0.98 && Math.min(i.r[2]/i.iw, i.r[3]/i.ih)>=(land?0.97:0.78), tag+': kangas täyttää näytön ('+Math.round(i.r[2])+'×'+Math.round(i.r[3])+')');
     if (land) ok(i.W>=384 && i.H>=176, tag+': vaaka-asettelun vähimmäiskoko ('+i.W*2+'×'+i.H*2+' natiivia)');
-    const k=i.r[2]*dpr/(i.W*2); if (Math.abs(k-Math.round(k))<0.01) ok(i.cw===i.W*2*Math.round(k), tag+': kokonaislukukerroin '+Math.round(k));
+    const k=i.r[2]*dpr/(i.W*2); if (Math.abs(k-Math.round(k))<0.01) ok(i.cw===i.W*2, tag+': kokonaislukukerroin '+Math.round(k)+' (kangas natiivi, selain suurentaa)');
     else console.log('     '+tag+': kerroin '+k.toFixed(2)+' (piirto ×'+(i.cw/(i.W*2))+', selain pienentää)');
     await shot('1-uusi');
     // istuta: napauta terraariota (ruutu 4), ISTUTA, ensimmäinen rivi

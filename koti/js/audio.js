@@ -224,9 +224,8 @@ on('paljastus-alku', () => play('kohina'));
 on('paljastus-tulos', d => { const r = d.tulos || {}, k = r.kind;
   if (k==='done') return;                               // tilaus-valmis soitti jo juhlan
   if (k==='retki'){ if ((r.loot||[]).some(o=>o.first)) { play('uusi'); haptic([20,60,20,60,60]); } else { play('reveal'); haptic([20,60,40]); } return; }
-  if (k==='fail') { play('fail'); haptic([40,80,40]); }
-  else if (k==='villi') { play('villi'); haptic([30,50,30,50,30]); }
-  else if (r.key && r.key.includes('~')) { play('kulta'); haptic([20,40,20,40,20,40,80]); }
+  if (k==='villi') { play('villi'); haptic([30,50,30,50,30]); }
+  else if (r.mut && r.first && k==='new') { play('kulta'); haptic([20,40,20,40,20,40,80]); }
   else if (r.first) { play('uusi'); haptic([20,60,20,60,60]); }
   else { play('tuttu'); haptic([20,60,40]); } });
 on('nimeys', () => play('valmis'));

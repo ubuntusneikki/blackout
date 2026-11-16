@@ -1,7 +1,8 @@
 // näkymät, modaalit ja paljastus
-import {P, AMB, WILD, SYM, VESSELS, DEVICES, STRAINS, STRAIN_ORDER, ORIGIN_TXT, RECIPES, SHOP, CUR, ORDER, ROOMS, VERSION, SELL_BASE, LAB_UNLOCK_SOLD, FRAME, FRAME_ORDER, PRODUCTS, WAVES, TENDER} from './data.js';
+import {P, AMB, WILD, SYM, VESSELS, DEVICES, STRAINS, STRAIN_ORDER, ORIGIN_TXT, SHOP, CUR, ORDER, ROOMS, VERSION, SELL_BASE, LAB_UNLOCK_SOLD, FRAME, FRAME_ORDER, PRODUCTS, WAVES, TENDER} from './data.js';
 import {W, H, LAY, COL, g, px, dot, bay, rect, rng, BAYER, clamp, ease, text, textC, tw, wrap, wrapLines, fmt, button, hit, bar, HIT, resetHit, bevel, frame, veil} from './gfx.js';
-import {S, save, strain, replaceState, newGame} from './state.js';
+import {S, save, strain, replaceState, newGame, knows} from './state.js';
+import {traitRows, kykyTxt, kasvuTxt} from './genomi.js';
 import * as sim from './sim.js';
 import {on} from './events.js';
 import {vesselV} from './room.js';
@@ -68,7 +69,7 @@ function hint(){
   const st=sim.chainStep();
   if (st && st.id==='myy') return 'TAVOITE: '+st.txt+' ('+Math.min(S.sold,LAB_UNLOCK_SOLD)+' / '+LAB_UNLOCK_SOLD+').';
   if (st && st.id!=='tilaus') return 'TAVOITE: '+st.txt+'.';
-  return 'RISTEYTÄ KANTOJA HAUTOMOSSA. KANTAKIRJA KERTOO, MITÄ PUUTTUU.';
+  return 'RISTEYTÄ KANTOJA HAUTOMOSSA. JOKAINEN MALJA VOI YLLÄTTÄÄ.';
 }
 // lupausnäkymä: kellonaika, jolloin asia valmistuu
 export function clock(gameSec){ const d=new Date(Date.now()+gameSec/S.speed*1000); return d.getHours()+'.'+String(d.getMinutes()).padStart(2,'0'); }
@@ -135,6 +136,8 @@ function tapCell(r,i){
 
 // ---------- astia ----------
 const climate=T=>(T.wet?'KOSTEA':'KUIVA')+' / '+(T.warm?'LÄMMIN':'VIILEÄ');
+// kannan ilmasto on kysymysmerkki, kunnes kasvu tunnetaan (ensimmäinen sato tai tutkimusmalja)
+const climateK=T=>knows(T.key).g?climate(T):'ILMASTO ?';
 function drawVessel(t){
   const vs=U.sel&&U.sel.c; if(!vs||S.rooms[U.sel.r].cells[U.sel.i]!==vs){ U.view='room'; return; }
   const V=VESSELS[vs.type], T=strain(vs.strain), ox=LAY.ox, py=PY(), by=LAY.by;
@@ -144,28 +147,28 @@ function drawVessel(t){
   panel(()=>{
     text(V.name+'  '+climate(V)+(U.sel.r==='kellari'?'  KELLARI':''),ox+5,py+6,P.uiD);
     text(T?T.name:'TYHJÄ',ox+5,py+15,T?(T.mutant?AMB[2]:T.col[2]):P.ui3);
-    if (T && T.mutant) text(T.orig,ox+9+tw(T.name),py+15,P.uiD);   // TP7: alkuperäinen kanta pienellä
+    if (T && T.mutant && tw(T.name)+tw(T.orig)<178) text(T.orig,ox+9+tw(T.name),py+15,P.uiD);   // mutaatio pienellä nimen perässä
   });
   text('KOSTEUS',ox+5,py+25,P.ui3); bar(ox+46,py+25,vs.moist, vs.moist<0.25?P.red:P.wa2);
   const w=sim.waves(vs);
   if (T && !T.auto){ text('KASVU',ox+5,py+33,P.ui3); bar(ox+46,py+33,w>=WAVES?1:vs.growth, w>=WAVES?AMB[1]:T.col[1]);
     for(let k=0;k<WAVES;k++){ rect(ox+108+k*4,py+33,3,5,k<w?AMB[1]:P.ui1); rect(ox+108+k*4,py+33,3,.5,k<w?AMB[2]:'#2a3646'); } }
   const care=sim.tended()[U.sel.r+':'+U.sel.i];
-  if (T){ const m=sim.matchOf(vs,vs.strain); text(['HUONO ASTIA','KELPO ASTIA','TÄYDELLINEN'][m],ox+116,py+25, m===2?P.grn:m===1?P.ui3:P.red);
-    if (vs.moist<0.1) text('HORROS',ox+124,py+33,P.wa2); else if (T.auto) text('HOITAA NAAPUREITA',ox+124,py+33,T.col[2]);
-    else if (care) text('HOITAJA +'+Math.round((TENDER.grow-1)*100)+'%',ox+124,py+33,STRAINS.hoitaja.col[2]); }
+  if (T){ const m=sim.matchOf(vs,vs.strain), kg=knows(T.key).g; text(kg?['HUONO ASTIA','KELPO ASTIA','TÄYDELLINEN'][m]:'ILMASTO ?',ox+116,py+25, !kg?P.uiD:m===2?P.grn:m===1?P.ui3:P.red);
+    if (vs.moist<0.1) text('HORROS',ox+124,py+33,P.wa2); else if (T.tends) text(T.auto?'HOITAA NAAPUREITA':'HOITAA',ox+(T.auto?5:124),py+33,T.col[2]);
+    else if (care) text('HOITO +'+Math.round((sim.tendGrow(care)-1)*100)+'%',ox+124,py+33,STRAINS.hoitaja.col[2]); }
   if (LAY.land && T && by-py>100){   // sivupaneelissa on tilaa kannan tiedoille
-    const rows=[['ILMASTO',climate(T)]];
-    if (T.auto) rows.push(['TEHTÄVÄ','HOITAA NAAPUREITA']);
-    else { const m=Math.round(T.grow/60); rows.push(['KASVUAIKA',(m>=60?Math.floor(m/60)+' H':'')+(m%60?' '+(m%60)+' MIN':'')], ['SATO',T.yield+' / AALTO'], ['ARVO',fmt(T.price)+' '+CUR]); }
+    // piirteet ryhmittäin; tuntematon ryhmä näkyy kysymysmerkkinä (kasvu selviää sadosta, kyky tutkimusmaljasta)
+    const tk=knows(T.key), rows=traitRows(T,tk).map(([a,v])=>[a,v]);
+    if (tk.g && !T.auto){ const m=Math.round(T.grow/60); rows.push(['KASVUAIKA',(m>=60?Math.floor(m/60)+' H':'')+(m%60?' '+(m%60)+' MIN':'')], ['ARVO',fmt(T.price)+' '+CUR]); }
     rect(ox+5,py+46,182,.5,P.ui2);
-    rows.forEach(([a,v],k)=>{ if (py+52+k*10>by-12) return; text(a,ox+5,py+52+k*10,P.uiD); text(v,ox+62,py+52+k*10,P.ui3); });
+    rows.forEach(([a,v],k)=>{ if (py+52+k*10>by-12) return; text(a,ox+5,py+52+k*10,P.uiD); text(v,ox+62,py+52+k*10,v==='?'?AMB[1]:P.ui3); });
   }
   button(ox+4,by,24,14,'<',()=>{ const s=U.sel; startZoom(-1,s?cellBoxUi(s.r,s.i):null); U.view='room'; });
   button(ox+30,by,38,14,'SUMUTA',()=>sim.mist(vs), (vs.strain&&vs.moist<0.35&&V.dry>0)?'g':(V.dry>0?'n':'d'));
   if (!T) button(ox+70,by,118,14,'ISTUTA',()=>{ U.modal={type:'plant',vs}; }, Object.keys(S.spores).length?'a':'d');
   else if (w){ button(ox+70,by,76,14,w>1?'KORJAA '+w+' AALTOA':'KORJAA SATO',()=>{ sim.harvest(vs); U.burst=now(); },'a'); button(ox+148,by,40,14,'ITIÖT',()=>{ sim.takeSpores(vs); U.burst=now(); },'n'); }
-  else { button(ox+70,by,72,14, vs.moist<0.1?'HORROKSESSA':(T.auto?'HOITAA':'KASVAA '+Math.floor(vs.growth*100)+'%'),()=>{},'d');
+  else { button(ox+70,by,72,14, vs.moist<0.1?'HORROKSESSA':(T.auto?(T.tends?'HOITAA':'EI SATOA'):'KASVAA '+Math.floor(vs.growth*100)+'%'),()=>{},'d');
          button(ox+144,by,44,14,'KOMPOSTI',()=>{ U.modal={type:'confirmClear',vs}; }); }
 }
 
@@ -254,9 +257,9 @@ function drawModal(t){
     const keys=Object.keys(S.spores);
     if(!keys.length) wrap('EI ITIÖITÄ. OTA ITIÖT KYPSÄSTÄ KANNASTA TAI LÄHETÄ SYMBIONTTI RETKELLE.',X+10,y,TW,P.uiD);
     const per=fitN(8), first=pager(keys.length,per);
-    keys.slice(first,first+per).forEach(k=>{ const T=strain(k), mm=sim.matchOf(vs,k);
-      row(T.short,['HUONO','KELPO','TÄYDELLINEN'][mm],'ITIÖITÄ '+S.spores[k]+'  '+climate(T),
-        ()=>{ sim.plant(vs,k); U.modal=null; }, true, null, null, mm===2?P.grn:mm===1?P.ui3:P.red); });
+    keys.slice(first,first+per).forEach(k=>{ const T=strain(k), mm=sim.matchOf(vs,k), kg=knows(k).g;
+      row(T.short,kg?['HUONO','KELPO','TÄYDELLINEN'][mm]:'?','ITIÖITÄ '+S.spores[k]+'  '+climateK(T),
+        ()=>{ sim.plant(vs,k); U.modal=null; }, true, null, null, !kg?AMB[1]:mm===2?P.grn:mm===1?P.ui3:P.red); });
   }
   else if (m.type==='pick'){
     title('KUMPI?');
@@ -275,32 +278,38 @@ function drawModal(t){
     if (!land){ wrap(D.txt,X+10,y,TW,P.uiD); y+=18; }
     if (d.busy){
       const left=(1-d.t)*sim.devTime(d)/S.speed, mins=Math.ceil(left/60);
-      text(d.type==='hautomo'&&d.dish?strain(d.dish.a).name+' ×':'',X+10,y,P.ui3);
-      if (d.type==='hautomo'&&d.dish) text(strain(d.dish.b).name,X+10,y+8,P.ui3);
-      if (d.type==='kehikko'){ const F=FRAME[d.job||'kalvo']; text(STRAINS[d.job||'kalvo'].name+' > '+PRODUCTS[F.out].name,X+10,y,P.ui3); }
+      if (d.type==='hautomo'&&d.dish&&d.dish.study){ text('TUTKIMUS:',X+10,y,P.ui3); text(strain(d.dish.a).name,X+10,y+8,strain(d.dish.a).col[2]); }
+      else if (d.type==='hautomo'&&d.dish){ text(strain(d.dish.a).name+' ×',X+10,y,P.ui3); text(strain(d.dish.b).name,X+10,y+8,P.ui3); }
+      if (d.type==='kehikko'){ const F=sim.frameOf(d.job||'kalvo')||FRAME.kalvo; text(strain(d.job||'kalvo').short+' > '+PRODUCTS[F.out].name,X+10,y,P.ui3); }
       y+=20; bar(X+10,y,d.t,AMB[1]); text(mins>=60?Math.floor(mins/60)+' H '+(mins%60)+' MIN':mins+' MIN',X+76,y,P.uiD); y+=12;
     } else if (d.type==='hautomo'){
       const ag=S.inv.agar||0; text('AGAR-MALJOJA: '+ag,X+10,y,ag?P.ui3:P.red); y+=10;
       if (!ag){ wrap('OSTA AGAR-MALJOJA MARKKINALTA.',X+10,y,TW,P.uiD); }
       else {
-        text(m.pickA?'VALITSE TOINEN KANTA':'VALITSE ENSIMMÄINEN KANTA',X+10,y,AMB[1]); y+=10;
+        text(m.pickA?'VALITSE TOINEN KANTA':'VALITSE KANTA',X+10,y,AMB[1]); y+=10;
         const keys=Object.keys(S.spores).filter(k=>k!==m.pickA);
         if (m.pickA) { text(strain(m.pickA).name+' ×',X+10,y,strain(m.pickA).col[2]); y+=10; }
-        if (!keys.length) wrap('TARVITSET KAHDEN ERI KANNAN ITIÖT. OTA ITIÖT KYPSISTÄ KANNOISTA.',X+10,y,TW,P.uiD);
-        const per=fitN(6), first=pager(keys.length,per);
-        keys.slice(first,first+per).forEach(k=>{ const T=strain(k);
-          const tried = m.pickA && S.tried[sim.pairKey(m.pickA,k)], failed = tried==='fail';
-          const y0=y;
-          row(T.short,'× '+S.spores[k], failed?'HYLKIVÄT TOISIAAN':tried==='ok'?'TUTTU PARI':tried?'KOKEILTU PARI':climate(T), ()=>{
+        // tutkimusmalja: yksi kanta yksin maljalle paljastaa sen kysymysmerkit
+        const study = m.pickA && sim.unknownTraits(m.pickA);
+        if (study) row('TUTKI TÄMÄ KANTA','2 H','PALJASTAA KYVYN JA KASVUN',()=>{ if (sim.startStudy(d,m.pickA)) U.modal=null; },true,null,null,AMB[2],SYM);
+        if (!keys.length && !study) wrap(m.pickA?'RISTEYTYKSEEN TARVITSET TOISEN KANNAN ITIÖT. OTA ITIÖT KYPSISTÄ KANNOISTA.':'TARVITSET ITIÖPUSSEJA. OTA ITIÖT KYPSISTÄ KANNOISTA.',X+10,y,TW,P.uiD);
+        const per=fitN(study?5:6), first=pager(keys.length,per);
+        keys.slice(first,first+per).forEach(k=>{ const T=strain(k), tk=knows(k);
+          const tried = m.pickA && S.tried[sim.pairKey(m.pickA,k)];
+          const sub = tried==='ok'?'TUTTU PARI: UUSI MALJA VOI ANTAA TOISEN':(tk.k?kykyTxt(T):'KYKY ?')+'  '+(tk.g?kasvuTxt(T):'KASVU ?');
+          row(T.short,'× '+S.spores[k], sub, ()=>{
             if (!m.pickA){ m.pickA=k; m.page=0; return; }
-            if (sim.startDish(d,m.pickA,k)) U.modal=null; }, true, null, null, T.mutant?AMB[2]:T.col[2]);
-          if (failed) rect(X+9,y0+6,tw(T.short)+2,1,'#c4428f'); });   // hylätty pari yliviivattuna
+            if (sim.startDish(d,m.pickA,k)) U.modal=null; }, true, null, null, T.mutant?AMB[2]:T.col[2]); });
       }
     } else if (d.type==='kehikko'){
       text('VALITSE KANTA JA MUOTO',X+10,y,AMB[1]); y+=10;
-      FRAME_ORDER.filter(k=>S.known[k]).forEach(k=>{ if (land && y+20>Y+HH-18) return; const F=FRAME[k], have=S.inv['raw:'+k]||0, m=Math.round(F.time/60);
+      // kelpaavat kannat: muoto ratkaisee tuotteen (lakki, ryväs, verkko). Ensin ne, joista satoa on tarpeeksi.
+      const fk=Object.keys(S.known).filter(k=>strain(k)&&sim.frameOf(k)&&(STRAINS[k]||(S.inv['raw:'+k]||0)>0))
+        .sort((a,b)=>((S.inv['raw:'+b]||0)>=sim.frameOf(b).need)-((S.inv['raw:'+a]||0)>=sim.frameOf(a).need) || (S.inv['raw:'+b]||0)-(S.inv['raw:'+a]||0));
+      const perF=fitN(6), firstF=pager(fk.length,perF);
+      fk.slice(firstF,firstF+perF).forEach(k=>{ const F=sim.frameOf(k), have=S.inv['raw:'+k]||0, m=Math.round(F.time/60);
         const aika=(m>=60?Math.floor(m/60)+' H':'')+(m%60?' '+(m%60)+' MIN':'');
-        row(PRODUCTS[F.out].name, have+' / '+F.need, STRAINS[k].name+' '+aika+'  '+SELL_BASE[F.out]+' '+CUR,
+        row(PRODUCTS[F.out].name, have+' / '+F.need, strain(k).short+' '+aika+'  '+SELL_BASE[F.out]+' '+CUR,
           ()=>{ if (sim.startFrame(d,k)) U.modal=null; }, have>=F.need, null, null, AMB[2]); });
       if (!land) wrap('SATO KASVAA KEHIKKOON ELÄVÄKSI TUOTTEEKSI. TUOTE ON ARVOKKAAMPI KUIN SATO.',X+10,Y+HH-46,TW,P.uiD);
     }

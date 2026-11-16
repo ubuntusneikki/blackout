@@ -37,6 +37,7 @@ export const MILESTONES = [
   ['firstCross',  'ENSIMMÄINEN RISTEYTYS'],
   ['kehikko',     'KEHIKKO OSTETTU'],
   ['firstFilter', 'ENSIMMÄINEN SUODATIN'],
+  ['web',         'VERKKOMUOTOINEN KANTA'],
   ['hoitaja',     'HOITAJASIENI'],
   ['kellari',     'KELLARI'],
   ['firstBoard',  'ENSIMMÄINEN TAULUN TILAUS'],
@@ -46,7 +47,7 @@ export const MILESTONES = [
 class Metrics {
   constructor(){
     this.t = 0; this.ms = {}; this.sales = {}; this.salesN = {}; this.purchases = []; this.byCell = {};
-    this.counts = { mutation: 0, contamination: 0, fail: 0, cross: 0, rescue: 0, spike: 0, board: 0, chain: 0, frame: 0, retki: 0, harvest: 0, sporeTake: 0, filter: 0 };
+    this.counts = { hybrid: 0, mut_pieni: 0, mut_harv: 0, mut_ainut: 0, mutation: 0, contamination: 0, fail: 0, cross: 0, rescue: 0, spike: 0, board: 0, chain: 0, frame: 0, retki: 0, harvest: 0, sporeTake: 0, filter: 0 };
     this.visits = []; this.events = []; this.log = [];
   }
   mark(k){ if (this.ms[k] === undefined){ this.ms[k] = this.t; this.log.push(h(this.t) + ' ' + k); } }
@@ -67,10 +68,10 @@ class Metrics {
         if (p){ p.cell = id; this.byCell[id] = p; } break; }
       case 'malja-auki': {
         const r = d.tulos; this.counts.cross++;
-        if (r.kind === 'new'){ this.mark('firstCross'); if (r.key.startsWith('hoitaja')) this.mark('hoitaja'); if (r.key.includes('~')) this.counts.mutation++; }
-        else if (r.kind === 'villi') this.counts.contamination++; else this.counts.fail++;
+        if (r.kind === 'new'){ this.mark('firstCross'); if (r.first) this.counts.hybrid = (this.counts.hybrid || 0) + 1; if (r.mut){ this.counts.mutation++; this.counts['mut_' + r.mut.t] = (this.counts['mut_' + r.mut.t] || 0) + 1; } }
+        else if (r.kind === 'villi') this.counts.contamination++;
         this.log.push(h(this.t) + ' malja ' + r.kind + (r.key ? ' ' + r.key : '')); break; }
-      case 'korjuu': this.counts.harvest++; this.credit(d.astia, 'raw:' + d.kanta.split('~')[0], d.n); break;
+      case 'korjuu': this.counts.harvest++; this.credit(d.astia, 'raw:' + d.kanta, d.n); break;
       case 'itiot': this.counts.sporeTake++; this.credit(d.astia, 'itio:' + d.kanta, 1); break;
       case 'laite-keruu': if (d.laite.type === 'kehikko'){
         const prod = d.tuote || (/SUODATIN/.test(d.viesti || '') ? 'suodatin' : 'muotti');
@@ -101,7 +102,7 @@ export function pendingDecisions(){
     if (c.kind === 'vessel'){ if (G.waves ? G.waves(c) > 0 : c.ready) out.korjuu++; else if (!c.strain && anySpore) out.istutus++; }
     else if (c.done) out.laite++;
     else if (!c.busy && c.type === 'hautomo' && (S.inv.agar || 0) > 0 && Object.keys(S.spores).length >= 2) out.malja++;
-    else if (!c.busy && c.type === 'kehikko' && (S.inv['raw:kalvo'] || 0) >= D.DEVICES.kehikko.need) out.kehikko++;
+    else if (!c.busy && c.type === 'kehikko' && Object.keys(S.inv).some(id => { const f = id.startsWith('raw:') && G.frameOf(id.slice(4)); return f && S.inv[id] >= f.need; })) out.kehikko++;
   }
   if (Object.keys(S.inv).some(k => k.startsWith('raw:') || k === 'villi')) out.myynti = 1;
   if (S.order && !S.flags.done && (S.inv.suodatin || 0) > 0) out.toimitus = 1;
@@ -113,9 +114,11 @@ export function pendingDecisions(){
 // main.js: syncKnown + checkUnlocks + rescue pelin avautuessa
 function onOpen(){
   const S = ST.S;
-  for (const k in S.spores){ const b = k.split('~')[0]; if (D.STRAINS[b]) S.known[b] = 1; }
+  for (const k in S.spores) if (ST.strain(k)) S.known[k] = 1;
+  if (cur){ if (S.known.hoitaja) cur.mark('hoitaja'); if (Object.keys(S.known).some(isWeb)) cur.mark('web'); }
   G.checkUnlocks(); G.rescue();
 }
+const isWeb = k => { const f = G.frameOf(k); return !!f && f.out === 'suodatin'; };
 function advance(sec, speed){ G.simulate(sec * speed); clockSec += sec; if (cur) cur.t = clockSec; }
 
 // Yksi ajo: profiili, siemen, politiikka. Palauttaa mittarit.
@@ -138,14 +141,9 @@ export function runOne({ profile, seed, days = 14, speed = 1, policy, stopAtDone
     const growing = ST.allCells().filter(o => o.c.kind === 'vessel' && o.c.strain).length;
     const busy = ST.allCells().filter(o => o.c.kind === 'device' && o.c.busy).length;
     const ev0 = M.events.length;
-    // umpikuja: risteytyksen vanhempaa ei ole itiöinä eikä kasvamassa (tulos vielä tuntematon)
+    // umpikuja: sinihelttaa (risteytysten vanhempi) ei ole itiöinä eikä kasvamassa
     const lost = [];
-    const brewing = ST.allCells().filter(o => o.c.dish).map(o => (G.recipeFor(o.c.dish.a, o.c.dish.b) || {}).out);
-    for (const r of D.RECIPES) if (!S.known[r.out] && !brewing.includes(r.out)) for (const b of [r.a, r.b]){
-      if (!S.known[b]) continue;
-      const has = Object.keys(S.spores).some(k => k.split('~')[0] === b && S.spores[k] > 0) || ST.allCells().some(o => o.c.strain && o.c.strain.split('~')[0] === b);
-      if (!has && !lost.includes(b)) lost.push(b); }
-    if (lost.length) M.lostVisits = (M.lostVisits || 0) + 1, M.lost = [...new Set([...(M.lost || []), ...lost])];
+    if (!Object.keys(S.spores).some(k => k === 'heltta' && S.spores[k] > 0) && !ST.allCells().some(o => o.c.strain === 'heltta')) lost.push('heltta');
     // käynti: toimi, odota 30 s, toimi... visitMin minuutin ajan
     let acts = 0; const steps = Math.max(1, Math.round(profile.visitMin * 2));
     for (let i = 0; i < steps; i++){
@@ -169,7 +167,7 @@ function summarize(M, S, times, last){
   // suodatin arvotetaan tilauksen palkkiolla (palkkio / tarve); kalvoheltta saa puolet suodattimen arvosta
   // jaettuna tarpeella ja kehikko toisen puolen. Myymätön tuote arvotetaan perushinnalla.
   const filterV = D.ORDER.reward / D.ORDER.need, kalvoV = filterV / 2 / D.DEVICES.kehikko.need;
-  const value = c => c.prod === 'suodatin' ? filterV / 2 * c.n : c.prod === 'raw:kalvo' ? Math.max(kalvoV, avg(c.prod)) * c.n : avg(c.prod) * c.n;
+  const value = c => c.prod === 'suodatin' ? filterV / 2 * c.n : c.prod.startsWith('raw:') && isWeb(c.prod.slice(4)) ? Math.max(kalvoV, avg(c.prod)) * c.n : avg(c.prod) * c.n;
   const purchases = M.purchases.map(p => {
     let cost = p.price;
     if (p.key === 'kellari'){   // kellarin takaisinmaksu: tila + sinne sijoitetut astiat

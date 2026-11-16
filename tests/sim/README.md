@@ -55,3 +55,7 @@ Botti tunnistaa TP3:n rajapinnan, jos se on pelissä: satoaallot (`G.waves`), ke
 
 - Botti on yksi järkevä pelaaja, ei optimi. Luvut kertovat suunnan ja mittasuhteet; vertaa aina samalla botilla ennen ja jälkeen muutoksen.
 - Käynnin aikana peli kulkee oikeassa ajassa (30 s välein), joten käynnin pituus vaikuttaa vain nopeisiin kasvuihin (ensimmäinen 60 s kasvu).
+
+## V2.2: genomi
+
+Reseptejä ei enää ole. Botti ryhmittelee kannat tehtävän mukaan (verkkomuotoinen = kehikossa suodatin, HOIDA-kykyinen = hoitaja) ja valitsee risteytykset tavoitepiirteen mukaan (`wantCross` policy.js:ssä): ensin yksi risteytys ketjun askelta varten, sitten verkkomuoto × siniheltta, kunnes verkkomuotoinen kanta kasvaa nopeudella 5 tai kuusi maljaa on käytetty. Uudet mittarit: virstanpylväs VERKKOMUOTOINEN KANTA sekä laskurit `hybrid`, `mut_pieni`, `mut_harv`, `mut_ainut`.
