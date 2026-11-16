@@ -23,13 +23,13 @@ Pelaaja ei valmista esineitä vaan kasvattaa elävää rihmastoa: kantoja ristey
 index.html          aloitussivu: ohjaa suoraan kotipeliin
 ulko/index.html     ULKO-01 (JÄÄDYTETTY: ulkopeli ei kuulu tähän protoon, saaliit simuloidaan kotona)
 koti/index.html     KOTI-01 v1: kotipeli ES-moduuleina koti/js/ (data, gfx, events, state, sim, retki, retki-ui, room, iso, xsec, ui, main,
-                    reveal = paljastus ja sen jono, book = kantakirja ja sukupuu, naming = mutaation nimikenttä, nat = natiivikoordinaattikääre)
+                    reveal = paljastus ja sen jono, book = kantakirja ja sukupuu, genomi = genomit, periytyminen ja mutaatioarvonta (puhdas, ei Math.random), naming = mutaation nimikenttä, nat = natiivikoordinaattikääre)
                     iso.js = isometrinen päänäkymä (atlas koti/gfx/, 384 px kerros UI-puskurin alla, osumat, siirtymät)
 koti/pwa.js, sw.js  puhelinversio: asennus (manifest.webmanifest, ikonit/), offline, tallennuksen vienti/tuonti koodina
 iso/index.html      kokeilu (JÄÄDYTETTY): isometrinen 3D-kartta three.js r128:lla + pikselöintivarjostin
 blender/            Blender-skriptit (bpy): room.py (huone), kit.py (katupakkaus + talot), koti.py (kodin spritet), koti_atlas.py (atlas + esikatselu), pix.py (pikselöinti), sheet.py
 docs/               ydinvisio.md, kotipeli-v1.md (+ suunnitelma), prototyypin-tila.md, grafiikka-koti.md (kodin spritet ja atlas)
-tests/              Playwright-skriptit: v1-lapipeluu.js (botti pelaa tilaukseen asti), tallennukset.js, pwa.js, vaaka.js (vaakatila ja kierto), fps.js (piirtoajat), tp7-paljastus.js (kaikki paljastuksen tulokset, jono, kantakirja)
+tests/              Playwright-skriptit: v1-lapipeluu.js (botti pelaa tilaukseen asti), tallennukset.js, pwa.js, vaaka.js (vaakatila ja kierto), fps.js (piirtoajat), tp7-paljastus.js (periytyminen, mutaatiot, tutkimusmalja, jono, kantakirja)
 ```
 
 Ei build-vaihetta: staattisia sivuja GitHub Pagesissa. Paikallisesti: `python3 -m http.server` repon juuressa.
@@ -42,8 +42,9 @@ Koti on ES-moduuleina (`koti/js/*.js`) ilman bundleria; se vaatii http-palvelime
 ## Yhteinen tallennus
 
 - `localStorage` avain **`solmu_yhteinen_v1`**, sama ulko- ja kotisivulla (toimii vain samassa origin-osoitteessa).
-- Kodin v1-skeema (`schema:1`): `speed, hopea, rooms{huone,kellari}{owned, cells[]}, cur, inv{raw:kanta, suodatin, villi, agar}, spores{kanta:n}, vesselInv[], deviceInv[], bought, sold, known{}, tried{}, market{sat, spike, nextSpike}, flags{}, order, retki{cur, n, deep}, kotiLast, board[], boardNext, boardSeq, boardDone, chain, made{}, names{}, book{seen{}}`. TP7: `names['kanta~perk']` = pelaajan antama mutaation nimi (`strain()` käyttää sitä), `book.seen` = kantakirjassa nähdyt kannat (KANNAT hehkuu, kun uutta), `tried[pari]` = 1 (kesken/kontaminaatio), 'ok' tai 'fail' (hylätyt yliviivattuina hautomossa). Rihmaretki (`retki.js`, TP5): `retki.cur = {type:'lyhyt'|'syva', t, back}`, ovi aukeaa ensimmäisestä myynnistä (`flags.retki`). Ulko käyttää: `spores, vesselInv, found, cells, memories, walked`.
-- Ruutu on `{kind:'vessel', type, strain, growth, moist, ready, waves}` tai `{kind:'device', type, t, busy, done, dish|job}`. `waves` = kypsät satoaallot (≤3), kehikon `job` = syötekanta (`FRAME` data.js:ssä). Mutaatiokannan avain on `kanta~grow` tai `kanta~yield`.
+- Kodin v1-skeema (`schema:1`): `speed, hopea, rooms{huone,kellari}{owned, cells[]}, cur, inv{raw:kanta, suodatin, villi, agar}, spores{kanta:n}, vesselInv[], deviceInv[], bought, sold, known{}, tried{}, market{sat, spike, nextSpike}, flags{}, order, retki{cur, n, deep}, kotiLast, board[], boardNext, boardSeq, boardDone, chain, made{}, names{}, book{seen{}}, seed, kannat{}, tieto{}, crossN{}`. TP7: `names[kanta]` = pelaajan antama kannan nimi (`strain()` käyttää sitä), `book.seen` = kantakirjassa nähdyt kannat (KANNAT hehkuu, kun uutta), `tried[pari]` = 1 (kesken/kontaminaatio), tai 'ok' (V2.2: hylkimistä ei enää ole). Rihmaretki (`retki.js`, TP5): `retki.cur = {type:'lyhyt'|'syva', t, back}`, ovi aukeaa ensimmäisestä myynnistä (`flags.retki`). Ulko käyttää: `spores, vesselInv, found, cells, memories, walked`.
+- Ruutu on `{kind:'vessel', type, strain, growth, moist, ready, waves}` tai `{kind:'device', type, t, busy, done, dish|job}`. `waves` = kypsät satoaallot (≤3), kehikon `job` = syötekanta (`FRAME` data.js:ssä). 
+- **Genomi (V2.2, `genomi.js`):** ei reseptejä. Kannan avain on pohjakannan tunniste (`heltta, ruusu, hamara, kalvo, hoitaja, verkko, yoruusu`) tai risteymän `x` + geenien tiiviste; sama geeniyhdistelmä = sama kanta. `kannat[avain] = {g:{M,K,G}, seed, pa, pb, from, mut, stab, nimi}`: M = muoto ja värit, K = kyky ja luonne, G = sato, nopeus ja ilmasto; ryhmät periytyvät kokonaisina. `tieto[avain] = {k, g}` = tunnetut piirreryhmät (kasvu selviää sadosta, kyky tutkimusmaljasta). `seed` = pelaajan siemen ja `crossN[pari]` = parin maljojen määrä: tulos on `GN.cross(kannat, a, b, seed, n)`, aina sama samoilla arvoilla. Käytä aina `strain(avain)` (state.js), älä `STRAINS[avain]`. Vanhat `kanta~grow`/`kanta~yield` muunnetaan `upgradeV22()`:ssa.
 - Kuivausteline ja `dry:*`-tuotteet poistettiin (TP0): `ensure()` hyvittää ne hopeana (kuivattu 5, teline 40).
 - Tallennus ilman `schema`-kenttää on vanha (V0.2/V0.3): `state.js` `migrate()` muuntaa sen (sato, uute, mk, jalosteet ja tulikääpä → hopeaksi; hylly 3 sarakkeesta 4×4-ruudukkoon).
 - Koti omistaa kentät `KOTI_OWNS` (state.js). Kun toinen välilehti kirjoittaa (`storage`-tapahtuma), koti ottaa uuden tilan mutta pitää nämä omat arvonsa. Ulko tekee muutokset aina tuoreimpaan tallennukseen (`mutate`).
@@ -87,6 +88,6 @@ Koti on ES-moduuleina (`koti/js/*.js`) ilman bundleria; se vaatii http-palvelime
 1. ~~**Ulko:** poista HERÄTÄ-toiminto, `places`-piirto ja parantamisen palkinnot. Jätä löydöt, syke ja muistot.~~ Tehty (ULKO-01 V0.2).
 2. ~~**Kotipeli v1:**~~ toteutettu (KOTI-01 V1.0). Koko määrittely on tiedostossa **docs/kotipeli-v1.md** (suodatinputki: kasvatus, laboratorio ja risteytys, muottikasvatus, kuivaus, hoitajasieni, 4×4-huone ja kellari, HOPEA-markkina, tilaus). Se korvaa aiemmat tehtävät 2–5. KOTI-01 V0.3:n markkina (MK, jalosteet) sovitetaan tähän määrittelyyn.
 
-3. **Solmu V2** (toteutusprompti 16.11.2026, vaiheet omina PR:inään): ~~1. grafiikan siistiminen ja vaakatila~~ (V2.0), 2. genomi ja perinnöllinen risteytys, 3. proseduraalinen ulkonäkö, 4. laitteet (runko + hermosto), 5. villiintyminen, 6. välitavoiteketju, tapahtumat ja tekstit. Tila: docs/prototyypin-tila.md.
+3. **Solmu V2** (toteutusprompti 16.11.2026, vaiheet omina PR:inään): ~~1. grafiikan siistiminen ja vaakatila~~ (V2.0), ~~2. genomi ja perinnöllinen risteytys~~ (V2.2), 3. proseduraalinen ulkonäkö, 4. laitteet (runko + hermosto), 5. villiintyminen, 6. välitavoiteketju, tapahtumat ja tekstit. Tila: docs/prototyypin-tila.md.
 
 Ennen isoja suunnittelumuutoksia kysy Juusolta. Pienissä toteutusvalinnoissa valitse yksinkertaisin toimiva ratkaisu ja kerro se.
