@@ -1,5 +1,5 @@
 // KOTI v1: silmukka, syöte ja synkronointi
-import {W, H, screen, sctx, buf, HIT} from './gfx.js';
+import {W, H, RES, LAY, setLayout, screen, sctx, buf, HIT} from './gfx.js';
 import {S, SAVE_KEY, save, mergeIncoming} from './state.js';
 import * as sim from './sim.js';
 import {U, render, audioInit, openHautomo, switchRoom} from './ui.js';
@@ -37,17 +37,30 @@ function loop(ms){
   if (ms-lastSave>3000){ lastSave=ms; save(); sim.rescue(); }
   requestAnimationFrame(loop);
 }
-// näyttö on 384×672 (huonekerros 1:1, käyttöliittymäpuskuri ×2); kerroin K laitepikseleinä
+// Näyttö: pystyssä 384×672 natiivipikseliä (huonekerros 1:1). Vaakatilassa (V2.0) huone on vasemmalla ja sivupaneeli
+// oikealla: natiivikoko vähintään 768×352, ja ylimääräinen tila annetaan huoneelle ja paneelille (ei mustia reunoja).
+// K = kokonaislukukerroin laitepikseleinä; jos se jättäisi yli 15 % näytöstä tyhjäksi, venytetään näytön kokoon.
+const PORT=[384,672], LAND_MIN=[768,352], LAND_MAX=[1024,448];
 let K=1;
 function draw(ms){ render(ms); fx.draw(ms); composite(sctx, buf, K, U.view); }
 function fit(){
-  const dpr=window.devicePixelRatio||1, s=Math.min(innerWidth*dpr/(2*W), innerHeight*dpr/(2*H)), n=Math.floor(s);
-  // kokonaislukukerroin laitepikseleinä, jos se täyttää näytön melkein; muuten venytys (pikselöity)
-  K=Math.max(1,n); const use = n>=1 && n/s>=0.85 ? n : s;
-  screen.width=2*W*K; screen.height=2*H*K;
-  screen.style.width=(2*W*use/dpr)+'px'; screen.style.height=(2*H*use/dpr)+'px';
+  const dpr=window.devicePixelRatio||1, dw=innerWidth*dpr, dh=innerHeight*dpr;
+  const sP=Math.min(dw/PORT[0], dh/PORT[1]), sL=Math.min(dw/LAND_MIN[0], dh/LAND_MIN[1]), land=sL>sP;
+  const s=land?sL:sP, n=Math.floor(s), use = n>=1 && n/s>=0.85 ? n : s;
+  let nw=PORT[0], nh=PORT[1];
+  if (land){ nw=Math.min(LAND_MAX[0], Math.max(LAND_MIN[0], Math.floor(dw/use)&~1)); nh=Math.min(LAND_MAX[1], Math.max(LAND_MIN[1], Math.floor(dh/use)&~1)); }
+  // Kun kokonaislukukerroin ei täytä näyttöä (esim. 412 px leveä näyttö, dpr 2,625), piirretään seuraavalla
+  // kokonaisluvulla ja annetaan selaimen pienentää pehmeästi: pikselit pysyvät tasakokoisina (ei 2/3 px:n vaihtelua).
+  const whole = use===n;
+  K=whole ? n : Math.max(1,Math.ceil(s)); screen.style.imageRendering = whole ? '' : 'auto';
+  if (nw!==buf.width || nh!==buf.height || land!==LAY.land) setLayout(nw, nh, land);
+  if (screen.width!==nw*K || screen.height!==nh*K){ screen.width=nw*K; screen.height=nh*K; }
+  screen.style.width=(nw*use/dpr)+'px'; screen.style.height=(nh*use/dpr)+'px';
 }
-addEventListener('resize',fit); fit();
+let fitT=0;
+function refit(){ fit(); draw(performance.now()); clearTimeout(fitT); fitT=setTimeout(()=>{ fit(); draw(performance.now()); },250); }   // kierto: koko asettuu vasta hetken päästä
+addEventListener('resize',refit); addEventListener('orientationchange',refit); fit();
+
 let down=null;
 screen.addEventListener('pointerdown',e=>{ audioInit();
   const r=screen.getBoundingClientRect(), x=(e.clientX-r.left)/r.width*W, y=(e.clientY-r.top)/r.height*H;
@@ -56,7 +69,7 @@ screen.addEventListener('pointerdown',e=>{ audioInit();
 });
 // pyyhkäisy vaihtaa tilaa
 screen.addEventListener('pointerup',e=>{ if(!down) return; const r=screen.getBoundingClientRect(), dx=(e.clientX-down.cx)/r.width*W;
-  if (Math.abs(dx)>40 && U.view==='room' && !U.modal && down.y>14 && down.y<272) switchRoom(); down=null; });
+  if (Math.abs(dx)>40 && U.view==='room' && !U.modal && down.x<LAY.rw && down.y>LAY.ry && down.y<LAY.ry+LAY.rh) switchRoom(); down=null; });
 document.addEventListener('visibilitychange',()=>{ if(document.hidden){ save(); return; }
   try { const inc=JSON.parse(localStorage.getItem(SAVE_KEY)); if(inc) mergeIncoming(inc); } catch(e){}
   catchUp(); syncKnown(); morningReveal(); lastMs=performance.now(); });

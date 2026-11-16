@@ -3,7 +3,9 @@
 // joten nämä ohuet kääreet jakavat koordinaatit kahdella. Nimet ovat samat kuin gfx.js:ssä.
 import * as G from './gfx.js';
 export const N = G.RES || 2;
-export const W = G.W*N, H = G.H*N;
+export let W = G.W*N, H = G.H*N;                    // elävät: seuraavat asettelua (pysty 384×672, vaaka näytön mukaan)
+G.onLayout(() => { W = G.W*N; H = G.H*N; });
+export const LAY = G.LAY;
 export const LH = 10;                                  // rivin korkeus natiivina (fontti 7 px + väli)
 export const g = G.g, BAYER = G.BAYER, rng = G.rng, clamp = G.clamp, ease = G.ease, fmt = G.fmt, screen = G.screen;
 export const px = (x, y, col) => G.dot(x/N, y/N, col);

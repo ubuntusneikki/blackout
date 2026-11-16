@@ -11,9 +11,7 @@ const X = XL.getContext('2d');
 // sisätila (kerroksen koordinaatit). UI-koordinaateissa sama alue on noin (24…167, 78…214), kuten ennen.
 export const SOIL = 400, TY0 = 128, BASE = 444;
 export const INNER = { purkki:[96,288], terraario:[52,332], akvaario:[52,332], palvelin:[76,308] };
-// UI-koordinaatit efekteille (fx.js): astian sisätila ja kasvuston keskikohta
-export const XSEC_BOX_UI = {x:24, y:78, w:143, h:136};
-export const ORIGIN = [96, 214];
+// V2.0: leijuvat itiöt ja mutaation kiertävät pisteet on poistettu lähikuvasta (hehku = pelattavaa).
 
 // ---------- värit ----------
 const hex = h => [parseInt(h.slice(1,3),16), parseInt(h.slice(3,5),16), parseInt(h.slice(5,7),16)];
@@ -298,17 +296,13 @@ export function drawXsec(vs, t, v, opt){
     const room = (gx1 - gx0)/260, s = life*(SCALE[style] || 1.3)*(type === 'purkki' ? 0.8 : 1)*Math.min(1, room + 0.15);
     // valolammikko alustalla ja hengittävä hehku
     const br = 0.6 + 0.4*Math.sin(t*1.3);
-    if (glow > 0){ halo(cx, ground + 2, 120*s + 20, 9, vcol(T.col[1], v), 0.45*glow*br, [x0 + 2, x1 - 2, 0, XH]);
+    if (glow > 0){ halo(cx, ground + 2, 70*s + 14, 6, vcol(T.col[1], v), 0.4*glow*br, [x0 + 2, x1 - 2, 0, XH]);
       halo(cx, ground - 60*s, 80*s + 12, 60*s + 8, vcol(T.col[0], v), 0.18*glow*br, [x0 + 3, x1 - 3, TY0 + 2, ground]); }
     topY = SHAPE[style](cx, ground, s, c, sc, {sway: dry ? 0 : Math.round(Math.sin(t*0.9)*1.5), droop: dry ? 3 : 0, glow}, t);
     if (T.auto){ // hoitajan rihmat kulkevat ulos astiasta naapureihin
       for (let k = 0; k < 3; k++){ const yy = BASE + 22 + k*7, ph = (t*40 + k*31) % (XW + 40);
         for (let x = 0; x < XW; x++) if (((x + k*3) % 5) === 0 && (x < x0 - 16 || x > x1 + 16)) px(x, yy, sc[0]);
         px(ph - 20, yy, c[4]); px(ph - 19, yy, c[4]); } }
-    // itiöt leijuvat
-    if (!dry && life > 0.5) for (let i = 0; i < (T.mutant ? 30 : 18); i++){ const sx = x0 + 10 + ((i*53) % (x1 - x0 - 20)), y = ground - 20 - ((t*(6 + i%4*3) + i*29) % (ground - TY0 - 30));
-      px(sx + Math.round(Math.sin(t + i)*3), y, T.mutant && i % 3 === 0 ? AMB[2] : c[i % 3 ? 2 : 4]); }
-    if (T.mutant) for (let k = 0; k < 6; k++){ const a = t*1.2 + k*1.047; px(cx + Math.cos(a)*90*s, topY + 40*s + Math.sin(a)*30*s, AMB[2]); }
   }
   vesselFront(type, t, {wet: VWET[type] ? vs.moist : 0});
   // valmis sato: meripihkainen merkki kasvuston yllä
@@ -333,7 +327,7 @@ function drawLk(vs, t, v, opt, type, lt, back, front, T){
     const ready = vs.ready || vs.waves > 0, stage = (ready || vs.growth >= 0.999) ? 'kypsa' : vs.growth >= 0.4 ? 'nuori' : 'itu';
     const base = String(vs.strain).split('~')[0], sh = lk('lk_sieni_' + base + '_' + stage, v);
     const s = (0.18 + 0.82*ease(vs.growth))*1.3;
-    if (glow > 0){ halo(gx, gy + 2, 110*s + 20, 8, vcol(T.col[1], v), 0.45*glow*br, [x0 - 30, x1 + 30, 0, XH]);
+    if (glow > 0){ halo(gx, gy + 2, 64*s + 14, 6, vcol(T.col[1], v), 0.4*glow*br, [x0, x1, 0, XH]);
       halo(gx, gy - 60*s, 80*s + 12, 60*s + 8, vcol(T.col[0], v), 0.16*glow*br, [x0, x1, oy + 10, gy]); }
     if (sh){
       const sway = (!dry && stage !== 'itu') ? Math.round(Math.sin(t*0.9)*1.5) : 0;
@@ -347,10 +341,6 @@ function drawLk(vs, t, v, opt, type, lt, back, front, T){
       for (let k = 0; k < 3; k++){ const yy = 478 + k*7, ph = (t*40 + k*31) % (XW + 40);
         for (let x = 0; x < XW; x++) if (((x + k*3) % 5) === 0 && (x < x0 - 30 || x > x1 + 30)) px(x, yy, sc[0]);
         px(ph - 20, yy, c4); px(ph - 19, yy, c4); } }
-    if (!dry && stage !== 'itu') for (let i = 0; i < (T.mutant ? 30 : 18); i++){   // itiöt leijuvat
-      const sx = x0 + 10 + ((i*53) % (x1 - x0 - 20)), y = gy - 20 - ((t*(6 + i%4*3) + i*29) % Math.max(40, gy - oy - 60));
-      px(sx + Math.round(Math.sin(t + i)*3), y, T.mutant && i % 3 === 0 ? AMB[2] : vcol(T.col[i % 3 ? 2 : 1], v)); }
-    if (T.mutant) for (let k = 0; k < 6; k++){ const a = t*1.2 + k*1.047; px(gx + Math.cos(a)*70, gy - 50 + Math.sin(a)*24, AMB[2]); }
   }
   X.drawImage(front.c, XW/2 - front.ax, AY - front.ay);
   // kostea astia: huurua ja pisaroita etulasissa

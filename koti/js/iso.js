@@ -2,14 +2,22 @@
 // hehku koodilla, osumat, tilan vaihdon siirtymä ja poikkileikkauksen zoomaus.
 // Huone piirretään omaan 384 px leveään kerrokseen (ISO) käyttöliittymäpuskurin (192 px, ×2) alle.
 // Koordinaatit: kerroksen piste (lx, ly) = käyttöliittymän piste (lx/2, (ly+IY)/2).
-import {P, AMB, STRAINS, ROOMS, CUR, WILD, SYM} from './data.js';
-import {vital, rng, BAYER, clamp, ease, W, H, tw, GUIDE_BOXES} from './gfx.js';
+import {P, AMB, STRAINS, ROOMS, CUR, SYM} from './data.js';
+import {vital, rng, BAYER, clamp, ease, W, H, RES, LAY, onLayout, tw, GUIDE_BOXES} from './gfx.js';
 import {S, strain, neighbors} from './state.js';
-import {XL, XSEC_BOX_UI} from './xsec.js';
+import {XL} from './xsec.js';
 
 export const IW = 384, IH = 516, IY = 28;          // kerros alkaa käyttöliittymän y=14 kohdalta
 export const layer = document.createElement('canvas'); layer.width = IW; layer.height = IH;
 const L = layer.getContext('2d');
+// Kerroksen paikka näytöllä natiivipikseleinä (ORG = huone, XORG = poikkileikkaus). Pystyssä yläpalkin alla,
+// vaakatilassa keskellä vasenta huonealuetta (ylä- ja alareuna rajautuvat pois; tilan kuva on kerroksen keskellä).
+export const ORG = {x:0, y:IY}, XORG = {x:0, y:IY};
+onLayout(() => {
+  if (!LAY.land){ ORG.x = XORG.x = 0; ORG.y = XORG.y = IY; return; }
+  ORG.x = XORG.x = Math.round((LAY.rw*RES - IW)/2); ORG.y = Math.round((H*RES - IH)/2);
+  XORG.y = Math.min(0, Math.round(H*RES - 462));     // lähikuva: astian jalusta alareunaan, kansi saa rajautua
+});
 const mk = (w, h) => { const c = document.createElement('canvas'); c.width = Math.max(1, w); c.height = Math.max(1, h); return c; };
 
 // ---------- atlas ----------
@@ -111,6 +119,10 @@ function outline(s, col, key){
     if (!a(x, y) && (a(x-1, y) || a(x+1, y) || a(x, y-1) || a(x, y+1))) g.fillRect(x + 1, y + 1, 1, 1);
   return (OC[key] = c);
 }
+// spriten näytepisteet (6 px:n ruudukko, vain näkyvät pikselit): peittymisen arviointiin
+function samples(s){ if (s.smp) return s.smp; const out = [];
+  for (let y = 3; y < s.h; y += 6) for (let x = 3; x < s.w; x += 6) if (alphaAt(s, x, y) > 0) out.push([x, y]);
+  return (s.smp = out); }
 function alphaAt(s, x, y){
   if (x < 0 || y < 0 || x >= s.w || y >= s.h) return 0;
   if (!s.alpha) s.alpha = s.c.getContext('2d').getImageData(0, 0, s.w, s.h).data;
@@ -134,31 +146,56 @@ const SPOTS = {
 function spotBox(r, id, ox, oy){ const s = sprite('tila_' + r); if (!s) return null; const sp = SPOTS[r].find(q => q.id === id); if (!sp) return null;
   const [ax, ay] = roomAnchor(r); return {x: ax - s.ax + sp.x + (ox||0), y: ay - s.ay + sp.y + (oy||0), w: sp.w, h: sp.h}; }
 
-// ---------- taustan villi rihmasto ----------
-let BG = null;
-function background(){
-  if (BG) return BG;
-  BG = mk(IW, IH); const g = BG.getContext('2d'), R = rng(41);
-  g.fillStyle = P.bg0; g.fillRect(0, 0, IW, IH);
-  // reunoilta kurottavat kylmän violetit rihmat
-  for (let n = 0; n < 46; n++){
-    const side = n % 4; let x = side === 0 ? 0 : side === 1 ? IW - 1 : R()*IW, y = side === 2 ? 0 : side === 3 ? IH - 1 : R()*IH;
-    let ang = side === 0 ? 0 : side === 1 ? Math.PI : side === 2 ? Math.PI/2 : -Math.PI/2; const len = 20 + R()*70;
-    for (let k = 0; k < len; k++){ ang += (R() - 0.5)*0.5; x += Math.cos(ang); y += Math.sin(ang);
-      const f = 1 - k/len; if (BAYER[(y|0)&3][(x|0)&3] < 2 + f*10){ g.fillStyle = f > 0.7 ? WILD[1] : WILD[0]; g.fillRect(x|0, y|0, 1, 1); }
-      if (R() < 0.04){ g.fillStyle = WILD[2]; g.fillRect(x|0, y|0, 1, 1); } }
-  }
-  // tumma keskusta: huone erottuu
-  const img = g.getImageData(0, 0, IW, IH), d = img.data;
-  for (let y = 0; y < IH; y++) for (let x = 0; x < IW; x++){ const dx = (x - IW/2)/(IW*0.55), dy = (y - IH/2)/(IH*0.5), e = clamp(1 - Math.hypot(dx, dy), 0, 1);
-    const i = (y*IW + x)*4; for (let k = 0; k < 3; k++) d[i+k] = d[i+k]*(1 - e*0.9) + [11,16,24][k]*e*0.9; }
-  g.putImageData(img, 0, 0);
-  return BG;
+// ---------- vuorokaudenaika ja ikkuna ----------
+// V2.0: tausta on tasainen ja tumma (villit rihmat ja leijuvat itiöt poistettu: ne eivät kertoneet pelaajalle mitään).
+// Ikkuna ja valokaista piirretään tähän kerrokseen heti tilan kuvan jälkeen, joten esineet peittävät ne oikein.
+function hourNow(){ if (window.__fxHour != null) return window.__fxHour; const d = new Date(); return d.getHours() + d.getMinutes()/60; }
+export function nightness(h){ h = h == null ? hourNow() : h;   // 0 = keskipäivä, 1 = keskiyö
+  if (h >= 22 || h < 5) return 1; if (h >= 9 && h < 17) return 0; if (h < 9) return 1 - (h - 5)/4; return (h - 17)/5; }
+const dusk = h => Math.max(0, 1 - Math.abs(h - 7)/2.2, 1 - Math.abs(h - 19.5)/2.5);
+const BAND = {};
+// tyyliohje: ei auringonvaloa. Päivä = pölyinen sumu ja vino lämmin valokaista, aamu ja ilta = meripihkainen horisontti, yö = syvä violetti.
+function windowFx(tila, ox, oy, t){
+  const [rax, ray] = roomAnchor('huone'), sp = SPOTS.huone.find(q => q.id === 'ikkuna');
+  const bx = sp.x, by = sp.y, bw = sp.w, bh = sp.h, X0 = rax - tila.ax + ox, Y0 = ray - tila.ay + oy;
+  const h = hourNow(), n = nightness(h), dk = dusk(h);
+  // lasi on suunnikas (yläreuna laskee oikealle): efektit vain lasin päälle
+  const gx0 = Math.round(bx + bw*0.07), gx1 = Math.round(bx + bw*0.94), gh = Math.round(bh*0.48), SL = 0.4, gTop = x => Math.round(by + bh*0.145 + (x - gx0)*SL);
+  for (let x = gx0; x < gx1; x++){ const t0 = gTop(x);
+    for (let y = t0; y < t0 + gh; y++){ const f = (y - t0)/gh, b = BAYER[y&3][x&3];
+      if (n > 0.05 && b < n*(f < 0.5 ? 9 : 4)) px(X0 + x, Y0 + y, f < 0.5 ? '#130f24' : '#24203f');
+      else if (n < 0.95 && f < 0.6 && b < (1 - n)*1.5) px(X0 + x, Y0 + y, '#5a4a6a');
+      if (dk > 0.05 && f > 0.55 && b < dk*4*(f - 0.55)/0.45) px(X0 + x, Y0 + y, f > 0.85 ? '#ffcf7a' : '#d99a5b'); } }
+  // yöllä ikkunan takana villin rihmaston kärjet välkkyvät hiljaa (ainoa merkki ulkomaailmasta)
+  if (n > 0.3) for (let k = 0; k < 8; k++){ const x = gx0 + ((k*53 + 7) % (gx1 - gx0)), y = gTop(x) + gh - 3 - ((k*29) % (gh >> 1));
+    if (Math.sin(t*1.1 + k*2.3) > 0.5) px(X0 + x, Y0 + y, '#d6b0ff'); }
+  // päivällä vino valokaista ikkunasta lattialle: valmiiksi laskettu kerros (10 tasoa), vain tilan pinnoille
+  const lv = Math.round((1 - n)*10); if (!lv) return;
+  let c = BAND[lv];
+  if (!c){ c = BAND[lv] = mk(tila.w, tila.h); const g = c.getContext('2d'), img = g.createImageData(tila.w, tila.h), D = img.data;
+    const LEN = 150, DX = -0.75, k0 = lv/10*0.9, yb = gTop(gx0) + gh;
+    for (let y = yb; y < tila.h; y++) for (let x = 0; x < tila.w; x++){
+      const s0 = (y - yb - (x - gx0)*SL)/(1 - DX*SL); if (s0 < 0 || s0 > LEN) continue;
+      const xw = x - DX*s0; if (xw < gx0 || xw > gx1) continue;
+      if (alphaAt(tila, x, y) < 200) continue;
+      const e = Math.min(xw - gx0, gx1 - xw)/12, fall = 1 - s0/LEN; let k = k0*fall*fall*Math.min(1, e);
+      if (BAYER[y&3][x&3] < 3) k *= 1.6;
+      const i = (y*tila.w + x)*4; D[i] = 255; D[i+1] = 232; D[i+2] = 176; D[i+3] = Math.min(90, k*80); }
+    g.putImageData(img, 0, 0); }
+  L.drawImage(c, X0, Y0);
 }
-function spores(t){
-  for (let k = 0; k < 18; k++){ const R = rng(900 + k), sx = R()*IW, sp = 4 + R()*6, ph = R()*100;
-    const y = IH - ((t*sp + ph*7) % (IH + 20)), x = sx + Math.sin(t*0.4 + ph)*8;
-    L.fillStyle = k % 5 ? WILD[1] : WILD[2]; L.fillRect(x|0, y|0, 1, 1); }
+// valolammikko lattialla astian alla: elävä kasvusto valaisee ympäristöään kannan värillä, hengittää ja sammuu kuivuessa
+// Kolme lisäävää soikiota (ei pistekuviota eikä reunanpehmennystä), rajattuna tilan kuvaan, jotta valo ei vuoda tyhjään.
+let POOL = null;
+function pools(tila, X0, Y0, list){
+  if (!list.length) return;
+  if (!POOL || POOL.width !== tila.w || POOL.height !== tila.h) POOL = mk(tila.w, tila.h);
+  const g = POOL.getContext('2d'); g.globalCompositeOperation = 'source-over'; g.clearRect(0, 0, tila.w, tila.h);
+  for (const [x, y, col, k] of list){ g.fillStyle = col; g.globalAlpha = clamp(0.11*k, 0, 0.2);
+    for (const [rx, ry] of [[66, 33], [50, 25], [34, 17]])
+      for (let dy = -ry; dy <= ry; dy++){ const hw = Math.round(rx*Math.sqrt(1 - (dy*dy)/(ry*ry))); if (hw > 0) g.fillRect(Math.round(x - X0) - hw, Math.round(y - Y0) + dy, 2*hw, 1); } }
+  g.globalAlpha = 1; g.globalCompositeOperation = 'destination-in'; g.drawImage(tila.c, 0, 0);
+  L.save(); L.globalCompositeOperation = 'lighter'; L.drawImage(POOL, X0, Y0); L.restore();
 }
 
 // ---------- piirto ----------
@@ -220,7 +257,6 @@ function readyMarker(x, y, t){
   rect(x - 2, by - 14, 5, 9, AMB[0]); rect(x - 1, by - 13, 3, 7, AMB[1]); rect(x, by - 13, 1, 5, AMB[2]);
   rect(x - 2, by - 3, 5, 4, AMB[0]); rect(x - 1, by - 2, 3, 2, AMB[2]);
 }
-function orbit(x, y, t, col, rx, ry, n){ for (let k = 0; k < n; k++){ const a = t*1.5 + k*6.283/n; px(x + Math.cos(a)*rx, y + Math.sin(a)*ry, col); } }
 function bar(x, y, v, col){ rect(x - 13, y, 26, 3, P.ui0); rect(x - 12, y + 1, 24, 1, P.ui1); rect(x - 12, y + 1, Math.round(24*clamp(v,0,1)), 1, col); }
 // sumutusmerkki (kuivuva astia): sininen pisara tummalla ääriviivalla
 const DROP = ['...o...','..oao..','..oao..','.oaaao.','oaabaao','oabbaao','oaaaaao','.oaaao.','..ooo..'];
@@ -234,7 +270,13 @@ function drawRoomAt(r, t, opt, ox, oy){
   const room = S.rooms[r], tila = sprite('tila_' + r); if (!tila) return;
   const [rax, ray] = roomAnchor(r);
   draw(tila, rax + ox, ray + oy);
+  if (r === 'huone' && ATL.state === 'ok') windowFx(tila, ox, oy, t);
   const n = ROOMS[r].w*ROOMS[r].h, cells = room.cells, list = [];
+  const night = nightness(), pl = [];
+  cells.forEach((c, i) => { if (!c || c.kind !== 'vessel' || !c.strain || c.moist < 0.1) return; const T = strain(c.strain); if (!T) return;
+    const [x, y] = cellAnchor(r, i, ox, oy), br = 0.75 + 0.25*Math.sin(t*1.25 + i*2.1);
+    pl.push([x, y, T.col[1], br*(0.3 + 0.7*c.growth)*(0.5 + 0.5*night)]); });
+  pools(tila, rax - tila.ax + ox, ray - tila.ay + oy, pl);
   // lattia: vapaat ruudut, kun jotain voi sijoittaa
   for (let i = 0; i < n; i++){ const [x, y] = cellAnchor(r, i, ox, oy);
     DRAWN.push({r, i, kind:'floor', x, y});
@@ -245,8 +287,7 @@ function drawRoomAt(r, t, opt, ox, oy){
   cells.forEach((c, i) => { if (!c || c.kind !== 'vessel' || !c.strain) return; const T = strain(c.strain); if (!T || !T.auto) return;
     const [x0, y0] = cellAnchor(r, i, ox, oy);
     neighbors(r, i).forEach(j => { if (!cells[j] || cells[j].kind !== 'vessel') return; const [x1, y1] = cellAnchor(r, j, ox, oy);
-      for (let k = 6; k < 38; k++){ const f = k/44, ph = ((t*8 - k) % 8 + 8) % 8; if (k & 1) continue;
-        px(x0 + (x1 - x0)*f, y0 + (y1 - y0)*f + 2, ph < 2 ? T.col[2] : T.col[0]); } }); });
+      for (let k = 8; k < 36; k += 4){ const f = k/44; px(x0 + (x1 - x0)*f, y0 + (y1 - y0)*f + 2, T.col[1]); } }); });
   // oven hehku, kun ovi on toiminnassa (TP5 asettaa opt.doorGlow)
   // doorGlow: true = retki valittavissa (symbiontin syaani), 'amb' = retkeltä palattu (meripihka, tee tämä nyt)
   if (r === 'huone' && opt.doorGlow){ const b = spotBox(r, 'ovi', ox, oy); if (b){ const col = opt.doorGlow === 'amb' ? AMB[2] : SYM;
@@ -255,7 +296,6 @@ function drawRoomAt(r, t, opt, ox, oy){
     const yTop = x => b.y + 26 - (x - x0)*sl, yBot = x => b.y + b.h - 4 - (x - x0)*sl;
     for (const x of [x0, x1]) for (let y = yTop(x); y < yBot(x); y++) if (BAYER[(y|0)&3][x&3] < 6 + pulse*10) px(x, y, col);
     for (let x = x0; x <= x1; x++) if (BAYER[(yTop(x)|0)&3][x&3] < 6 + pulse*10) px(x, yTop(x), col);
-    for (let k = 0; k < 10; k++){ const q = (t*18 + k*11) % (b.h - 30); px(x0 + 4 + ((k*7) % (x1 - x0 - 8)), yBot(x0 + 4 + ((k*7) % (x1 - x0 - 8))) - q, col); }
     if (opt.doorGlow === 'amb') readyMarker((x0 + x1)/2, yTop((x0 + x1)/2) - 2, t); } }
   // syvyysjärjestys c + r
   for (let i = 0; i < n; i++) if (cells[i]){ const w = ROOMS[r].w; list.push({i, c:cells[i], d:(i % w) + ((i / w) | 0), col:i % w}); }
@@ -281,7 +321,6 @@ function drawRoomAt(r, t, opt, ox, oy){
           // hengittävä hehku vain kypsällä, hyvinvoivalla kasvustolla
           if (!dry && stage === 'kypsa' && v > 0.6){ const br = 0.5 + 0.5*Math.sin(t*1.3 + seed); dithHalo(pxp, top + sh.h*0.25, sh.w*0.45 + 2, sh.h*0.22 + 2, T.col[1], br*0.22); }
           drawShroom(sh, pxp, pyp + (dry ? 1 : 0), (!dry && stage !== 'itu') ? Math.round(Math.sin(t*0.9 + seed)*1.2) : 0);
-          if (T.mutant) orbit(pxp, top + sh.h*0.35, t, AMB[2], sh.w*0.5 + 5, sh.h*0.25 + 3, 4);
         }
       }
       draw(front, x, y);
@@ -303,6 +342,16 @@ function drawRoomAt(r, t, opt, ox, oy){
     }
     if (lifted){ const o = DRAWN[DRAWN.length - 1]; if (Math.sin(t*8) > -0.3) L.drawImage(outline(o.s, AMB[2], 'pick' + o.s.w + 'x' + o.s.h + (c.type||'')), Math.round(o.box.x) - 1, Math.round(o.box.y) - 1); }
   }
+  // V2.0: toisen taakse jäävä esine. Jos alle puolet esineestä näkyy, sen ääriviiva piirretään edessä olevien läpi
+  // ja napautus päällekkäiseen kohtaan antaa valita (pickAt palauttaa myös takana olevat: also).
+  const objs = DRAWN.filter(o => o.kind === 'obj' && o.r === r);
+  objs.forEach((o, k) => { const P0 = samples(o.s); let seen = 0;
+    for (const [sx, sy] of P0){ const X = o.box.x + sx, Y = o.box.y + sy; let cov = false;
+      for (let j = k + 1; j < objs.length && !cov; j++){ const q = objs[j]; cov = alphaAt(q.s, X - q.box.x, Y - q.box.y) > 0; }
+      if (!cov) seen++; }
+    o.hidden = P0.length > 0 && seen/P0.length < 0.5;
+    if (o.hidden){ const c = cells[o.i], hot = c && (c.kind === 'vessel' ? isReady(c) : c.done);
+      L.drawImage(outline(o.s, hot ? AMB[1] : P.gl2, 'hid' + o.s.w + 'x' + o.s.h + (c ? c.type : '')), Math.round(o.box.x) - 1, Math.round(o.box.y) - 1); } });
   over.forEach(f => f());
   for (const sp of SPOTS[r]) if (!sp.noTap){ const b = spotBox(r, sp.id, ox, oy); if (b) DRAWN.push({r, kind:'spot', id:sp.id, box:b}); }
   if (opt.guide && opt.guide.length) guideTargets(r, t, opt.guide, ox, oy);
@@ -337,7 +386,7 @@ export function startTransition(from, to){ TRANS.from = from; TRANS.to = to; TRA
 export function drawIso(t, opt){
   DRAWN = [];
   if (ATL.state === 'loading'){ L.fillStyle = P.bg0; L.fillRect(0, 0, IW, IH); return; }
-  L.drawImage(background(), 0, 0); spores(t);
+  L.fillStyle = P.bg0; L.fillRect(0, 0, IW, IH);
   const a = (performance.now() - TRANS.t0)/TRANS.dur;
   if (TRANS.from && a < 1){
     const e = ease(a), dir = TRANS.to === 'kellari' ? -1 : 1;
@@ -350,7 +399,9 @@ export function drawIso(t, opt){
 export function pickAt(lx, ly){
   if (TRANS.from) return null;
   for (let k = DRAWN.length - 1; k >= 0; k--){ const o = DRAWN[k]; if (o.kind !== 'obj') continue;
-    if (alphaAt(o.s, lx - o.box.x, ly - o.box.y) > 0) return {kind:'cell', r:o.r, i:o.i}; }
+    if (alphaAt(o.s, lx - o.box.x, ly - o.box.y) > 0){ const also = [];
+      for (let j = k - 1; j >= 0; j--){ const q = DRAWN[j]; if (q.kind === 'obj' && q.hidden && alphaAt(q.s, lx - q.box.x, ly - q.box.y) > 0) also.push({r:q.r, i:q.i}); }
+      return {kind:'cell', r:o.r, i:o.i, also}; } }
   let best = null, bd = 1e9;
   for (const o of DRAWN) if (o.kind === 'floor'){ const d = Math.abs(lx - o.x)/44 + Math.abs(ly - o.y)/22; if (d <= 1 && d < bd){ bd = d; best = o; } }
   if (best) return {kind:'cell', r:best.r, i:best.i};
@@ -358,9 +409,11 @@ export function pickAt(lx, ly){
   return null;
 }
 // käyttöliittymän koordinaatit (192-avaruus) ↔ kerros
-export const toLayer = (x, y) => [x*2, y*2 - IY];
-export const toUi = (lx, ly) => [lx/2, (ly + IY)/2];
-const boxUi = b => ({x:b.x/2, y:(b.y + IY)/2, w:b.w/2, h:b.h/2});
+export const toLayer = (x, y) => [x*2 - ORG.x, y*2 - ORG.y];
+export const toUi = (lx, ly) => [(lx + ORG.x)/2, (ly + ORG.y)/2];
+const boxUi = b => ({x:(b.x + ORG.x)/2, y:(b.y + ORG.y)/2, w:b.w/2, h:b.h/2});
+// poikkileikkauskerroksen piste käyttöliittymän koordinaatteina (efektit)
+export const xsecUi = (lx, ly) => [(lx + XORG.x)/2, (ly + XORG.y)/2];
 // ruudun (tai sen esineen) näkyvä laatikko käyttöliittymän koordinaateissa, null jos ei näkyvissä
 export function cellBoxUi(r, i){
   const o = DRAWN.find(q => q.kind === 'obj' && q.r === r && q.i === i); if (o) return boxUi(o.box);
@@ -369,7 +422,7 @@ export function cellBoxUi(r, i){
 }
 // efektien lokaattori (TP6, fx.js setLocator): kaikki käyttöliittymän koordinaateissa
 export const isoLocator = {
-  cell: (r, i) => (window.__U && __U.view === 'vessel') ? ((__U.sel && __U.sel.r === r && __U.sel.i === i) ? {...XSEC_BOX_UI, xsec:true} : null) : cellBoxUi(r, i),
+  cell: (r, i) => (window.__U && __U.view === 'vessel') ? ((__U.sel && __U.sel.r === r && __U.sel.i === i) ? {x:(48 + XORG.x)/2, y:(128 + XORG.y)/2, w:143, h:136, xsec:true} : null) : cellBoxUi(r, i),
   window: () => { if (S.cur !== 'huone' || !DRAWN.length) return null; const b = spotBox('huone', 'ikkuna', 0, 0); return b ? boxUi(b) : null; },
   counter: () => { const s = Math.floor(S.hopea) + ' ' + CUR; return {x: W - 4 - tw(s)/2, y: 6}; }
 };
@@ -382,20 +435,28 @@ export function startZoom(dir, box){
   ZOOM.dir = dir; ZOOM.box = box || {x:W/2 - 20, y:120, w:40, h:40}; ZOOM.t0 = performance.now();
   if (dir < 0){ ZOOM.snap = mk(IW, IH); ZOOM.snap.getContext('2d').drawImage(XL, 0, 0); }
 }
-// sctx: näytön konteksti, k: kerroin 384-leveydelle, view: 'room' | 'vessel' | muu (vain puskuri)
+// sctx: näytön konteksti, k: kerroin natiivipikselistä näytön pikseliin, view: 'room' | 'vessel' | muu (vain puskuri)
 export function composite(sctx, buf, k, view){
+  const SW = buf.width, SH = buf.height;
   sctx.imageSmoothingEnabled = false;
-  sctx.fillStyle = P.bg0; sctx.fillRect(0, 0, 2*W*k, 2*H*k);
+  sctx.fillStyle = P.bg0; sctx.fillRect(0, 0, SW*k, SH*k);
   const z = zoomActive();
-  if (view === 'room' || z) sctx.drawImage(layer, 0, 0, IW, IH, 0, IY*k, IW*k, IH*k);
+  // huonealue natiivina: kerrokset rajataan siihen (vaakatilassa sivupaneeli jää oikealle)
+  const rx = 0, ry = LAY.ry*RES, rw = LAY.rw*RES, rh = LAY.rh*RES;
+  sctx.save(); sctx.beginPath(); sctx.rect(rx*k, ry*k, rw*k, rh*k); sctx.clip();
+  if (view === 'room' || z) sctx.drawImage(layer, 0, 0, IW, IH, ORG.x*k, ORG.y*k, IW*k, IH*k);
+  if (view === 'vessel' && !z && LAY.land && rw > IW){   // lähikuvan seinä ja lattia jatkuvat huonealueen reunoihin
+    const fy = Math.max(0, 452 + XORG.y);
+    sctx.fillStyle = '#141c28'; sctx.fillRect(0, 0, rw*k, fy*k); sctx.fillStyle = '#1f262c'; sctx.fillRect(0, fy*k, rw*k, (rh - fy)*k); }
   if (view === 'vessel' || z){
     // poikkileikkaus kasvaa ruudun laatikosta koko näkymään (tai kutistuu takaisin)
     let a = 1; if (z){ a = ease((performance.now() - ZOOM.t0)/ZOOM.dur); if (ZOOM.dir < 0) a = 1 - a; }
-    const b = ZOOM.box || {x:0, y:14, w:W, h:258}, lerp = (p, q) => p + (q - p)*a;
-    const x = lerp(b.x, 0), y = lerp(b.y, 14), w = lerp(b.w, W), h = lerp(b.h, 258);
+    const full = {x:XORG.x/2, y:XORG.y/2, w:IW/2, h:IH/2}, b = ZOOM.box || full, lerp = (p, q) => p + (q - p)*a;
+    const x = lerp(b.x, full.x), y = lerp(b.y, full.y), w = lerp(b.w, full.w), h = lerp(b.h, full.h);
     if (z) sctx.globalAlpha = Math.min(1, 0.3 + a);
     sctx.drawImage(z && ZOOM.dir < 0 ? ZOOM.snap : XL, 0, 0, IW, IH, Math.round(x*2*k), Math.round(y*2*k), Math.round(w*2*k), Math.round(h*2*k));
     sctx.globalAlpha = 1;
   }
-  sctx.drawImage(buf, 0, 0, buf.width, buf.height, 0, 0, 2*W*k, 2*H*k);
+  sctx.restore();
+  sctx.drawImage(buf, 0, 0, SW, SH, 0, 0, SW*k, SH*k);
 }

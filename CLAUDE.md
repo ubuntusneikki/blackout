@@ -29,7 +29,7 @@ koti/pwa.js, sw.js  puhelinversio: asennus (manifest.webmanifest, ikonit/), offl
 iso/index.html      kokeilu (JÄÄDYTETTY): isometrinen 3D-kartta three.js r128:lla + pikselöintivarjostin
 blender/            Blender-skriptit (bpy): room.py (huone), kit.py (katupakkaus + talot), koti.py (kodin spritet), koti_atlas.py (atlas + esikatselu), pix.py (pikselöinti), sheet.py
 docs/               ydinvisio.md, kotipeli-v1.md (+ suunnitelma), prototyypin-tila.md, grafiikka-koti.md (kodin spritet ja atlas)
-tests/              Playwright-skriptit: v1-lapipeluu.js (botti pelaa tilaukseen asti), tallennukset.js, pwa.js, tp7-paljastus.js (kaikki paljastuksen tulokset, jono, kantakirja)
+tests/              Playwright-skriptit: v1-lapipeluu.js (botti pelaa tilaukseen asti), tallennukset.js, pwa.js, vaaka.js (vaakatila ja kierto), tp7-paljastus.js (kaikki paljastuksen tulokset, jono, kantakirja)
 ```
 
 Ei build-vaihetta: staattisia sivuja GitHub Pagesissa. Paikallisesti: `python3 -m http.server` repon juuressa.
@@ -55,6 +55,8 @@ Koti on ES-moduuleina (`koti/js/*.js`) ilman bundleria; se vaatii http-palvelime
 - **Pikselitaide 192 px leveänä** (iso-kokeilu 256 px), skaalaus kokonaisluvulla, `image-rendering: pixelated`.
   - Poikkeus: kodin isometrinen huone on 384 px leveä (ruutu 88×44 px, ks. docs/grafiikka-koti.md), Juuson hyväksymä 2026-11-12. 192 px:n raja oli ulkopelin yhtenäistä tarkkuutta varten; ulkopelin tarkkuus päätetään myöhemmin.
 - **Kodin käyttöliittymä natiivisti 384×672** (Juuso 2026-11-13): `gfx.js` käyttää loogisia 192×336-koordinaatteja, mutta puskuri on natiivi (RES=2), joten 0,5 loogista = 1 pikseli, samaa tarkkuutta kuin huone ja poikkileikkaus. Pistekuvioissa `dot()` ja `bay()` 0,5:n askelin; paneelit `bevel()`/`frame()` 1 px:n valo- ja varjoreunoin.
+- **Vaakatila (V2.0):** `main.js fit()` valitsee pysty- tai vaaka-asettelun. `gfx.js`:n `W` ja `H` ovat eläviä (`export let`), joten älä tallenna niitä moduulitason vakioihin. `LAY` (`land, ox, py, by, rw, ry, rh`) kertoo, missä huonealue ja paneeli ovat: pystyssä paneeli on huoneen alla, vaakatilassa huone on vasemmalla ja 192 loogista leveä sivupaneeli oikealla (ikkunat aukeavat siihen). Vaaka on vähintään 768×352 natiivia ja kasvaa näytön mukaan. Uusi näkymä tehdään aina molempiin asetteluihin; `node tests/vaaka.js` tarkistaa neljä näyttökokoa.
+- **Ei taustahälyä (V2.0):** ei jatkuvia hiukkasia, leijuvia pisteitä eikä koristehehkuja. Eloisuus tulee kasvustoista, laitteista ja toimintojen palautteesta (`fx.js`: purskeet, kolikot, renkaat). Valolammikot ja ikkunan valo piirretään `iso.js`:n huonekerrokseen.
 - **Lähikuva (poikkileikkaus)** käyttää samoja Blender-malleja kuin huone: `koti.py`:n `lk_*`-spritet (kamera edestä 76°, astiat 340 px/m, sienet 290 px/m) → `python3 koti_atlas.py <render> ../koti/gfx --lk` → `koti/gfx/lahikuva.png/json`. xsec.js piirtää koodigrafiikalla vain, jos atlas tai kannan sprite puuttuu.
 - **5×7 vahva pikselifontti** (F-taulukko gfx.js:ssä, pystyvedot 2 px, glyfi 6×7, väli 1 px), Ä/Ö pisteillä glyfin yläpuolella; `sc=2` on Scale2x-pehmennetty. Ulkopelissä on yhä vanha 3×5.
 - **Paletti** (pix.py `PAL` ja iso/index.html `PAL` ovat sama lista): tumma viileä pohja, lämmin sisävalo, kantojen omat värit:
@@ -84,5 +86,7 @@ Koti on ES-moduuleina (`koti/js/*.js`) ilman bundleria; se vaatii http-palvelime
 
 1. ~~**Ulko:** poista HERÄTÄ-toiminto, `places`-piirto ja parantamisen palkinnot. Jätä löydöt, syke ja muistot.~~ Tehty (ULKO-01 V0.2).
 2. ~~**Kotipeli v1:**~~ toteutettu (KOTI-01 V1.0). Koko määrittely on tiedostossa **docs/kotipeli-v1.md** (suodatinputki: kasvatus, laboratorio ja risteytys, muottikasvatus, kuivaus, hoitajasieni, 4×4-huone ja kellari, HOPEA-markkina, tilaus). Se korvaa aiemmat tehtävät 2–5. KOTI-01 V0.3:n markkina (MK, jalosteet) sovitetaan tähän määrittelyyn.
+
+3. **Solmu V2** (toteutusprompti 16.11.2026, vaiheet omina PR:inään): ~~1. grafiikan siistiminen ja vaakatila~~ (V2.0), 2. genomi ja perinnöllinen risteytys, 3. proseduraalinen ulkonäkö, 4. laitteet (runko + hermosto), 5. villiintyminen, 6. välitavoiteketju, tapahtumat ja tekstit. Tila: docs/prototyypin-tila.md.
 
 Ennen isoja suunnittelumuutoksia kysy Juusolta. Pienissä toteutusvalinnoissa valitse yksinkertaisin toimiva ratkaisu ja kerro se.

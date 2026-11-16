@@ -2,13 +2,13 @@
 // Kytkeytyy vain events.js:n tapahtumiin. Paikat kysytään lokaattorilta, jonka isometrinen näkymä (TP4)
 // voi vaihtaa: setLocator({cell(r,i)->{x,y,w,h}|null, window()->{x,y,w,h}|null, counter()->{x,y}}).
 import {P, AMB, WILD, CUR} from './data.js';
-import {W, H, RES, g, px, dot, bay, rect, BAYER, clamp, text, tw, screen} from './gfx.js';
+import {W, H, RES, LAY, g, px, dot, bay, rect, BAYER, clamp, text, tw, screen} from './gfx.js';
 import {S, strain} from './state.js';
 import {on} from './events.js';
 import {U} from './ui.js';
 import {cellXY, CELL} from './room.js';
 import {play} from './audio.js';
-import {layer as ISO_LAYER, IY as ISO_Y} from './iso.js';
+import {xsecUi} from './iso.js';
 
 const reduced = (()=>{ try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch(e){ return false; } })();
 
@@ -58,13 +58,12 @@ let counterFlash=-1e9;
 
 // ---------- tapahtumat ----------
 function colsOf(key){ const T=key&&strain(key); return T ? [T.col[1],T.col[2],T.col[2]] : [AMB[1],AMB[2]]; }
-function centerTop(b){ return b.xsec ? [96, 170] : [b.x+b.w/2, b.y+b.h*0.45]; }
+function centerTop(b){ return b.xsec ? xsecUi(192, 312) : [b.x+b.w/2, b.y+b.h*0.45]; }
 function onCell(d, fn){ const b=boxOf(d.astia||d.laite||d.esine); if (b) fn(b, ...centerTop(b)); }
 
 on('korjuu', d=>onCell(d,(b,x,y)=>{
   const c=colsOf(d.kanta), big=b.xsec?1.8:1;
   burst(x,y,reduced?6:Math.round(22*big),[...c,AMB[2]],{speed:38*big,up:25*big,g:80,life:0.9,big:b.xsec?0.4:0});
-  if (!reduced) burst(x,y,10,[c[0]],{speed:10,up:8,g:-6,life:1.6,drag:0.6});   // itiöpöly jää leijumaan
   floatText('+'+(d.n||1),x,y-8,AMB[2]); }));
 on('laite-keruu', d=>onCell(d,(b,x,y)=>{ burst(x,y,reduced?6:18,[AMB[1],AMB[2],P.ui3],{speed:32,up:20,g:70}); }));
 on('itiot', d=>onCell(d,(b,x,y)=>{ const c=colsOf(d.kanta);
@@ -73,10 +72,10 @@ on('sumutus', d=>onCell(d,(b,x,y)=>{
   const n=reduced?6:(b.xsec?40:16), top=b.xsec?b.y-4:b.y+2;
   for (let k=0;k<n;k++) add({x:b.x+4+Math.random()*(b.w-8),y:top-Math.random()*6,vx:(Math.random()-0.5)*4,vy:12+Math.random()*16,g:30,drag:0.5,
     life:(b.h/40)*(0.5+Math.random()*0.5),col:Math.random()<0.4?'#e8fff0':P.wa2}); }));
-on('istutus', d=>onCell(d,(b)=>{ const x=b.xsec?96:b.x+b.w/2, y=b.xsec?212:b.y+b.h-8;
+on('istutus', d=>onCell(d,(b)=>{ const x=b.xsec?xsecUi(192,0)[0]:b.x+b.w/2, y=b.xsec?xsecUi(0,396)[1]:b.y+b.h-8;
   burst(x,y,reduced?4:10,[P.so2,P.so3],{dir:-1.57,spread:1.6,speed:24,g:90,life:0.6});
   burst(x,y-2,reduced?2:6,colsOf(d.kanta),{dir:-1.57,spread:0.8,speed:14,g:-4,life:1.2}); }));
-on('komposti', d=>onCell(d,(b)=>{ const x=b.xsec?96:b.x+b.w/2, y=b.xsec?200:b.y+b.h*0.6;
+on('komposti', d=>onCell(d,(b)=>{ const x=b.xsec?xsecUi(192,0)[0]:b.x+b.w/2, y=b.xsec?xsecUi(0,372)[1]:b.y+b.h*0.6;
   burst(x,y,reduced?4:14,[P.so1,P.so2,P.so3],{speed:16,g:70,life:0.8}); }));
 on('sijoitus', d=>onCell(d,(b,x)=>{ burst(x,b.y+b.h-3,reduced?4:12,[P.ui3,P.bg4,P.so3],{dir:-1.57,spread:2.6,speed:20,g:50,life:0.5}); }));
 on('malja-alku', d=>onCell(d,(b,x,y)=>{ burst(x,y,reduced?3:8,['#fff6dc',P.gl3||'#e8fff0'],{dir:-1.57,spread:0.6,speed:12,g:-8,life:1}); }));
@@ -95,7 +94,7 @@ on('osto', d=>{ const c=L.counter(), n=reduced?0:clamp(Math.ceil((d.hinta||3)/10
   for (let k=0;k<n;k++) coin(c.x, c.y, tapX+(Math.random()-0.5)*10, tapY, k*0.05, false);
   floatText('-'+(d.hinta||0)+' '+CUR, c.x-8, c.y+12, P.ui3, 'ui'); });
 // iso juhla: itiöitä koko ruudulle
-function confetti(cols){ if (reduced) return; for (let k=0;k<70;k++) add({x:Math.random()*W,y:-4-Math.random()*60,vx:(Math.random()-0.5)*10,vy:10+Math.random()*20,g:6,drag:0.3,life:4+Math.random()*2,col:cols[k%cols.length],layer:'ui'}); }
+function confetti(cols){ if (reduced) return; for (let k=0;k<44;k++) add({x:Math.random()*W,y:-4-Math.random()*40,vx:(Math.random()-0.5)*10,vy:26+Math.random()*30,g:20,drag:0.3,life:1.6+Math.random()*1.2,col:cols[k%cols.length],layer:'ui'}); }
 on('avaus', ()=>confetti([AMB[2],'#8fd0a0','#e8fff0']));
 on('tilaus-valmis', d=>{ if (d.lahde!=='taulu') confetti([AMB[2],AMB[1],'#a8fbee','#ffa6d6']); else counterFlash=performance.now(); });
 on('virstanpylvas', ()=>confetti([AMB[2],'#a8fbee']));
@@ -123,76 +122,15 @@ function scanStates(){
   firstScan=false;
 }
 
-// ---------- ambient: itiöpöly ja valolammikot ----------
-function ambient(t, dt){
-  if (U.view!=='room' || U.modal) return;
-  const cells=S.rooms[S.cur].cells, night=nightness();
-  cells.forEach((c,i)=>{ if (!c || c.kind!=='vessel' || !c.strain) return; const b=L.cell(S.cur,i); if (!b) return;
-    const T=strain(c.strain); if (!T) return; const dry=c.moist<0.1, life=0.3+0.7*c.growth;
-    // valolammikko astian alle: kannan värinen pistekuvioitu hehku, hengittää ja sammuu kuivuessa
-    if (!dry){ const k=breath(t,i)*life*(0.55+0.45*night), cx=b.x+b.w/2, cy=b.y+b.h+1, rx=b.w*0.48;
-      for (let yy=-1;yy<=2;yy+=.5) for (let xx=-rx;xx<=rx;xx+=.5){ const X=cx+xx, Y=cy+yy, d=Math.hypot(xx/rx,yy/2.5);
-        if (d<1 && bay(X,Y) < (1-d)*15*k) dot(X,Y, d<0.4?T.col[2]:T.col[1]); } }
-    // itiöpöly nousee kasvavista astioista
-    if (!reduced && !dry && Math.random() < dt*0.7*life) add({x:b.x+6+Math.random()*(b.w-12),y:b.y+b.h*0.5,vx:(Math.random()-0.5)*2,vy:-3-Math.random()*3,g:0,drag:0,life:2.5+Math.random()*2,col:T.mutant&&Math.random()<0.4?AMB[2]:T.col[Math.random()<0.3?2:1],mote:true});
-  });
-}
-
-// ---------- ikkuna: oikea vuorokaudenaika ----------
-// tyyliohje: ei auringonvaloa eikä siniharmaata päivää. Päivä = pölyinen sienisumu ja vino valokaista,
-// aamu ja ilta = meripihkainen horisontti, yö = syvä violetti ja villi rihmasto hehkuu kirkkaammin.
-function hourNow(){ const d=new Date(); return d.getHours()+d.getMinutes()/60; }
-export function nightness(h){ h=h==null?hourNow():h; // 0 = keskipäivä, 1 = keskiyö
-  if (h>=22||h<5) return 1; if (h>=9&&h<17) return 0; if (h<9) return 1-(h-5)/4; return (h-17)/5; }
-function dusk(h){ return Math.max(0, 1-Math.abs(h-7)/2.2, 1-Math.abs(h-19.5)/2.5); }
-function windowLight(t){
-  const w=L.window(); if (!w) return;
-  const h=window.__fxHour!=null?window.__fxHour:hourNow(), n=nightness(h), dk=dusk(h);
-  // ikkuna on oikeassa seinässä: lasi on suunnikas (yläreuna laskee oikealle), efektit vain lasin päälle
-  const gx0=w.x+w.w*0.07, gx1=w.x+w.w*0.94, gh=w.h*0.48, SL=0.4, gTop=x=>w.y+w.h*0.145+(x-gx0)*SL;
-  for (let x=gx0;x<gx1;x+=.5){ const t0=gTop(x);
-    for (let y=t0;y<t0+gh;y+=.5){ const f=(y-t0)/gh, b=bay(x,y);
-      if (n>0.05 && b < n*(f<0.5?9:4)) dot(x,y,f<0.5?'#130f24':'#24203f');            // yö tummentaa taivaan
-      else if (n<0.95 && f<0.6 && b < (1-n)*1.5) dot(x,y,'#5a4a6a');                    // päivän sumu
-      if (dk>0.05 && f>0.55 && b < dk*4*(f-0.55)/0.45) dot(x,y, f>0.85?'#ffcf7a':'#d99a5b'); } }  // horisontti
-  // yöllä villin rihmaston kärjet välkkyvät
-  if (n>0.3) for (let k=0;k<14;k++){ const x=gx0+((k*53+7)%((gx1-gx0)|0)), y=gTop(x)+gh-2-((k*29)%Math.max(4,gh/2));
-    if (Math.sin(t*1.7+k*2.3)>0.4) dot(x,y,'#d6b0ff'); }
-  // päivällä vino valokaista ikkunasta lattialle (alas vasemmalle), vain huoneen pinnoille eikä esineiden päälle
-  const bandK=(1-n)*0.9;
-  if (bandK>0.05 && U.view==='room' && !U.modal){
-    const cellsB=[]; for (let i=0;i<S.rooms[S.cur].cells.length;i++){ const b=L.cell(S.cur,i); if (b) cellsB.push(b); }
-    const LEN=70, DX=-0.75, N0=Math.round(gTop(gx0)+gh)*RES, N1=Math.min(272*RES, Math.round((gTop(gx1)+gh+LEN)*RES)), NW=W*RES;
-    if (N1>N0){
-      const img=g.getImageData(0,N0,NW,N1-N0), D=img.data;
-      const LA=ISO_LAYER.getContext('2d').getImageData(0,N0-ISO_Y,NW,N1-N0).data;     // huonekerroksen alfa samoilla riveillä
-      for (let ny=N0;ny<N1;ny++){ const y=ny/RES;
-        for (let nx=0;nx<NW;nx++){ const x=nx/RES;
-          // lähtöpiste lasin alareunalla: x0 = x - DX*s, missä s = etäisyys alareunasta pystysuunnassa
-          const s=(y-(gTop(gx0)+gh)-(x-gx0)*SL)/(1-DX*SL); if (s<0||s>LEN) continue;   // alareuna on vino
-          const xw=x-DX*s; if (xw<gx0||xw>gx1) continue;
-          const i=((ny-N0)*NW+nx)*4; if (LA[i+3]<200) continue;                         // ei tyhjän päälle
-          if (cellsB.some(b=>x>=b.x&&x<b.x+b.w&&y>=b.y&&y<b.y+b.h)) continue;
-          const e=Math.min(xw-gx0, gx1-xw)/6, fall=1-s/LEN; let k=bandK*fall*fall*Math.min(1,e)*0.8;
-          if (BAYER[ny&3][nx&3] < 3) k*=1.6;
-          if (D[i+3]===0){ D[i]=255; D[i+1]=240; D[i+2]=192; D[i+3]=Math.min(110,k*90); continue; }
-          if (D[i+3]<250) continue;
-          D[i]=Math.min(255,D[i]*(1+k)+60*k); D[i+1]=Math.min(255,D[i+1]*(1+k*0.85)+44*k); D[i+2]=Math.min(255,D[i+2]*(1+k*0.4)+18*k); } }
-      g.putImageData(img,0,N0);
-    }
-    // pölyhiukkaset valokaistassa
-    if (!reduced && Math.random()<0.15) add({x:gx0+Math.random()*(gx1-gx0)-Math.random()*40,y:gTop(gx0)+gh+Math.random()*50,vx:(Math.random()-0.5)*2,vy:-1,g:0,drag:0,life:3,col:'#fff0c0',mote:true});
-  }
-}
+// V2.0: jatkuvat taustahiukkaset (itiöpöly, valokaistan pöly) on poistettu. Valolammikot ja ikkunan valo
+// piirretään isometriseen kerrokseen (iso.js). Tässä on vain toimintojen palaute: purskeet, kolikot, renkaat ja tekstit.
 
 // ---------- piirto ----------
 let lastMs=0;
 export function draw(ms){
   const dt=Math.min(0.25,(ms-(lastMs||ms))/1000); lastMs=ms; const t=ms/1000;
   scanStates();
-  const modal=!!U.modal, inRoom=U.view==='room';
-  if (!modal && inRoom) windowLight(t);
-  if (!modal) ambient(t, dt);
+  const modal=!!U.modal && !LAY.land;   // vaakatilassa ikkunat ovat sivupaneelissa eivätkä peitä huonetta
   // valmistumisen renkaat
   for (let k=RINGS.length-1;k>=0;k--){ const R=RINGS[k], a=(ms-R.t0)/700; if (a>1){ RINGS.splice(k,1); continue; } if (modal) continue;
     const b=R.b, cx=b.x+b.w/2, cy=b.y+b.h/2, r=6+a*b.w*0.6;

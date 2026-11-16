@@ -71,3 +71,32 @@ Toteutuneet luvut. Ajat ovat pelinopeudella ×1; testinopeus ×60 on oletus.
 - **Simulaattorin botti** (`tests/sim/policy.js`): botti jätti kehikon tyhjäksi päiviksi, koska se myi siniheltan ennen kuin ehti kasvattaa siitä tuotteen (ketjun askel "kasvata tuote kehikossa"), eikä se kasvattanut kalvohelttaa ennen tilausta. Nyt se pitää halvimman reseptin sadon kehikolle ja kasvattaa kalvohelttaa valmiiksi, kuten pelaaja tekisi. Pelin luvut eivät muuttuneet.
 - **Loppuajo** (20 siementä, ×1): tilauksen mediaani aktiivinen 1,5 vrk, 4 käyntiä/vrk 6,0 vrk (ka. 6,2, tavoite 6–8), 2 käyntiä/vrk 11,5 vrk (16/20 ajoa 14 vrk:ssa). Laboratorio aukeaa 4/vrk-profiililla noin 33 h:n kohdalla (päivän 2 aamu). Kokeilu: laboratorio 10 myynnistä (nyt 15) avaisi sen 24 h:ssa ja lyhentäisi tilauksen noin 5,5 vrk:een, eli alle tavoitteen, joten raja pidettiin.
 - Pages julkaisee mainin onnistuneesti (pages build and deployment, PR #14:n merge).
+
+## KOTI-01 V2.0 (Solmu V2, vaihe 1: grafiikan siistiminen ja vaakatila)
+
+Ensimmäinen vaihe toteutuspromptista "Solmu V2" (16.11.2026). Pelilogiikka, talous ja tallennus ovat ennallaan.
+
+**Siistiminen (hehku = pelattavaa)**
+- Poistettu: taustan villit rihmaviivat ja leijuvat itiöt, valokaistan pöly, kasvustoista nousevat hiukkaset, oven nousevat pisteet, mutaation kiertävät pisteet (huone ja lähikuva), lähikuvan leijuvat itiöt, yläpalkin koristevalo, korjuun jälkeen leijumaan jäävä itiöpöly. Juhlasade on lyhyempi (noin 2 s).
+- Valolammikko on nyt lattialla astian alla (kolme lisäävää soikiota, rajattu tilan kuvaan), ei enää pistekuviona muiden esineiden päällä. Ikkunan valo ja valokaista piirretään huonekerrokseen, joten esineet peittävät ne oikein.
+- Meripihka vain yhdelle asialle: valmis sato, valmis laite, palannut retki, ensisijainen nappi. KANNAT-napissa on pieni merkki, kun kirjassa on uutta.
+- Tekstit: lyhyemmät vihjeet, markkinan rivillä vain määrä ja hinta (tila väreillä: piikki meripihka, pudonnut hinta ruusu).
+
+**Vaakatila**
+- `main.js fit()` valitsee asettelun sen mukaan, kumpi täyttää näytön paremmin. Pysty on ennallaan 384×672. Vaaka on vähintään 768×352 natiivipikseliä ja kasvaa näytön mukaan (enintään 1024×448), joten mustia reunoja ei jää.
+- `gfx.js`: `W` ja `H` ovat eläviä (`export let`), `LAY` kertoo asettelun (`land, ox, py, by, rw, ry, rh`), `setLayout()` ja `onLayout()`. `nat.js` seuraa samaa. `iso.js`: `ORG` ja `XORG` ovat huone- ja lähikuvakerroksen paikat näytöllä.
+- Vaakatilassa huone on vasemmalla ja 384 px:n sivupaneeli oikealla: yläpalkki, vihje, SEURAAVAKSI-lista ja napit. Ikkunat (markkina, laitteet, istutus, retki, asetukset) aukeavat sivupaneeliin, huone jää näkyviin ja napautus huoneeseen sulkee ikkunan. Lähikuvassa sivupaneeli näyttää myös kannan tiedot.
+- Kantakirja (kortit kahdessa rivissä, sukupuu vasemmalta oikealle, kannan sivu kolmena palstana), paljastus (näytös vasemmalla, tulos ja nimeäminen oikealla) ja retken paluu ovat saaneet oman vaaka-asettelunsa.
+- Skaalaus: kokonaislukukerroin, kun se täyttää vähintään 85 % näytöstä (390×844 ja 844×390 dpr 3: ×3; 915×412 dpr 2,625: ×3). Muuten piirretään seuraavalla kokonaisluvulla ja selain pienentää (412×915 dpr 2,625: piirto ×3, näyttö ×2,82), jolloin pikselit pysyvät tasakokoisina.
+- `manifest.webmanifest`: `orientation: any`.
+
+**Toisen taakse jäävät esineet (Juuson havainto 16.11.)**
+- Jos esineestä näkyy alle puolet, sen ääriviiva piirretään edessä olevien läpi (valmis: meripihka, muuten himmeä lasinsininen).
+- Napautus kohtaan, jossa on myös piilossa oleva esine, avaa KUMPI?-valinnan (EDESSÄ / TAKANA). Muut napautukset toimivat kuten ennen.
+
+**Testit:** `node tests/vaaka.js [kuvakansio]` (neljä näyttökokoa, kierto kesken pelin, napautukset, KUMPI?-valinta). Vanhat testit ajetaan pystykoossa 384×672 ja menevät läpi muuttamatta.
+
+**Tiedossa, ei tehty tässä vaiheessa**
+- Pystytilassa pitkän näytön ylä- ja alareunaan jää tyhjää (asettelu on kiinteä 384×672).
+- Piirto on yhä noin 11 kuvaa sekunnissa (`main.js`, 90 ms:n väli). 60 fps:n mittaus ja sujuvammat siirtymät kuuluvat myöhempään vaiheeseen.
+- Vaakatilaa ei ole kokeiltu oikealla puhelimella (selaimen palkit, näppäimistö nimeämisessä).

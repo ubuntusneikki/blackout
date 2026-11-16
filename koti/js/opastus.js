@@ -12,7 +12,7 @@ import {on, emit} from './events.js';
 import * as sim from './sim.js';
 import * as retki from './retki.js';
 import {VESSELS, STRAINS, SHOP, FRAME, FRAME_ORDER, PRODUCTS, SYM, P} from './data.js';
-import {rect, dot, text, wrapLines, W, setGuideTest} from './gfx.js';
+import {rect, dot, text, wrapLines, W, LAY, COL, setGuideTest} from './gfx.js';
 
 export const defaults = () => ({vaihe:null, nahty:{}, pois:false});
 const O = () => S.opastus || (S.opastus = defaults());
@@ -206,12 +206,14 @@ setGuideTest(isGuided);
 // iso.js: kohderuudut ja -paikat huoneessa
 export function isoTargets(){ return cur ? cur.keys.filter(k => k.startsWith('cell:') || k.startsWith('floor:') || k.startsWith('spot:')) : []; }
 
-// symbiontin vihjerivi yläpalkin alla: enintään 2 riviä
+// symbiontin vihjerivi yläpalkin alla: enintään 2 riviä (vaakatilassa sivupaneelin yläosassa, enintään 3 riviä)
+function stripLines(){ return (cur && cur.text) ? wrapLines(cur.text, (LAY.land ? COL : W) - 18).slice(0, LAY.land ? 3 : 2) : []; }
+export function stripH(){ const n = stripLines().length; return n ? 6 + n*9 : 0; }
 export function drawStrip(t){
-  if (!cur || !cur.text) return;
-  const L = wrapLines(cur.text, W - 18).slice(0, 2), h = 5 + L.length*9;
-  rect(0, 14, W, h, 'rgba(11,16,24,0.86)'); rect(0, 14 + h, W, .5, '#34b8ac'); rect(0, 14.5 + h, W, .5, '#1d5c58');
+  const L = stripLines(); if (!L.length) return;
+  const h = 5 + L.length*9, x = LAY.ox, w = W - x;
+  rect(x, 14, w, h, LAY.land ? '#0b1018' : 'rgba(11,16,24,0.86)'); rect(x, 14 + h, w, .5, '#34b8ac'); rect(x, 14.5 + h, w, .5, '#1d5c58');
   const p = Math.sin(t*3) > 0;   // symbiontin merkki: pieni sykkivä solmu
-  rect(4.5, 18.5, 2, 2, p ? SYM : '#34b8ac'); rect(5, 16.5, 1, 6, '#34b8ac'); rect(3, 19, 5, 1, '#34b8ac'); dot(5.5, 19.5, '#ffffff');
-  L.forEach((l, k) => text(l, 11, 17 + k*9, SYM));
+  rect(x + 4.5, 18.5, 2, 2, p ? SYM : '#34b8ac'); rect(x + 5, 16.5, 1, 6, '#34b8ac'); rect(x + 3, 19, 5, 1, '#34b8ac'); dot(x + 5.5, 19.5, '#ffffff');
+  L.forEach((l, k) => text(l, x + 11, 17 + k*9, SYM));
 }
