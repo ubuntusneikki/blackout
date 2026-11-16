@@ -1,7 +1,7 @@
 // rihmaretken näkymät: oven modaali (TP5). Paluun paljastus on reveal.js:ssä (TP7). TP4:n isometrisessä huoneessa ovi on napautuskohde,
 // joka avaa saman modaalin: U.modal={type:'retki'}.
 import {P, AMB, WILD, SYM, STRAINS, VESSELS} from './data.js';
-import {W, px, dot, bay, bevel, rect, rng, BAYER, clamp, text, textC, tw, wrap, button, hit, bar, isGuided, guideMark} from './gfx.js';
+import {W, LAY, px, dot, bay, bevel, rect, rng, BAYER, clamp, text, textC, tw, wrap, button, hit, bar, isGuided, guideMark} from './gfx.js';
 import {S, strain} from './state.js';
 import * as retki from './retki.js';
 
@@ -33,14 +33,14 @@ export function drawRetkiModal(m,X,Y,WW,HH,t,ctx){
   textC('OVI',X+WW/2,Y+6,AMB[2]);
   let y=Y+18;
   const st=retki.status();
-  door(X+WW/2,y+44,26,40,t, st&&!st.back ? 0.6 : 0.15);
-  y+=52;
+  const TW=WW-22;
+  if (!LAY.land){ door(X+WW/2,y+44,26,40,t, st&&!st.back ? 0.6 : 0.15); y+=52; }   // vaakatilassa ovi näkyy huoneessa vieressä
   if (!retki.retkiOpen()){
-    wrap('OVI ON VIELÄ KIINNI. MYY ENSIMMÄINEN SATO MARKKINALLA, NIIN SYMBIONTTI USKALTAA KUROTTAA RIHMANSA ULOS.',X+10,y,154,P.uiD);
+    wrap('OVI ON VIELÄ KIINNI. MYY ENSIMMÄINEN SATO MARKKINALLA, NIIN SYMBIONTTI USKALTAA KUROTTAA RIHMANSA ULOS.',X+10,y,TW,P.uiD);
     return;
   }
   if (st && st.back){
-    wrap('SYMBIONTTI PALASI '+(st.tyyppi==='syva'?'SYVÄLTÄ':'LYHYELTÄ')+' RETKELTÄ. RIHMOISSA ON JOTAIN.',X+10,y,154,P.ui3); y+=24;
+    wrap('SYMBIONTTI PALASI '+(st.tyyppi==='syva'?'SYVÄLTÄ':'LYHYELTÄ')+' RETKELTÄ. RIHMOISSA ON JOTAIN.',X+10,y,TW,P.ui3); y+=24;
     button(X+16,y,WW-32,18,'OTA LÖYDÖT VASTAAN',()=>ctx.reveal(),'a');
     return;
   }
@@ -49,7 +49,7 @@ export function drawRetkiModal(m,X,Y,WW,HH,t,ctx){
     text('SYMBIONTTI ON RETKELLÄ',X+10,y,P.ui3); y+=10;
     text(R.name,X+10,y,SYM); y+=12;
     bar(X+10,y,st.t,SYM); text(timeLeft(st.left/S.speed),X+76,y,P.uiD); y+=14;
-    wrap('YKSI RETKI KERRALLAAN. KOTI JATKAA KASVUAAN SILLÄ AIKAA.',X+10,y,154,P.uiD);
+    wrap('YKSI RETKI KERRALLAAN. KOTI JATKAA KASVUAAN SILLÄ AIKAA.',X+10,y,TW,P.uiD);
     return;
   }
   text('LÄHETÄ SYMBIONTTI RETKELLE',X+10,y,AMB[1]); y+=12;
@@ -59,7 +59,7 @@ export function drawRetkiModal(m,X,Y,WW,HH,t,ctx){
     text(R.name,X+10,y+4,ok?P.ui3:P.uiD);
     const right = R.cost ? 'SUODATIN '+(S.inv[R.cost]||0) : 'ILMAINEN';
     text(right,X+WW-10-tw(right),y+4,ok?(R.cost?AMB[2]:P.grn):P.uiD);
-    wrap(R.txt,X+10,y+14,152,ok?P.uiD:P.ui2);
+    wrap(R.txt,X+10,y+14,TW-2,ok?P.uiD:P.ui2);
     if (ok) hit(X+6,y,WW-12,34,()=>{ retki.start(type); ctx.close(); });
     if (ok && isGuided('row:'+R.name)) guideMark(X+6,y,WW-12,34);
     y+=38;

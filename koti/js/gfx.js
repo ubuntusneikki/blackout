@@ -2,12 +2,29 @@
 import {P, AMB} from './data.js';
 // Käyttöliittymän koordinaatit ovat loogisia (192×336), mutta puskuri on natiivi 384×672 (RES=2),
 // samaa tarkkuutta kuin isometrinen huone ja poikkileikkaus. 0,5 loogista = yksi pikseli.
-export const W = 192, H = 336, RES = 2;
+// V2.0: W ja H ovat eläviä (export let): pystyssä 192×336, vaakatilassa näytön mukaan (vähintään 384×176).
+export const RES = 2;
+export let W = 192, H = 336;
 export const screen = document.getElementById('c');
 export const sctx = screen.getContext('2d');
 export const buf = document.createElement('canvas'); buf.width = W*RES; buf.height = H*RES;
 export const g = buf.getContext('2d', {willReadFrequently:true});
 g.setTransform(RES,0,0,RES,0,0);
+// Asettelu (loogisina): pystyssä huone on ylhäällä ja paneeli alhaalla, vaakatilassa huone on vasemmalla
+// ja 192 leveä sivupaneeli oikealla. ox = paneelin vasen reuna, py = paneelin sisällön yläreuna,
+// by = alimman nappirivin y, rw = huonealueen leveys, ry/rh = huonealueen yläreuna ja korkeus.
+export const COL = 192;
+export const LAY = {land:false, ox:0, py:272, by:318, rw:192, ry:14, rh:258};
+const layoutSubs = [];
+export function onLayout(fn){ layoutSubs.push(fn); }
+export function setLayout(nw, nh, land){
+  W = nw/RES; H = nh/RES;
+  if (buf.width !== nw || buf.height !== nh){ buf.width = nw; buf.height = nh; }
+  g.setTransform(RES,0,0,RES,0,0);
+  Object.assign(LAY, land ? {land:true, ox:W-COL, py:14, by:H-18, rw:W-COL, ry:0, rh:H}
+                          : {land:false, ox:0, py:272, by:318, rw:W, ry:14, rh:258});
+  for (const f of layoutSubs) f();
+}
 const q = v => Math.round(v*RES)/RES;
 export function px(x,y,col){ g.fillStyle=col; g.fillRect(x|0,y|0,1,1); }            // looginen pikseli (2×2)
 export function dot(x,y,col){ g.fillStyle=col; g.fillRect(Math.floor(x*RES)/RES,Math.floor(y*RES)/RES,1/RES,1/RES); }   // yksi natiivipikseli
