@@ -44,7 +44,7 @@ function migrate(s){
   const inv={};
   for (const id in (s.goods||{})){ const n=s.goods[id], k=id.slice(2);
     if (id[0]==='r' && STRAINS[k]) inv['raw:'+k]=(inv['raw:'+k]||0)+n;
-    else hopea += n*(id[0]==='j'?10:SELL_BASE.raw); }
+    else hopea += n*(id[0]==='j'?10:2); }
   const spores={}; for (const k in (s.spores||{})){ if (STRAINS[k]) spores[k]=s.spores[k]; else hopea += s.spores[k]*SELL_BASE.itio; }
   if (!spores.ruusu) spores.ruusu=2;   // v1:n alkuitiöt, jotta risteytys on mahdollinen
   const known={heltta:1, ruusu:1}; for (const k in spores) known[k]=1; for (const k in (s.seen||{})) if (STRAINS[k]) known[k]=1;
@@ -58,7 +58,8 @@ function migrate(s){
 export function ensure(s){
   if (!s || typeof s!=='object') return newGame();
   if (!s.schema) s=migrate(s);
-  const d=newGame();
+  const d=newGame(), pre22=!s.tieto || typeof s.tieto!=='object';   // tallennus ajalta ennen genomia
+  if (pre22) delete s.tieto;
   if (!s.opastus) s.opastus=experienced(s);
   for (const k in d) if (s[k]===undefined) s[k]=d[k];
   for (const k in d.flags) if (s.flags[k]===undefined) s.flags[k]=d.flags[k];
@@ -75,7 +76,7 @@ export function ensure(s){
   if (!s.names || typeof s.names!=='object') s.names={};
   dropDrying(s);
   upgradeV12(s);
-  upgradeV22(s);
+  upgradeV22(s, pre22);
   // ulkosivu voi tuoda vanhoja kenttiä; ne eivät haittaa
   return s;
 }
@@ -132,9 +133,9 @@ function upgradeV12(s){
 }
 // V2.2: genomit. Vanhat mutaatioavaimet (kanta~grow, kanta~yield) muunnetaan rekisterin kannoiksi ja nimet säilyvät.
 // Kaikki ennestään tunnetut kannat ovat kokonaan tunnettuja (ei kysymysmerkkejä vanhaan peliin). Ajetaan joka latauksella.
-function upgradeV22(s){
+function upgradeV22(s, pre22){
   if (!s.kannat || typeof s.kannat!=='object') s.kannat={};
-  if (!s.tieto || typeof s.tieto!=='object'){ s.tieto={}; for (const k in s.known) s.tieto[k]={k:1, g:1}; }
+  if (pre22){ s.tieto={}; for (const k in s.known) s.tieto[k]={k:1, g:1}; }   // vanhan tallennuksen kannat tunnetaan kokonaan
   if (!s.crossN || typeof s.crossN!=='object') s.crossN={};
   if (!s.seed) s.seed=(Math.random()*4294967296)>>>0;
   const map={};
@@ -149,6 +150,14 @@ function upgradeV22(s){
   const rekey=o=>{ if (!o) return; for (const k of Object.keys(o)) if (k.includes('~')){ const n=conv(k), v=o[k]; delete o[k];
     if (n) o[n]=typeof v==='number' ? (o[n]||0)+v : v; } };
   rekey(s.spores); rekey(s.known); rekey(s.book.seen);
+  for (const k of Object.keys(s.tieto)) if (k.includes('~')) delete s.tieto[k];
+  // tuoteavaimet (raw:kanta~perk, itio:kanta~perk) varastossa, markkinassa ja taulun tilauksissa
+  const pid=id=>{ if (typeof id!=='string' || !id.includes('~')) return id; const i=id.indexOf(':'), n=conv(id.slice(i+1)); return n ? id.slice(0,i+1)+n : null; };
+  const rekeyP=o=>{ if (!o) return; for (const k of Object.keys(o)) if (k.includes('~')){ const n=pid(k), v=o[k]; delete o[k]; if (n) o[n]=(o[n]||0)+v; } };
+  rekeyP(s.inv); rekeyP(s.made); if (s.market){ rekeyP(s.market.sat); if (s.market.spike && s.market.spike.id) s.market.spike.id=pid(s.market.spike.id); if (s.market.spike && !s.market.spike.id) s.market.spike=null; }
+  if (Array.isArray(s.board)) s.board=s.board.filter(o=>!o || !o.tuote || (o.tuote=pid(o.tuote)));
+  // kokeillut parit: avaimet uusiksi, hylkimistä ei enää ole
+  for (const k of Object.keys(s.tried||{})){ const v=s.tried[k]; if (k.includes('~')){ delete s.tried[k]; const ab=k.split('+').map(conv); if (ab[0] && ab[1]) s.tried[ab.sort().join('+')]=v==='fail'?1:v; } else if (v==='fail') s.tried[k]=1; }
   for (const k of Object.keys(s.names)) if (k.includes('~')){ conv(k); delete s.names[k]; }
   for (const r in s.rooms) s.rooms[r].cells.forEach(c=>{ if (!c) return;
     if (c.kind==='vessel' && c.strain){ c.strain=conv(c.strain); if (!c.strain || !(STRAINS[c.strain]||s.kannat[c.strain])){ c.strain=null; c.growth=0; c.ready=false; c.waves=0; } }

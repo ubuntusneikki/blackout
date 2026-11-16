@@ -33,7 +33,7 @@ module.exports = function(){
     const buyIf=(k,cond)=>{ const h0=S.hopea; if(cond) G.buy(k); if(S.hopea<h0) { ev('osto '+k+' (hopeaa '+Math.round(S.hopea)+')'); return true; } return false; };
     if(S.flags.lab){
       if(!flags.hautomo) flags.hautomo=buyIf('hautomo',true);
-      if(flags.hautomo && (S.inv.agar||0)<1) buyIf('agar',true);
+      if(flags.hautomo && (S.inv.agar||0)<1 && !S.flags.firstCross) buyIf('agar',true);
     }
     if(S.known.kalvo && !flags.keh) flags.keh=buyIf('kehikko',true);
     if(!S.known.kalvo && S.flags.lab && flags.hautomo && !flags.keh && S.hopea>90) flags.keh=buyIf('kehikko',true);
@@ -44,8 +44,8 @@ module.exports = function(){
     while((S.deviceInv.length||S.vesselInv.length) && free()){ const [r,i]=free(); if(S.deviceInv.length) G.place('huone'===r&&S.rooms.huone.cells[i]?r:r,i,'device',S.deviceInv[0]); else G.place(r,i,'vessel',S.vesselInv[0]); }
     // hautomo
     const h=cells().find(o=>o.c.type==='hautomo'&&!o.c.busy);
-    if(h && S.inv.agar){ if(!S.known.kalvo && has('heltta')&&has('ruusu')) G.startDish(h.c,'heltta','ruusu');
-      else if(S.known.kalvo && !S.known.hoitaja && has('heltta')&&has('hamara')) G.startDish(h.c,'heltta','hamara'); }
+    // V2.2: ei reseptejä. Yksi risteytys ketjun askelta varten; kalvoheltta (verkkomuoto) tulee lyhyeltä retkeltä.
+    if(h && S.inv.agar && !S.flags.firstCross && has('heltta')&&has('ruusu')) G.startDish(h.c,'heltta','ruusu');
     // kehikko
     const k=cells().find(o=>o.c.type==='kehikko'&&!o.c.busy); if(k){ if(!G.startFrame(k.c,'kalvo') && !S.flags.frame) G.startFrame(k.c,'heltta'); }
     // rihmaretki: ota löydöt vastaan, lähetä lyhyelle retkelle aina kun ovi on vapaa

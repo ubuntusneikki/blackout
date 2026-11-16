@@ -159,5 +159,5 @@ export function vitalRect(x,y,w,h,v){ if(v>=1) return; x=Math.max(0,x|0)*RES; y=
 const hexRgb=h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];
 export function tintPixels(d,cols){ const C=cols.map(hexRgb);
   for(let i=0;i<d.length;i+=4){ if(!d[i+3]) continue; const r=d[i],gg=d[i+1],b=d[i+2],mx=Math.max(r,gg,b),mn=Math.min(r,gg,b); if(mx-mn<40) continue;
-    const l=clamp(((0.3*r+0.59*gg+0.11*b)/255-0.18)/0.6,0,1)*2, k=l<1?0:1, f=l-k;
+    const l=Math.pow(clamp(((0.3*r+0.59*gg+0.11*b)/255-0.15)/0.8,0,1),1.5)*2, k=l<1?0:1, f=l-k;
     for(let j=0;j<3;j++) d[i+j]=C[k][j]+(C[k+1][j]-C[k][j])*f; } }
